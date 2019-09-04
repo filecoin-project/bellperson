@@ -6,6 +6,8 @@ use paired::{CurveAffine, CurveProjective};
 use std::io;
 use std::iter;
 use std::sync::Arc;
+use gpu;
+use paired::Engine;
 
 use super::SynthesisError;
 
@@ -14,6 +16,7 @@ pub trait SourceBuilder<G: CurveAffine>: Send + Sync + 'static + Clone {
     type Source: Source<G>;
 
     fn new(self) -> Self::Source;
+    fn get(self) -> (Arc<Vec<G>>, usize);
 }
 
 /// A source of bases, like an iterator.
@@ -34,6 +37,8 @@ impl<G: CurveAffine> SourceBuilder<G> for (Arc<Vec<G>>, usize) {
     fn new(self) -> (Arc<Vec<G>>, usize) {
         (self.0.clone(), self.1)
     }
+
+    fn get(self) -> (Arc<Vec<G>>, usize) { (self.0.clone(), self.1) }
 }
 
 impl<G: CurveAffine> Source<G> for (Arc<Vec<G>>, usize) {
@@ -256,13 +261,31 @@ pub fn multiexp<Q, D, G, S>(
     bases: S,
     density_map: D,
     exponents: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+    kern: &mut Option<gpu::MultiexpKernel<G::Engine>>
 ) -> Box<Future<Item = <G as CurveAffine>::Projective, Error = SynthesisError>>
 where
     for<'a> &'a Q: QueryDensity,
     D: Send + Sync + 'static + Clone + AsRef<Q>,
     G: CurveAffine,
-    S: SourceBuilder<G>,
+    S: SourceBuilder<G>
 {
+
+    if let Some(ref mut k) = kern {
+
+        // Extract the density map in an array
+        let mut dm = vec![false; exponents.len()];
+        let mut i = 0;
+        for (&_, d) in exponents.iter().zip(density_map.as_ref().iter()) {
+            dm[i] = d;
+            i += 1;
+        }
+
+        let (bss, skip) = bases.clone().get();
+        let result = k.multiexp(bss.clone(), exponents.clone(), dm, skip).expect("GPU Multiexp failed!");
+
+        return Box::new(pool.compute(move || { Ok(result) }))
+    }
+
     let c = if exponents.len() < 32 {
         3u32
     } else {
@@ -320,7 +343,60 @@ fn test_with_bls12() {
 
     let pool = Worker::new();
 
-    let fast = multiexp(&pool, (g, 0), FullDensity, v).wait().unwrap();
+    let fast = multiexp(&pool, (g, 0), FullDensity, v, &mut None).wait().unwrap();
 
     assert_eq!(naive, fast);
+}
+
+pub fn gpu_multiexp_supported<E>(log_d: u32) -> gpu::GPUResult<gpu::MultiexpKernel<E>> where E: Engine {
+    let kern = gpu::MultiexpKernel::<E>::create(1 << log_d)?;
+    Ok(kern)
+}
+
+#[test]
+pub fn gpu_multiexp_consistency() {
+    use std::time::Instant;
+    use paired::bls12_381::Bls12;
+    use rand::{self, Rand};
+
+    const MAX_LOG_D: usize = 25;
+    const START_LOG_D: usize = 10;
+    let mut kern = gpu::MultiexpKernel::<Bls12>::create(1 << MAX_LOG_D).ok();
+    if kern.is_none() { panic!("Cannot initialize kernel!"); }
+    let pool = Worker::new();
+
+    let rng = &mut rand::thread_rng();
+
+    let mut bases =
+        (0..(1 << 10))
+            .map(|_| <Bls12 as Engine>::G1::rand(rng).into_affine())
+            .collect::<Vec<_>>();
+    for _ in 10..START_LOG_D { bases = [bases.clone(), bases.clone()].concat(); }
+
+    for log_d in START_LOG_D..(MAX_LOG_D + 1) {
+        let g = Arc::new(bases.clone());
+
+        let samples = 1 << log_d;
+        println!("Testing Multiexp for {} elements...", samples);
+
+        let v = Arc::new(
+            (0..samples)
+                .map(|_| <Bls12 as ScalarEngine>::Fr::rand(rng).into_repr())
+                .collect::<Vec<_>>(),
+        );
+
+        let mut avg = 0u64;
+        for i in 0..10 { // Get average of 10 timings
+            let now = Instant::now();
+            let gpu = multiexp(&pool, (g.clone(), 0), FullDensity, v.clone(), &mut kern).wait().unwrap();
+            let gpu_dur = now.elapsed().as_secs() * 1000 as u64 + now.elapsed().subsec_millis() as u64;
+            avg+=gpu_dur;
+            println!("GPU took {}ms.", gpu_dur);
+        }
+        println!("GPU took {}ms in average.", avg / 10);
+
+        println!("============================");
+
+        bases = [bases.clone(), bases.clone()].concat();
+    }
 }
