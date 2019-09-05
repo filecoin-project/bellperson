@@ -10,7 +10,7 @@ use super::{Parameters, VerifyingKey};
 
 use {Circuit, ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
 
-use domain::{EvaluationDomain, Scalar};
+use domain::EvaluationDomain;
 
 use multicore::Worker;
 
@@ -113,19 +113,19 @@ impl<E: Engine> ConstraintSystem<E> for KeypairAssembly<E> {
             }
         }
 
-        eval(
+        eval::<E>(
             a(LinearCombination::zero()),
             &mut self.at_inputs,
             &mut self.at_aux,
             self.num_constraints,
         );
-        eval(
+        eval::<E>(
             b(LinearCombination::zero()),
             &mut self.bt_inputs,
             &mut self.bt_aux,
             self.num_constraints,
         );
-        eval(
+        eval::<E>(
             c(LinearCombination::zero()),
             &mut self.ct_inputs,
             &mut self.ct_aux,
@@ -192,7 +192,7 @@ where
     }
 
     // Create bases for blind evaluation of polynomials at tau
-    let powers_of_tau = vec![Scalar::<E>(E::Fr::zero()); assembly.num_constraints];
+    let powers_of_tau = vec![E::Fr::zero(); assembly.num_constraints];
     let mut powers_of_tau = EvaluationDomain::from_coeffs(powers_of_tau)?;
 
     // Compute G1 window table
@@ -232,7 +232,7 @@ where
                             let mut current_tau_power = tau.pow(&[(i * chunk) as u64]);
 
                             for p in powers_of_tau {
-                                p.0 = current_tau_power;
+                                *p = current_tau_power;
                                 current_tau_power.mul_assign(&tau);
                             }
                         });
@@ -258,7 +258,7 @@ where
                         // Set values of the H query to g1^{(tau^i * t(tau)) / delta}
                         for (h, p) in h.iter_mut().zip(p.iter()) {
                             // Compute final exponent
-                            let mut exp = p.0;
+                            let mut exp = *p;
                             exp.mul_assign(&coeff);
 
                             // Exponentiate
@@ -289,7 +289,7 @@ where
         g2_wnaf: &Wnaf<usize, &[E::G2], &mut Vec<i64>>,
 
         // Lagrange coefficients for tau
-        powers_of_tau: &[Scalar<E>],
+        powers_of_tau: &[E::Fr],
 
         // QAP polynomials
         at: &[Vec<(E::Fr, usize)>],
@@ -346,13 +346,13 @@ where
                             .zip(ct.iter())
                         {
                             fn eval_at_tau<E: Engine>(
-                                powers_of_tau: &[Scalar<E>],
+                                powers_of_tau: &[E::Fr],
                                 p: &[(E::Fr, usize)],
                             ) -> E::Fr {
                                 let mut acc = E::Fr::zero();
 
                                 for &(ref coeff, index) in p {
-                                    let mut n = powers_of_tau[index].0;
+                                    let mut n = powers_of_tau[index];
                                     n.mul_assign(coeff);
                                     acc.add_assign(&n);
                                 }
@@ -361,9 +361,9 @@ where
                             }
 
                             // Evaluate QAP polynomials at tau
-                            let mut at = eval_at_tau(powers_of_tau, at);
-                            let mut bt = eval_at_tau(powers_of_tau, bt);
-                            let ct = eval_at_tau(powers_of_tau, ct);
+                            let mut at = eval_at_tau::<E>(powers_of_tau, at);
+                            let mut bt = eval_at_tau::<E>(powers_of_tau, bt);
+                            let ct = eval_at_tau::<E>(powers_of_tau, ct);
 
                             // Compute A query (in G1)
                             if !at.is_zero() {
@@ -400,7 +400,7 @@ where
     }
 
     // Evaluate for inputs.
-    eval(
+    eval::<E>(
         &g1_wnaf,
         &g2_wnaf,
         &powers_of_tau,
@@ -418,7 +418,7 @@ where
     );
 
     // Evaluate for auxillary variables.
-    eval(
+    eval::<E>(
         &g1_wnaf,
         &g2_wnaf,
         &powers_of_tau,

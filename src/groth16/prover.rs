@@ -12,7 +12,7 @@ use super::{ParameterSource, Proof};
 
 use {Circuit, ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
 
-use domain::{EvaluationDomain, Scalar};
+use domain::EvaluationDomain;
 
 use multiexp::{multiexp, DensityTracker, FullDensity};
 
@@ -63,9 +63,9 @@ struct ProvingAssignment<E: Engine> {
     b_aux_density: DensityTracker,
 
     // Evaluations of A, B, C polynomials
-    a: Vec<Scalar<E>>,
-    b: Vec<Scalar<E>>,
-    c: Vec<Scalar<E>>,
+    a: Vec<E::Fr>,
+    b: Vec<E::Fr>,
+    c: Vec<E::Fr>,
 
     // Assignments of variables
     input_assignment: Vec<E::Fr>,
@@ -112,7 +112,7 @@ impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
         let b = b(LinearCombination::zero());
         let c = c(LinearCombination::zero());
 
-        self.a.push(Scalar(eval(
+        self.a.push(eval(
             &a,
             // Inputs have full density in the A query
             // because there are constraints of the
@@ -121,15 +121,15 @@ impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
             Some(&mut self.a_aux_density),
             &self.input_assignment,
             &self.aux_assignment,
-        )));
-        self.b.push(Scalar(eval(
+        ));
+        self.b.push(eval(
             &b,
             Some(&mut self.b_input_density),
             Some(&mut self.b_aux_density),
             &self.input_assignment,
             &self.aux_assignment,
-        )));
-        self.c.push(Scalar(eval(
+        ));
+        self.c.push(eval(
             &c,
             // There is no C polynomial query,
             // though there is an (beta)A + (alpha)B + C
@@ -139,7 +139,7 @@ impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
             None,
             &self.input_assignment,
             &self.aux_assignment,
-        )));
+        ));
     }
 
     fn push_namespace<NR, N>(&mut self, _: N)
@@ -229,7 +229,7 @@ where
         let a_len = a.len() - 1;
         a.truncate(a_len);
         // TODO: parallelize if it's even helpful
-        let a = Arc::new(a.into_iter().map(|s| s.0.into_repr()).collect::<Vec<_>>());
+        let a = Arc::new(a.into_iter().map(|s| s.into_repr()).collect::<Vec<_>>());
 
         multiexp(&worker, params.get_h(a.len())?, FullDensity, a)
     };
