@@ -9,9 +9,11 @@ use super::sources;
 use super::structs;
 
 // Best params for RTX 2080Ti
-const NUM_GROUPS : usize = 334;
-const WINDOW_SIZE : usize = 10;
-const NUM_WINDOWS : usize = 26;
+const NUM_GROUPS : usize = 334; // Partition the bases into `NUM_GROUPS` groups
+const WINDOW_SIZE : usize = 10; // Exponents are 255bit long, divide exponents into `WINDOW_SIZE` bit windows
+const NUM_WINDOWS : usize = 26; // Then we will have Ceil(256/`WINDOW_SIZE`) windows per exponent
+// So each group will have `NUM_WINDOWS` threads and as there are `NUM_GROUPS` groups, there will
+// be `NUM_GROUPS` * `NUM_WINDOWS` threads in total.
 
 const LOCAL_WORK_SIZE : usize = 256;
 const BUCKET_LEN : usize = 1 << WINDOW_SIZE;
@@ -72,6 +74,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
         self.exp_buffer.write(texps).enq()?;
         self.dm_buffer.write(tdm).enq()?;
 
+        // Make global work size divisible by `LOCAL_WORK_SIZE`
         let mut gws = NUM_WINDOWS * NUM_GROUPS;
         gws += (LOCAL_WORK_SIZE - (gws % LOCAL_WORK_SIZE)) % LOCAL_WORK_SIZE;
 
@@ -121,6 +124,8 @@ impl<E> MultiexpKernel<E> where E: Engine {
             return Err(GPUError {msg: "Only E::G1 and E::G2 are supported!".to_string()} );
         }
 
+        // Using the algorithm below, we can calculate the final result by accumulating the results
+        // of those `NUM_GROUPS` * `NUM_WINDOWS` threads.
         let mut acc = <G as CurveAffine>::Projective::zero();
         let mut bits = 0;
         for i in 0..NUM_WINDOWS {
@@ -129,7 +134,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
             for g in 0..NUM_GROUPS {
                 acc.add_assign(&res[g * NUM_WINDOWS + i]);
             }
-            bits += w;
+            bits += w; // Process the next window
         }
 
         Ok(acc)

@@ -1,3 +1,5 @@
+// Elliptic curve operations (Short Weierstrass Jacobian form)
+
 #define POINT_ZERO ((POINT_projective){FIELD_ZERO, FIELD_ONE, FIELD_ZERO})
 
 typedef struct {
@@ -12,6 +14,7 @@ typedef struct {
   FIELD z;
 } POINT_projective;
 
+// http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 POINT_projective POINT_double(POINT_projective inp) {
   if(FIELD_eq(inp.z, FIELD_ZERO)) return inp;
   FIELD a = FIELD_sqr(inp.x); // A = X1^2
@@ -36,6 +39,7 @@ POINT_projective POINT_double(POINT_projective inp) {
   return inp;
 }
 
+// http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-madd-2007-bl
 POINT_projective POINT_add_mixed(POINT_projective a, POINT_affine b) {
   if(b.inf) return a;
 
@@ -75,6 +79,7 @@ POINT_projective POINT_add_mixed(POINT_projective a, POINT_affine b) {
   }
 }
 
+// http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
 POINT_projective POINT_add(POINT_projective a, POINT_projective b) {
 
   if(FIELD_eq(a.z, FIELD_ZERO)) return b;

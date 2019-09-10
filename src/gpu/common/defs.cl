@@ -7,6 +7,7 @@ typedef ulong limb;
 
 #ifdef NVIDIA
 
+// Returns a * b + c + d, puts the carry in d
 limb mac_with_carry(limb a, limb b, limb c, limb *d) {
   limb lo, hi;
   asm("mad.lo.cc.u64 %0, %2, %3, %4;\r\n"
@@ -18,6 +19,7 @@ limb mac_with_carry(limb a, limb b, limb c, limb *d) {
   return lo;
 }
 
+// Returns a + b, puts the carry in d
 limb add_with_carry(limb a, limb *b) {
   limb lo, hi;
   asm("add.cc.u64 %0, %2, %3;\r\n"
@@ -27,6 +29,7 @@ limb add_with_carry(limb a, limb *b) {
   return lo;
 }
 
+// Returns a + b + c, puts the carry in c
 limb add2_with_carry(limb a, limb b, bool *c) {
   limb lo, hi, cc = *c;
   asm("add.cc.u64 %0, %2, %3;\r\n"

@@ -6,8 +6,8 @@ use super::sources;
 use super::structs;
 
 const LOG2_MAX_ELEMENTS : usize = 32; // At most 2^32 elements is supported.
-const MAX_RADIX_DEGREE : u32 = 8;
-const MAX_LOCAL_WORK_SIZE_DEGREE : u32 = 7;
+const MAX_RADIX_DEGREE : u32 = 8; // Radix256
+const MAX_LOCAL_WORK_SIZE_DEGREE : u32 = 7; // 128
 
 pub struct FFTKernel<F> where F: PrimeField {
     proque: ProQue,
@@ -42,6 +42,11 @@ impl<F> FFTKernel<F> where F: PrimeField {
                       fft_omg_buffer: omgbuff})
     }
 
+    /// Peforms a FFT round
+    /// * `lgn` - Specifies log2 of number of elements
+    /// * `lgp` - Specifies log2 of `p`, (http://www.bealto.com/gpu-fft_group-1.html)
+    /// * `deg` - 1=>radix2, 2=>radix4, 3=>radix8, ...
+    /// * `max_deg` - The precalculated
     fn radix_fft_round(&mut self, lgn: u32, lgp: u32, deg: u32, max_deg: u32, in_src: bool) -> ocl::Result<()> {
         let n = 1u32 << lgn;
         let lwsd = cmp::min(deg - 1, MAX_LOCAL_WORK_SIZE_DEGREE);
@@ -62,7 +67,11 @@ impl<F> FFTKernel<F> where F: PrimeField {
         Ok(())
     }
 
+    /// Share some precalculated values between threads to boost the performance
     fn setup_pq(&mut self, omega: &F, n: usize, max_deg: u32) -> ocl::Result<()>  {
+
+        // Precalculate:
+        // [omega^(0/(2^(deg-1))), omega^(1/(2^(deg-1))), ..., omega^((2^(deg-1)-1)/(2^(deg-1)))]
         let mut tpq = vec![structs::PrimeFieldStruct::<F>::default(); 1 << max_deg >> 1];
         let pq = unsafe { std::mem::transmute::<&mut [structs::PrimeFieldStruct::<F>], &mut [F]>(&mut tpq) };
         let tw = omega.pow([(n >> max_deg) as u64]);
@@ -76,6 +85,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
         }
         self.fft_pq_buffer.write(&tpq).enq()?;
 
+        // Precalculate [omega, omega^2, omega^4, omega^8, ..., omega^(2^31)]
         let mut tom = vec![structs::PrimeFieldStruct::<F>::default(); 32];
         let om = unsafe { std::mem::transmute::<&mut [structs::PrimeFieldStruct::<F>], &mut [F]>(&mut tom) };
         om[0] = *omega;
@@ -85,6 +95,9 @@ impl<F> FFTKernel<F> where F: PrimeField {
         Ok(())
     }
 
+    /// Performs FFT on `a`
+    /// * `omega` -
+    /// * `lgn` - Specifies log2 of number of elements
     pub fn radix_fft(&mut self, a: &mut [F], omega: &F, lgn: u32) -> GPUResult<()> {
         let n = 1 << lgn;
 
@@ -100,7 +113,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
             let deg = cmp::min(max_deg, lgn - lgp);
             self.radix_fft_round(lgn, lgp, deg, max_deg, in_src)?;
             lgp += deg;
-            in_src = !in_src;
+            in_src = !in_src; // Destination of this FFT round is source of the next round.
         }
         if in_src { self.fft_src_buffer.read(ta).enq()?; }
         else { self.fft_dst_buffer.read(ta).enq()?; }
@@ -109,6 +122,8 @@ impl<F> FFTKernel<F> where F: PrimeField {
         Ok(())
     }
 
+    /// Multiplies all of the elements in `a` by `field`
+    /// * `lgn` - Specifies log2 of number of elements
     pub fn mul_by_field(&mut self, a: &mut [F], field: &F, lgn: u32) -> GPUResult<()> {
         let n = 1 << lgn;
         let ta = unsafe { std::mem::transmute::<&mut [F], &mut [structs::PrimeFieldStruct::<F>]>(a) };

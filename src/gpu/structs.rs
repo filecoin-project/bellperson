@@ -2,6 +2,9 @@ use paired::{CurveAffine, CurveProjective};
 use ff::{PrimeField};
 use ocl::traits::OclPrm;
 
+// Implement OclPrm trait for PrimeField, CurveAffine and CurveProjective
+// so that they can be copied to GPU.
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct PrimeFieldStruct<T>(pub T);
 impl<T> Default for PrimeFieldStruct<T> where T: PrimeField {

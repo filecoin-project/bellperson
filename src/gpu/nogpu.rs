@@ -4,6 +4,8 @@ use std::marker::PhantomData;
 use paired::{Engine, CurveAffine, CurveProjective};
 use super::error::{GPUResult, GPUError};
 
+// This module is compiled instead of `fft.rs` and `multiexp.rs` if `gpu` feature is disabled.
+
 pub struct FFTKernel<F>(PhantomData::<F>) where F: PrimeField;
 
 impl<F> FFTKernel<F> where F: PrimeField {

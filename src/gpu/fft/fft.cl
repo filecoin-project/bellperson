@@ -7,15 +7,18 @@ uint bitreverse(uint n, uint bits) {
   return r;
 }
 
-__kernel void radix_fft(__global FIELD* x,
-                        __global FIELD* y,
-                        __global FIELD* pq,
-                        __global FIELD* omegas,
-                        __local FIELD* u,
-                        uint n,
-                        uint lgp,
+/*
+ * FFT algorithm is inspired from: http://www.bealto.com/gpu-fft_group-1.html
+ */
+__kernel void radix_fft(__global FIELD* x, // Source buffer
+                        __global FIELD* y, // Destination buffer
+                        __global FIELD* pq, // Precalculated twiddle factors
+                        __global FIELD* omegas, // [omega, omega^2, omega^4, ...]
+                        __local FIELD* u, // Local buffer to store intermediary values
+                        uint n, // Number of elements
+                        uint lgp, // Log2 of `p` (Read more in the link above)
                         uint deg, // 1=>radix2, 2=>radix4, 3=>radix8, ...
-                        uint max_deg)
+                        uint max_deg) // Maximum degree supported, according to `pq` and `omegas`
 {
   uint lid = get_local_id(0);
   uint lsize = get_local_size(0);
@@ -33,20 +36,15 @@ __kernel void radix_fft(__global FIELD* x,
   uint counts = count / lsize * lid;
   uint counte = counts + count / lsize;
 
-  //////// ~30% of total time
+  // Compute powers of twiddle
   FIELD twiddle = FIELD_pow_lookup(omegas, (n >> lgp >> deg) * k);
-  ////////
-
-  //////// ~35% of total time
   FIELD tmp = FIELD_pow(twiddle, counts);
   for(uint i = counts; i < counte; i++) {
     u[i] = FIELD_mul(tmp, x[i*t]);
     tmp = FIELD_mul(tmp, twiddle);
   }
   barrier(CLK_LOCAL_MEM_FENCE);
-  ////////
 
-  //////// ~35% of total time
   uint pqshift = max_deg - deg;
   for(uint rnd = 0; rnd < deg; rnd++) {
     uint bit = counth >> rnd;
@@ -62,7 +60,6 @@ __kernel void radix_fft(__global FIELD* x,
 
     barrier(CLK_LOCAL_MEM_FENCE);
   }
-  ////////
 
   for(uint i = counts >> 1; i < counte >> 1; i++) {
     y[i*p] = u[bitreverse(i, deg)];
@@ -70,6 +67,7 @@ __kernel void radix_fft(__global FIELD* x,
   }
 }
 
+/// Multiplies all of the elements by `field`
 __kernel void mul_by_field(__global FIELD* elements,
                         uint n,
                         FIELD field) {

@@ -2,6 +2,10 @@ use paired::Engine;
 use ff::PrimeField;
 use itertools::join;
 
+// Instead of having a very large OpenCL program written for a specific curve, with a lot of
+// rudandant codes (As OpenCL doesn't have generic types or templates), this module will dynamically
+// generate OpenCL codes given different PrimeFields and curves.
+
 static DEFS_SRC : &str = include_str!("common/defs.cl");
 static FIELD_SRC : &str = include_str!("common/field.cl");
 static FFT_SRC : &str = include_str!("fft/fft.cl");
@@ -11,12 +15,15 @@ static FIELD2_SRC : &str = include_str!("multiexp/field2.cl");
 static EC_SRC : &str = include_str!("multiexp/ec.cl");
 static MULTIEXP_SRC : &str = include_str!("multiexp/multiexp.cl");
 
+/// Divide anything into 64bit chunks
 fn limbs_of<T>(value: &T) -> &[u64] {
     unsafe {
         std::slice::from_raw_parts(value as *const T as *const u64, std::mem::size_of::<T>() / 8)
     }
 }
 
+/// Calculate the `INV` parameter of Montomery reduction algorithm for 64bit limbs
+/// * `a` - Is the first limb of modulus
 fn calc_inv(a: u64) -> u64 {
     let mut inv = 1u64;
     for _ in 0..63 {
@@ -27,9 +34,9 @@ fn calc_inv(a: u64) -> u64 {
 }
 
 fn params<F>(name: &str) -> String where F: PrimeField {
-    let one = F::one(); let one = limbs_of(&one);
-    let p = F::char(); let p = limbs_of(&p);
-    let limbs = one.len();
+    let one = F::one(); let one = limbs_of(&one); // Get Montomery from of F::one()
+    let p = F::char(); let p = limbs_of(&p); // Get regular form of field modulus
+    let limbs = one.len(); // Number of limbs
     let inv = calc_inv(p[0]);
     let limbs_def = format!("#define {}_LIMBS {}", name, limbs);
     let p_def = format!("#define {}_P (({}){{ {{ {} }} }})", name, name, join(p, ", "));
@@ -80,6 +87,7 @@ pub fn fft_kernel<F>() -> String where F: PrimeField {
         field::<F>("Fr"), fft("Fr")));
 }
 
+// WARNING: This function works only with Short Weierstrass Jacobian curves with Fq2 extension field.
 pub fn multiexp_kernel<E>() -> String where E: Engine {
     return String::from(format!("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         DEFS_SRC,
