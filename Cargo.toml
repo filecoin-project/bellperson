@@ -23,7 +23,8 @@ ocl = { version = "0.19", optional = true }
 itertools = "0.8.0"
 
 [features]
-default = ["ocl"]
+default = []
+gpu = ["ocl"]
 
 [package.metadata.release]
 pre-release-commit-message = "chore(release): release {{version}}"

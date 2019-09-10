@@ -1,7 +1,6 @@
 use ocl::{ProQue, Buffer, MemFlags};
 use paired::Engine;
 use std::sync::Arc;
-use ocl::prm::{Uchar};
 use ff::{PrimeField, ScalarEngine};
 use paired::{CurveAffine, CurveProjective};
 use super::error::{GPUResult, GPUError};
@@ -29,8 +28,7 @@ pub struct MultiexpKernel<E> where E: Engine {
     g2_bucket_buffer: Buffer<structs::CurveProjectiveStruct<E::G2>>,
     g2_result_buffer: Buffer<structs::CurveProjectiveStruct<E::G2>>,
 
-    exp_buffer: Buffer<structs::PrimeFieldStruct<E::Fr>>,
-    dm_buffer: Buffer<Uchar>
+    exp_buffer: Buffer<structs::PrimeFieldStruct<E::Fr>>
 }
 
 impl<E> MultiexpKernel<E> where E: Engine {
@@ -48,31 +46,27 @@ impl<E> MultiexpKernel<E> where E: Engine {
         let g2resbuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(NUM_WINDOWS * NUM_GROUPS).build()?;
 
         let expbuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(n).build()?;
-        let dmbuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(n).build()?;
 
         Ok(MultiexpKernel {proque: pq,
             g1_base_buffer: g1basebuff, g1_bucket_buffer: g1buckbuff, g1_result_buffer: g1resbuff,
             g2_base_buffer: g2basebuff, g2_bucket_buffer: g2buckbuff, g2_result_buffer: g2resbuff,
-            exp_buffer: expbuff, dm_buffer: dmbuff})
+            exp_buffer: expbuff})
     }
 
     pub fn multiexp<G>(&mut self,
             bases: Arc<Vec<G>>,
             exps: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
-            dm: Vec<bool>,
-            skip: usize)
+            skip: usize,
+            n: usize)
             -> GPUResult<(<G as CurveAffine>::Projective)>
             where G: CurveAffine {
 
         let exp_bits = std::mem::size_of::<E::Fr>() * 8;
-        let n = exps.len();
 
         let mut res = [<G as CurveAffine>::Projective::zero(); NUM_WINDOWS * NUM_GROUPS];
         let exps = unsafe { std::mem::transmute::<Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,Arc<Vec<<E::Fr as PrimeField>::Repr>>>(exps) }.to_vec();
         let texps = unsafe { std::mem::transmute::<&[<E::Fr as PrimeField>::Repr], &[structs::PrimeFieldStruct::<E::Fr>]>(&exps[..]) };
-        let tdm = unsafe { std::mem::transmute::<&[bool], &[Uchar]>(&dm[..]) };
         self.exp_buffer.write(texps).enq()?;
-        self.dm_buffer.write(tdm).enq()?;
 
         // Make global work size divisible by `LOCAL_WORK_SIZE`
         let mut gws = NUM_WINDOWS * NUM_GROUPS;
@@ -89,7 +83,6 @@ impl<E> MultiexpKernel<E> where E: Engine {
                 .arg(&self.g1_bucket_buffer)
                 .arg(&self.g1_result_buffer)
                 .arg(&self.exp_buffer)
-                .arg(&self.dm_buffer)
                 .arg(skip as u32)
                 .arg(n as u32)
                 .arg(NUM_GROUPS as u32)
@@ -110,7 +103,6 @@ impl<E> MultiexpKernel<E> where E: Engine {
                 .arg(&self.g2_bucket_buffer)
                 .arg(&self.g2_result_buffer)
                 .arg(&self.exp_buffer)
-                .arg(&self.dm_buffer)
                 .arg(skip as u32)
                 .arg(n as u32)
                 .arg(NUM_GROUPS as u32)

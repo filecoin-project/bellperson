@@ -13,7 +13,6 @@ __kernel void POINT_bellman_multiexp(
     __global POINT_projective *buckets,
     __global POINT_projective *results,
     __global EXPONENT *exps,
-    __global bool *dm,
     uint skip,
     uint n,
     uint num_groups,
@@ -26,7 +25,7 @@ __kernel void POINT_bellman_multiexp(
 
   // We have `num_windows` * `num_groups` threads per multiexp.
   uint gid = get_global_id(0);
-  if(gid > num_windows * num_groups) return;
+  if(gid >= num_windows * num_groups) return;
 
   // We have (2^window_size - 1) buckets.
   uint bucket_len = ((1 << window_size) - 1);
@@ -46,15 +45,13 @@ __kernel void POINT_bellman_multiexp(
 
   POINT_projective res = POINT_ZERO;
   for(uint i = nstart; i < nend; i++) {
-    if(dm[i]) {
-      uint ind = EXPONENT_get_bits(exps[i], bits, w);
+    uint ind = EXPONENT_get_bits(exps[i], bits, w);
 
-      // Special case where it is faster to add the base into `res` instead of
-      // `bucket[0]`.
-      if(ind == 1) res = POINT_add_mixed(res, bases[i]);
+    // Special case where it is faster to add the base into `res` instead of
+    // `bucket[0]`.
+    if(ind == 1) res = POINT_add_mixed(res, bases[i]);
 
-      else if(ind--) buckets[ind] = POINT_add_mixed(buckets[ind], bases[i]);
-    }
+    else if(ind--) buckets[ind] = POINT_add_mixed(buckets[ind], bases[i]);
   }
 
   // Summation by parts

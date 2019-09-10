@@ -272,16 +272,17 @@ where
 
     if let Some(ref mut k) = kern {
 
-        // Extract the density map in an array
-        let mut dm = vec![false; exponents.len()];
-        let mut i = 0;
-        for (&_, d) in exponents.iter().zip(density_map.as_ref().iter()) {
-            dm[i] = d;
-            i += 1;
+        let mut exps = vec![exponents[0]; exponents.len()];
+        let mut n = 0;
+        for (&e, d) in exponents.iter().zip(density_map.as_ref().iter()) {
+            if d {
+                exps[n] = e;
+                n += 1;
+            }
         }
 
         let (bss, skip) = bases.clone().get();
-        let result = k.multiexp(bss.clone(), exponents.clone(), dm, skip).expect("GPU Multiexp failed!");
+        let result = k.multiexp(bss.clone(), Arc::new(exps.clone()), skip, n).expect("GPU Multiexp failed!");
 
         return Box::new(pool.compute(move || { Ok(result) }))
     }
@@ -301,9 +302,6 @@ where
 
     multiexp_inner(pool, bases, density_map, exponents, 0, c, true)
 }
-
-#[cfg(test)]
-use paired::Engine;
 
 #[test]
 fn test_with_bls12() {
@@ -349,17 +347,30 @@ fn test_with_bls12() {
 }
 
 pub fn gpu_multiexp_supported<E>(log_d: u32) -> gpu::GPUResult<gpu::MultiexpKernel<E>> where E: Engine {
-    let kern = gpu::MultiexpKernel::<E>::create(1 << log_d)?;
-    Ok(kern)
+    const TEST_SIZE : u32 = 1024;
+    use rand::Rand;
+    let pool = Worker::new();
+    let rng = &mut rand::thread_rng();
+    let mut kern = Some(gpu::MultiexpKernel::<E>::create(TEST_SIZE)?);
+    let bases_g1 = Arc::new((0..TEST_SIZE).map(|_| E::G1::rand(rng).into_affine()).collect::<Vec<_>>());
+    let bases_g2 = Arc::new((0..TEST_SIZE).map(|_| E::G2::rand(rng).into_affine()).collect::<Vec<_>>());
+    let exps = Arc::new((0..TEST_SIZE).map(|_| E::Fr::rand(rng).into_repr()).collect::<Vec<_>>());
+    let gpu_g1 = multiexp(&pool, (bases_g1.clone(), 0), FullDensity, exps.clone(), &mut kern).wait().unwrap();
+    let cpu_g1 = multiexp(&pool, (bases_g1.clone(), 0), FullDensity, exps.clone(), &mut None).wait().unwrap();
+    let gpu_g2 = multiexp(&pool, (bases_g2.clone(), 0), FullDensity, exps.clone(), &mut kern).wait().unwrap();
+    let cpu_g2 = multiexp(&pool, (bases_g2.clone(), 0), FullDensity, exps.clone(), &mut None).wait().unwrap();
+    if cpu_g1 == gpu_g1 && cpu_g2 == gpu_g2 { Ok(gpu::MultiexpKernel::<E>::create(1 << log_d)?) }
+    else { Err(gpu::GPUError {msg: "GPU Multiexp not supported!".to_string()} ) }
 }
 
+#[cfg(feature = "gpu")]
 #[test]
 pub fn gpu_multiexp_consistency() {
     use std::time::Instant;
     use paired::bls12_381::Bls12;
     use rand::{self, Rand};
 
-    const MAX_LOG_D: usize = 25;
+    const MAX_LOG_D: usize = 20;
     const START_LOG_D: usize = 10;
     let mut kern = gpu::MultiexpKernel::<Bls12>::create(1 << MAX_LOG_D).ok();
     if kern.is_none() { panic!("Cannot initialize kernel!"); }
@@ -385,15 +396,19 @@ pub fn gpu_multiexp_consistency() {
                 .collect::<Vec<_>>(),
         );
 
-        let mut avg = 0u64;
-        for i in 0..10 { // Get average of 10 timings
-            let now = Instant::now();
-            let gpu = multiexp(&pool, (g.clone(), 0), FullDensity, v.clone(), &mut kern).wait().unwrap();
-            let gpu_dur = now.elapsed().as_secs() * 1000 as u64 + now.elapsed().subsec_millis() as u64;
-            avg+=gpu_dur;
-            println!("GPU took {}ms.", gpu_dur);
-        }
-        println!("GPU took {}ms in average.", avg / 10);
+        let mut now = Instant::now();
+        let gpu = multiexp(&pool, (g.clone(), 0), FullDensity, v.clone(), &mut kern).wait().unwrap();
+        let gpu_dur = now.elapsed().as_secs() * 1000 as u64 + now.elapsed().subsec_millis() as u64;
+        println!("GPU took {}ms.", gpu_dur);
+
+        now = Instant::now();
+        let cpu = multiexp(&pool, (g.clone(), 0), FullDensity, v.clone(), &mut None).wait().unwrap();
+        let cpu_dur = now.elapsed().as_secs() * 1000 as u64 + now.elapsed().subsec_millis() as u64;
+        println!("CPU took {}ms.", cpu_dur);
+
+        println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
+
+        assert_eq!(cpu, gpu);
 
         println!("============================");
 

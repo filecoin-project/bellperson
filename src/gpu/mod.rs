@@ -1,25 +1,27 @@
 mod error;
 pub use self::error::*;
 
+#[cfg(feature = "gpu")]
 mod sources;
+#[cfg(feature = "gpu")]
 pub use self::sources::*;
 
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 mod structs;
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 pub use self::structs::*;
 
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 mod fft;
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 pub use self::fft::*;
 
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 mod multiexp;
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 pub use self::multiexp::*;
 
-#[cfg(not (feature = "ocl"))]
+#[cfg(not (feature = "gpu"))]
 mod nogpu;
-#[cfg(not (feature = "ocl"))]
+#[cfg(not (feature = "gpu"))]
 pub use self::nogpu::*;

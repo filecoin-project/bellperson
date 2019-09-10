@@ -9,7 +9,7 @@ extern crate paired;
 extern crate rand;
 extern crate itertools;
 
-#[cfg(feature = "ocl")]
+#[cfg(feature = "gpu")]
 extern crate ocl;
 
 mod gpu;

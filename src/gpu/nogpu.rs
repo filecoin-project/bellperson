@@ -1,7 +1,7 @@
 use ff::{PrimeField, ScalarEngine};
 use std::sync::Arc;
 use std::marker::PhantomData;
-use paired::{Engine, CurveAffine, CurveProjective};
+use paired::{Engine, CurveAffine};
 use super::error::{GPUResult, GPUError};
 
 // This module is compiled instead of `fft.rs` and `multiexp.rs` if `gpu` feature is disabled.
@@ -34,7 +34,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
     pub fn multiexp<G>(&mut self,
             _: Arc<Vec<G>>,
             _: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
-            _: Vec<bool>,
+            _: usize,
             _: usize)
             -> GPUResult<(<G as CurveAffine>::Projective)>
             where G: CurveAffine {
