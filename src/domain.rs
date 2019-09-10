@@ -294,6 +294,13 @@ fn best_fft<E: Engine, T: Group<E>>(kern: &mut Option<gpu::FFTKernel<E::Fr>>, a:
 
 pub fn gpu_fft<E: Engine, T: Group<E>>(kern: &mut gpu::FFTKernel<E::Fr>, a: &mut [T], omega: &E::Fr, log_n: u32) -> gpu::GPUResult<()>
 {
+    // EvaluationDomain module is supposed to work only with E::Fr elements, and not CurveProjective
+    // points. The Bellman authors have implemented an unnecessarry abstraction called Group<E>
+    // which is implemented for both PrimeField and CurveProjective elements. As nowhere in the code
+    // is the CurveProjective version used, T and E::Fr are guaranteed to be equal and thus have same
+    // size.
+    // For compatibility/performance reasons we decided to transmute the array to the desired type
+    // as it seems safe and needs less modifications in the current structure of Bellman library.
     let a = unsafe { std::mem::transmute::<&mut [T], &mut [E::Fr]>(a) };
     kern.radix_fft(a, omega, log_n)?;
     Ok(())
@@ -301,6 +308,7 @@ pub fn gpu_fft<E: Engine, T: Group<E>>(kern: &mut gpu::FFTKernel<E::Fr>, a: &mut
 
 pub fn gpu_mul_by_field<E: Engine, T: Group<E>>(kern: &mut gpu::FFTKernel<E::Fr>, a: &mut [T], minv: &E::Fr, log_n: u32) -> gpu::GPUResult<()>
 {
+    // The reason of unsafety is same as above.
     let a = unsafe { std::mem::transmute::<&mut [T], &mut [E::Fr]>(a) };
     kern.mul_by_field(a, minv, log_n)?;
     Ok(())

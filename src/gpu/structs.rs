@@ -2,8 +2,13 @@ use paired::{CurveAffine, CurveProjective};
 use ff::{PrimeField};
 use ocl::traits::OclPrm;
 
-// Implement OclPrm trait for PrimeField, CurveAffine and CurveProjective
+// Everything that needs to be copied to GPU needs to implement OclPrm trait.
+// This module implements a generic OclPrm version of PrimeField, CurveAffine and CurveProjective
 // so that they can be copied to GPU.
+// A transmute from [PrimeField] to [PrimeFieldStruct] is safe as their sizes are equal.
+// Also safe for [CurveAffine] to [CurveAffineStruct] and [CurveProjective] to [CurveProjectiveStruct]
+// It costs less memory to just transmute the data sources for both FFT and Multiexp to their
+// OpenCL friendly equivalents instead of mapping them to a new array with each element casted.
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct PrimeFieldStruct<T>(pub T);

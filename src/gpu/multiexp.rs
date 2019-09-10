@@ -7,6 +7,8 @@ use super::error::{GPUResult, GPUError};
 use super::sources;
 use super::structs;
 
+// NOTE: Please read `structs.rs` for an explanation for unsafe transmutes of this code!
+
 // Best params for RTX 2080Ti
 const NUM_GROUPS : usize = 334; // Partition the bases into `NUM_GROUPS` groups
 const WINDOW_SIZE : usize = 10; // Exponents are 255bit long, divide exponents into `WINDOW_SIZE` bit windows

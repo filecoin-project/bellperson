@@ -5,6 +5,8 @@ use super::error::GPUResult;
 use super::sources;
 use super::structs;
 
+// NOTE: Please read `structs.rs` for an explanation for unsafe transmutes of this code!
+
 const LOG2_MAX_ELEMENTS : usize = 32; // At most 2^32 elements is supported.
 const MAX_RADIX_DEGREE : u32 = 8; // Radix256
 const MAX_LOCAL_WORK_SIZE_DEGREE : u32 = 7; // 128
@@ -63,7 +65,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
             .arg(deg)
             .arg(max_deg)
             .build()?;
-        unsafe { kernel.enq()?; }
+        unsafe { kernel.enq()?; } // Running a GPU kernel is unsafe!
         Ok(())
     }
 
