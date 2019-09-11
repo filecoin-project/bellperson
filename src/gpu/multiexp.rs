@@ -65,7 +65,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
 
         let exp_bits = std::mem::size_of::<E::Fr>() * 8;
 
-        let mut res = [<G as CurveAffine>::Projective::zero(); NUM_WINDOWS * NUM_GROUPS];
+        let mut res = vec![<G as CurveAffine>::Projective::zero(); NUM_WINDOWS * NUM_GROUPS];
         let exps = unsafe { std::mem::transmute::<Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,Arc<Vec<<E::Fr as PrimeField>::Repr>>>(exps) }.to_vec();
         let texps = unsafe { std::mem::transmute::<&[<E::Fr as PrimeField>::Repr], &[structs::PrimeFieldStruct::<E::Fr>]>(&exps[..]) };
         self.exp_buffer.write(texps).enq()?;
