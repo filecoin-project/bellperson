@@ -127,7 +127,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
     /// Multiplies all of the elements in `a` by `field`
     /// * `lgn` - Specifies log2 of number of elements
     pub fn mul_by_field(&mut self, a: &mut [F], field: &F, lgn: u32) -> GPUResult<()> {
-        let n = 1 << lgn;
+        let n = 1u32 << lgn;
         let ta = unsafe { std::mem::transmute::<&mut [F], &mut [structs::PrimeFieldStruct::<F>]>(a) };
         let field = structs::PrimeFieldStruct::<F>(*field);
         self.fft_src_buffer.write(&*ta).enq()?;
