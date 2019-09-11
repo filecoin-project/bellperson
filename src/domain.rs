@@ -545,8 +545,8 @@ fn parallel_fft_consistency() {
 }
 
 pub fn gpu_fft_supported<E>(log_d: u32) -> gpu::GPUResult<gpu::FFTKernel<E::Fr>> where E: Engine {
-    const LOG_TEST_SIZE : u32 = 10;
-    const TEST_SIZE : u32 = 1 << LOG_TEST_SIZE;
+    let LOG_TEST_SIZE : u32 = std::cmp::min(E::Fr::S - 1, 10);
+    let TEST_SIZE : u32 = 1 << LOG_TEST_SIZE;
     use rand::Rand;
     let rng = &mut rand::thread_rng();
     let mut kern = gpu::FFTKernel::create(TEST_SIZE)?;
