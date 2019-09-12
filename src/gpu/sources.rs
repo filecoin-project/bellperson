@@ -22,7 +22,7 @@ fn limbs_of<T>(value: &T) -> &[u64] {
     }
 }
 
-/// Calculate the `INV` parameter of Montomery reduction algorithm for 64bit limbs
+/// Calculate the `INV` parameter of Montgomery reduction algorithm for 64bit limbs
 /// * `a` - Is the first limb of modulus
 fn calc_inv(a: u64) -> u64 {
     let mut inv = 1u64;

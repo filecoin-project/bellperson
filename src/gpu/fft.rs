@@ -48,7 +48,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
     /// * `lgn` - Specifies log2 of number of elements
     /// * `lgp` - Specifies log2 of `p`, (http://www.bealto.com/gpu-fft_group-1.html)
     /// * `deg` - 1=>radix2, 2=>radix4, 3=>radix8, ...
-    /// * `max_deg` - The precalculated
+    /// * `max_deg` - The precalculated values pq` and `omegas` are valid for radix degrees up to `max_deg`
     fn radix_fft_round(&mut self, lgn: u32, lgp: u32, deg: u32, max_deg: u32, in_src: bool) -> ocl::Result<()> {
         let n = 1u32 << lgn;
         let lwsd = cmp::min(deg - 1, MAX_LOCAL_WORK_SIZE_DEGREE);
@@ -98,7 +98,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
     }
 
     /// Performs FFT on `a`
-    /// * `omega` -
+    /// * `omega` - Special value `omega` is used for FFT over finite-fields
     /// * `lgn` - Specifies log2 of number of elements
     pub fn radix_fft(&mut self, a: &mut [F], omega: &F, lgn: u32) -> GPUResult<()> {
         let n = 1 << lgn;
