@@ -20,11 +20,11 @@ byteorder = "1"
 ff = "0.4.0"
 paired = "0.15"
 ocl = { version = "0.19", optional = true }
-itertools = "0.8.0"
+itertools = { version = "0.8.0", optional = true }
 
 [features]
 default = []
-gpu = ["ocl"]
+gpu = ["ocl", "itertools"]
 
 [package.metadata.release]
 pre-release-commit-message = "chore(release): release {{version}}"

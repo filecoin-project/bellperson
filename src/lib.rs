@@ -7,8 +7,9 @@ extern crate futures_cpupool;
 extern crate num_cpus;
 extern crate paired;
 extern crate rand;
-extern crate itertools;
 
+#[cfg(feature = "gpu")]
+extern crate itertools;
 #[cfg(feature = "gpu")]
 extern crate ocl;
 
