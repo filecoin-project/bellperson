@@ -4,6 +4,7 @@ use ff::PrimeField;
 use super::error::GPUResult;
 use super::sources;
 use super::structs;
+use super::utils;
 
 // NOTE: Please read `structs.rs` for an explanation for unsafe transmutes of this code!
 
@@ -23,7 +24,8 @@ impl<F> FFTKernel<F> where F: PrimeField {
 
     pub fn create(n: u32) -> GPUResult<FFTKernel::<F>> {
         let src = sources::fft_kernel::<F>();
-        let pq = ProQue::builder().src(src).dims(n).build()?;
+        let device = utils::get_devices(utils::CPU_INTEL_PLATFORM_NAME)?[0];
+        let pq = ProQue::builder().device(device).src(src).dims(n).build()?;
         let srcbuff = Buffer::builder().queue(pq.queue().clone())
             .flags(MemFlags::new().read_write()).len(n)
             .build()?;

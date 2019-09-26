@@ -6,6 +6,7 @@ use paired::{CurveAffine, CurveProjective};
 use super::error::{GPUResult, GPUError};
 use super::sources;
 use super::structs;
+use super::utils;
 
 // NOTE: Please read `structs.rs` for an explanation for unsafe transmutes of this code!
 
@@ -37,7 +38,8 @@ impl<E> MultiexpKernel<E> where E: Engine {
 
     pub fn create(n: u32) -> GPUResult<MultiexpKernel<E>> {
         let src = sources::multiexp_kernel::<E>();
-        let pq = ProQue::builder().src(src).dims(n).build()?;
+        let device = utils::get_devices(utils::CPU_INTEL_PLATFORM_NAME)?[0];
+        let pq = ProQue::builder().device(device).src(src).dims(n).build()?;
 
         let g1basebuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(n).build()?;
         let g1buckbuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(BUCKET_LEN * NUM_WINDOWS * NUM_GROUPS).build()?;
