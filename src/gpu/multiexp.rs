@@ -17,7 +17,7 @@ const NUM_WINDOWS : usize = 26; // Then we will have Ceil(256/`WINDOW_SIZE`) win
 // So each group will have `NUM_WINDOWS` threads and as there are `NUM_GROUPS` groups, there will
 // be `NUM_GROUPS` * `NUM_WINDOWS` threads in total.
 
-const LOCAL_WORK_SIZE : usize = 4;
+const LOCAL_WORK_SIZE : usize = 256;
 const BUCKET_LEN : usize = 1 << WINDOW_SIZE;
 
 // Multiexp kernel for a single GPU
