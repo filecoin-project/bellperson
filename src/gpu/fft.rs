@@ -24,7 +24,7 @@ impl<F> FFTKernel<F> where F: PrimeField {
 
     pub fn create(n: u32) -> GPUResult<FFTKernel::<F>> {
         let src = sources::fft_kernel::<F>();
-        let device = utils::get_devices(utils::CPU_INTEL_PLATFORM_NAME)?[0];
+        let device = utils::get_devices(utils::GPU_NVIDIA_PLATFORM_NAME)?[0];
         let pq = ProQue::builder().device(device).src(src).dims(n).build()?;
         let srcbuff = Buffer::builder().queue(pq.queue().clone())
             .flags(MemFlags::new().read_write()).len(n)

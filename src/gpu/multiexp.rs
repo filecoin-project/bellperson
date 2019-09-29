@@ -141,7 +141,7 @@ pub struct MultiexpKernel<E>(Vec<SingleMultiexpKernel<E>>) where E: Engine;
 impl<E> MultiexpKernel<E> where E: Engine {
 
     pub fn create(n: u32) -> GPUResult<MultiexpKernel<E>> {
-        let devices = utils::get_devices(utils::CPU_INTEL_PLATFORM_NAME)?;
+        let devices = utils::get_devices(utils::GPU_NVIDIA_PLATFORM_NAME)?;
         let kernels : Vec<SingleMultiexpKernel<E>> = devices.into_iter()
             .map(|device| { SingleMultiexpKernel::<E>::create(device, n) })
             .filter(|result| { result.is_ok() })
