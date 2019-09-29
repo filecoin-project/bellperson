@@ -11,13 +11,13 @@ use super::utils;
 // NOTE: Please read `structs.rs` for an explanation for unsafe transmutes of this code!
 
 // Best params for RTX 2080Ti
-const NUM_GROUPS : usize = 334; // Partition the bases into `NUM_GROUPS` groups
-const WINDOW_SIZE : usize = 10; // Exponents are 255bit long, divide exponents into `WINDOW_SIZE` bit windows
-const NUM_WINDOWS : usize = 26; // Then we will have Ceil(256/`WINDOW_SIZE`) windows per exponent
+const NUM_GROUPS : usize = 1; // Partition the bases into `NUM_GROUPS` groups
+const WINDOW_SIZE : usize = 11; // Exponents are 255bit long, divide exponents into `WINDOW_SIZE` bit windows
+const NUM_WINDOWS : usize = 24; // Then we will have Ceil(256/`WINDOW_SIZE`) windows per exponent
 // So each group will have `NUM_WINDOWS` threads and as there are `NUM_GROUPS` groups, there will
 // be `NUM_GROUPS` * `NUM_WINDOWS` threads in total.
 
-const LOCAL_WORK_SIZE : usize = 256;
+const LOCAL_WORK_SIZE : usize = 4;
 const BUCKET_LEN : usize = 1 << WINDOW_SIZE;
 
 // Multiexp kernel for a single GPU
@@ -158,6 +158,12 @@ impl<E> MultiexpKernel<E> where E: Engine {
             -> GPUResult<(<G as CurveAffine>::Projective)>
             where G: CurveAffine {
         let mut acc = <G as CurveAffine>::Projective::zero();
+        let num_devices = self.0.len();
+        let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
+        for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
+            let res = kern.multiexp(Arc::new(bases.to_vec()), Arc::new(exps.to_vec()), skip, bases.len())?;
+            acc.add_assign(&res);
+        }
         Ok(acc)
     }
 }
