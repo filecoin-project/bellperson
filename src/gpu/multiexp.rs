@@ -1,4 +1,4 @@
-use ocl::{ProQue, Buffer, MemFlags};
+use ocl::{ProQue, Buffer, MemFlags, Device};
 use paired::Engine;
 use std::sync::Arc;
 use ff::{PrimeField, ScalarEngine};
@@ -20,7 +20,8 @@ const NUM_WINDOWS : usize = 26; // Then we will have Ceil(256/`WINDOW_SIZE`) win
 const LOCAL_WORK_SIZE : usize = 256;
 const BUCKET_LEN : usize = 1 << WINDOW_SIZE;
 
-pub struct MultiexpKernel<E> where E: Engine {
+// Multiexp kernel for a single GPU
+pub struct SingleMultiexpKernel<E> where E: Engine {
     proque: ProQue,
 
     g1_base_buffer: Buffer<structs::CurveAffineStruct<E::G1Affine>>,
@@ -34,12 +35,11 @@ pub struct MultiexpKernel<E> where E: Engine {
     exp_buffer: Buffer<structs::PrimeFieldStruct<E::Fr>>
 }
 
-impl<E> MultiexpKernel<E> where E: Engine {
+impl<E> SingleMultiexpKernel<E> where E: Engine {
 
-    pub fn create(n: u32) -> GPUResult<MultiexpKernel<E>> {
+    pub fn create(d: Device, n: u32) -> GPUResult<SingleMultiexpKernel<E>> {
         let src = sources::multiexp_kernel::<E>();
-        let device = utils::get_devices(utils::CPU_INTEL_PLATFORM_NAME)?[0];
-        let pq = ProQue::builder().device(device).src(src).dims(n).build()?;
+        let pq = ProQue::builder().device(d).src(src).dims(n).build()?;
 
         let g1basebuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(n).build()?;
         let g1buckbuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(BUCKET_LEN * NUM_WINDOWS * NUM_GROUPS).build()?;
@@ -51,7 +51,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
 
         let expbuff = Buffer::builder().queue(pq.queue().clone()).flags(MemFlags::new().read_write()).len(n).build()?;
 
-        Ok(MultiexpKernel {proque: pq,
+        Ok(SingleMultiexpKernel {proque: pq,
             g1_base_buffer: g1basebuff, g1_bucket_buffer: g1buckbuff, g1_result_buffer: g1resbuff,
             g2_base_buffer: g2basebuff, g2_bucket_buffer: g2buckbuff, g2_result_buffer: g2resbuff,
             exp_buffer: expbuff})
@@ -131,6 +131,33 @@ impl<E> MultiexpKernel<E> where E: Engine {
             bits += w; // Process the next window
         }
 
+        Ok(acc)
+    }
+}
+
+// A struct that containts several multiexp kernels for different devices
+pub struct MultiexpKernel<E>(Vec<SingleMultiexpKernel<E>>) where E: Engine;
+
+impl<E> MultiexpKernel<E> where E: Engine {
+
+    pub fn create(n: u32) -> GPUResult<MultiexpKernel<E>> {
+        let devices = utils::get_devices(utils::CPU_INTEL_PLATFORM_NAME)?;
+        let kernels : Vec<SingleMultiexpKernel<E>> = devices.into_iter()
+            .map(|device| { SingleMultiexpKernel::<E>::create(device, n) })
+            .filter(|result| { result.is_ok() })
+            .map(|result| { result.unwrap() })
+            .collect::<Vec<_>>();
+        return Ok(MultiexpKernel::<E>(kernels));
+    }
+
+    pub fn multiexp<G>(&mut self,
+            bases: Arc<Vec<G>>,
+            exps: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+            skip: usize,
+            n: usize)
+            -> GPUResult<(<G as CurveAffine>::Projective)>
+            where G: CurveAffine {
+        let mut acc = <G as CurveAffine>::Projective::zero();
         Ok(acc)
     }
 }
