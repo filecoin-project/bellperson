@@ -159,6 +159,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
             where G: CurveAffine {
         let mut acc = <G as CurveAffine>::Projective::zero();
         let num_devices = self.0.len();
+        if num_devices == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
         for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
             let res = kern.multiexp(Arc::new(bases.to_vec()), Arc::new(exps.to_vec()), skip, bases.len())?;
