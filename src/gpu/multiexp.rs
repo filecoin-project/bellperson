@@ -7,6 +7,7 @@ use super::error::{GPUResult, GPUError};
 use super::sources;
 use super::structs;
 use super::utils;
+use crossbeam::thread;
 
 // NOTE: Please read `structs.rs` for an explanation for unsafe transmutes of this code!
 
@@ -161,10 +162,19 @@ impl<E> MultiexpKernel<E> where E: Engine {
         let num_devices = self.0.len();
         if num_devices == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
-        for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
-            let res = kern.multiexp(Arc::new(bases.to_vec()), Arc::new(exps.to_vec()), skip, bases.len())?;
-            acc.add_assign(&res);
-        }
+
+        thread::scope(|s| {
+            let mut threads = Vec::new();
+            for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
+                threads.push(s.spawn(move |s| {
+                    kern.multiexp(Arc::new(bases.to_vec()), Arc::new(exps.to_vec()), skip, bases.len())
+                }));
+            }
+            for t in threads {
+                let result = t.join().unwrap().unwrap();
+                acc.add_assign(&result);
+            }
+        });
         Ok(acc)
     }
 }
