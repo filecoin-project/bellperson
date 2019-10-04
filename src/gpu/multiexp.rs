@@ -148,6 +148,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
             .filter(|result| { result.is_ok() })
             .map(|result| { result.unwrap() })
             .collect::<Vec<_>>();
+        if kernels.len() == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
         println!("Multiexp: {} working device(s) selected.", kernels.len());
         for (i, k) in kernels.iter().enumerate() {
             println!("Multiexp: Device {}: {}", i, k.proque.device().name()?);
@@ -164,7 +165,6 @@ impl<E> MultiexpKernel<E> where E: Engine {
             where G: CurveAffine {
         let mut acc = <G as CurveAffine>::Projective::zero();
         let num_devices = self.0.len();
-        if num_devices == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
 
         thread::scope(|s| {
