@@ -41,6 +41,9 @@ impl<F> FFTKernel<F> where F: PrimeField {
             .flags(MemFlags::new().read_write()).len(LOG2_MAX_ELEMENTS)
             .build()?;
 
+        println!("FFT: 1 working device(s) selected.");
+        println!("FFT: Device 0: {}", pq.device().name()?);
+
         Ok(FFTKernel {proque: pq,
                       fft_src_buffer: srcbuff,
                       fft_dst_buffer: dstbuff,

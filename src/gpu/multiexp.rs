@@ -148,6 +148,10 @@ impl<E> MultiexpKernel<E> where E: Engine {
             .filter(|result| { result.is_ok() })
             .map(|result| { result.unwrap() })
             .collect::<Vec<_>>();
+        println!("Multiexp: {} working device(s) selected.", kernels.len());
+        for (i, k) in kernels.iter().enumerate() {
+            println!("Multiexp: Device {}: {}", i, k.proque.device().name()?);
+        }
         return Ok(MultiexpKernel::<E>(kernels));
     }
 
