@@ -167,7 +167,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
         let num_devices = self.0.len();
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
 
-        thread::scope(|s| {
+        match thread::scope(|s| {
             let mut threads = Vec::new();
             for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
                 threads.push(s.spawn(move |s| {
@@ -178,7 +178,14 @@ impl<E> MultiexpKernel<E> where E: Engine {
                 let result = t.join().unwrap().unwrap();
                 acc.add_assign(&result);
             }
-        });
-        Ok(acc)
+        }) {
+            Ok(_) => {
+                return Ok(acc);
+            },
+            Err(e) => {
+                // TODO: Cast `e` to GPUError if the error occurred is a GPUError
+                return Err(GPUError {msg: "Multigpu Multiexp failed!".to_string()} );
+            }
+        };
     }
 }
