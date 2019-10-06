@@ -1,3 +1,4 @@
+use log::info;
 use ocl::{ProQue, Buffer, MemFlags, Device};
 use paired::Engine;
 use std::sync::Arc;
@@ -149,9 +150,9 @@ impl<E> MultiexpKernel<E> where E: Engine {
             .map(|result| { result.unwrap() })
             .collect::<Vec<_>>();
         if kernels.len() == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
-        println!("Multiexp: {} working device(s) selected.", kernels.len());
+        info!("Multiexp: {} working device(s) selected.", kernels.len());
         for (i, k) in kernels.iter().enumerate() {
-            println!("Multiexp: Device {}: {}", i, k.proque.device().name()?);
+            info!("Multiexp: Device {}: {}", i, k.proque.device().name()?);
         }
         return Ok(MultiexpKernel::<E>(kernels));
     }
