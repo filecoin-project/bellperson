@@ -180,13 +180,13 @@ impl<E> MultiexpKernel<E> where E: Engine {
             }
             acc
         }) {
-            Ok(acc) => {
-                return Ok(acc);
-            },
+            Ok(acc) => { Ok(acc) },
             Err(e) => {
-                // TODO: Cast `e` to GPUError if the error occurred is a GPUError
-                return Err(GPUError {msg: "Multigpu Multiexp failed!".to_string()} );
+                match &e.downcast_ref::<GPUError>() {
+                    &Some(err) => Err(err.clone()),
+                    &None => Err(GPUError {msg: "Multigpu Multiexp failed!".to_string()})
+                }
             }
-        };
+        }
     }
 }
