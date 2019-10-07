@@ -164,11 +164,11 @@ impl<E> MultiexpKernel<E> where E: Engine {
             n: usize)
             -> GPUResult<(<G as CurveAffine>::Projective)>
             where G: CurveAffine {
-        let mut acc = <G as CurveAffine>::Projective::zero();
         let num_devices = self.0.len();
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
 
         match thread::scope(|s| {
+            let mut acc = <G as CurveAffine>::Projective::zero();
             let mut threads = Vec::new();
             for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
                 threads.push(s.spawn(move |s| {
@@ -179,8 +179,9 @@ impl<E> MultiexpKernel<E> where E: Engine {
                 let result = t.join().unwrap().unwrap();
                 acc.add_assign(&result);
             }
+            acc
         }) {
-            Ok(_) => {
+            Ok(acc) => {
                 return Ok(acc);
             },
             Err(e) => {
