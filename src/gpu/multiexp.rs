@@ -60,8 +60,8 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
     }
 
     pub fn multiexp<G>(&mut self,
-            bases: Arc<Vec<G>>,
-            exps: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+            bases: &[G],
+            exps: &[<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr],
             skip: usize,
             n: usize)
             -> GPUResult<(<G as CurveAffine>::Projective)>
@@ -70,8 +70,7 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
         let exp_bits = std::mem::size_of::<E::Fr>() * 8;
 
         let mut res = vec![<G as CurveAffine>::Projective::zero(); NUM_WINDOWS * NUM_GROUPS];
-        let exps = unsafe { std::mem::transmute::<Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,Arc<Vec<<E::Fr as PrimeField>::Repr>>>(exps) }.to_vec();
-        let texps = unsafe { std::mem::transmute::<&[<E::Fr as PrimeField>::Repr], &[structs::PrimeFieldStruct::<E::Fr>]>(&exps[..]) };
+        let texps = unsafe { std::mem::transmute::<&[<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr], &[structs::PrimeFieldStruct::<E::Fr>]>(exps) };
         self.exp_buffer.write(texps).enq()?;
 
         // Make global work size divisible by `LOCAL_WORK_SIZE`
@@ -80,7 +79,7 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
 
         let sz = std::mem::size_of::<G>(); // Trick, used for dispatching between G1 and G2!
         if sz == std::mem::size_of::<E::G1Affine>() {
-            let tbases = unsafe { std::mem::transmute::<&[G], &[structs::CurveAffineStruct<E::G1Affine>]>(&bases) };
+            let tbases = unsafe { std::mem::transmute::<&[G], &[structs::CurveAffineStruct<E::G1Affine>]>(bases) };
             self.g1_base_buffer.write(tbases).enq()?;
             let kernel = self.proque.kernel_builder("G1_bellman_multiexp")
                 .global_work_size([gws])
@@ -99,7 +98,7 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
             self.g1_result_buffer.read(tres).enq()?;
 
         } else if sz == std::mem::size_of::<E::G2Affine>() {
-            let tbases = unsafe { std::mem::transmute::<&[G], &[structs::CurveAffineStruct<E::G2Affine>]>(&bases) };
+            let tbases = unsafe { std::mem::transmute::<&[G], &[structs::CurveAffineStruct<E::G2Affine>]>(bases) };
             self.g2_base_buffer.write(tbases).enq()?;
             let kernel = self.proque.kernel_builder("G2_bellman_multiexp")
                 .global_work_size([gws])
@@ -172,7 +171,7 @@ impl<E> MultiexpKernel<E> where E: Engine {
             let mut threads = Vec::new();
             for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
                 threads.push(s.spawn(move |s| {
-                    kern.multiexp(Arc::new(bases.to_vec()), Arc::new(exps.to_vec()), skip, bases.len())
+                    kern.multiexp(bases, exps, skip, bases.len())
                 }));
             }
             for t in threads {
