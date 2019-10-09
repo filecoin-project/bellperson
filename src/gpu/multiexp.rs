@@ -62,7 +62,6 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
     pub fn multiexp<G>(&mut self,
             bases: &[G],
             exps: &[<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr],
-            skip: usize,
             n: usize)
             -> GPUResult<(<G as CurveAffine>::Projective)>
             where G: CurveAffine {
@@ -87,7 +86,6 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
                 .arg(&self.g1_bucket_buffer)
                 .arg(&self.g1_result_buffer)
                 .arg(&self.exp_buffer)
-                .arg(skip as u32)
                 .arg(n as u32)
                 .arg(NUM_GROUPS as u32)
                 .arg(NUM_WINDOWS as u32)
@@ -106,7 +104,6 @@ impl<E> SingleMultiexpKernel<E> where E: Engine {
                 .arg(&self.g2_bucket_buffer)
                 .arg(&self.g2_result_buffer)
                 .arg(&self.exp_buffer)
-                .arg(skip as u32)
                 .arg(n as u32)
                 .arg(NUM_GROUPS as u32)
                 .arg(NUM_WINDOWS as u32)
@@ -166,12 +163,16 @@ impl<E> MultiexpKernel<E> where E: Engine {
         let num_devices = self.0.len();
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
 
+        // Bases are skipped by `self.1` elements, when converted from (Arc<Vec<G>>, usize) to Source
+        // https://github.com/zkcrypto/bellman/blob/10c5010fd9c2ca69442dc9775ea271e286e776d8/src/multiexp.rs#L38
+        let bases = &bases[skip..];
+
         match thread::scope(|s| {
             let mut acc = <G as CurveAffine>::Projective::zero();
             let mut threads = Vec::new();
             for ((bases, exps), kern) in bases.chunks(chunk_size).zip(exps.chunks(chunk_size)).zip(self.0.iter_mut()) {
                 threads.push(s.spawn(move |s| {
-                    kern.multiexp(bases, exps, skip, bases.len())
+                    kern.multiexp(bases, exps, bases.len())
                 }));
             }
             for t in threads {
