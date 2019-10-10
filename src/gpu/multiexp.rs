@@ -141,8 +141,9 @@ impl<E> MultiexpKernel<E> where E: Engine {
     pub fn create(n: u32) -> GPUResult<MultiexpKernel<E>> {
         let devices = utils::get_devices(utils::GPU_NVIDIA_PLATFORM_NAME)?;
         if devices.len() == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
+        let chunk_size = ((n as f64) / (devices.len() as f64)).ceil() as u32;
         let mut kernels = Vec::new();
-        for dev in devices.into_iter().map(|device| { SingleMultiexpKernel::<E>::create(device, n) }) {
+        for dev in devices.into_iter().map(|device| { SingleMultiexpKernel::<E>::create(device, chunk_size) }) {
             kernels.push(dev?);
         }
         info!("Multiexp: {} working device(s) selected.", kernels.len());
