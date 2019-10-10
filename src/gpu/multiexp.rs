@@ -140,12 +140,11 @@ impl<E> MultiexpKernel<E> where E: Engine {
 
     pub fn create(n: u32) -> GPUResult<MultiexpKernel<E>> {
         let devices = utils::get_devices(utils::GPU_NVIDIA_PLATFORM_NAME)?;
-        let kernels : Vec<SingleMultiexpKernel<E>> = devices.into_iter()
-            .map(|device| { SingleMultiexpKernel::<E>::create(device, n) })
-            .filter(|result| { result.is_ok() })
-            .map(|result| { result.unwrap() })
-            .collect::<Vec<_>>();
-        if kernels.len() == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
+        if devices.len() == 0 { return Err(GPUError {msg: "No working GPUs found!".to_string()} ); }
+        let mut kernels = Vec::new();
+        for dev in devices.into_iter().map(|device| { SingleMultiexpKernel::<E>::create(device, n) }) {
+            kernels.push(dev?);
+        }
         info!("Multiexp: {} working device(s) selected.", kernels.len());
         for (i, k) in kernels.iter().enumerate() {
             info!("Multiexp: Device {}: {}", i, k.proque.device().name()?);
