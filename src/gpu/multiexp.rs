@@ -160,6 +160,10 @@ impl<E> MultiexpKernel<E> where E: Engine {
             n: usize)
             -> GPUResult<(<G as CurveAffine>::Projective)>
             where G: CurveAffine {
+        if n == 0 {
+            return Ok(<G as CurveAffine>::Projective::zero());
+        }
+
         let num_devices = self.0.len();
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
 
