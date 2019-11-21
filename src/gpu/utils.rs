@@ -13,17 +13,18 @@ pub fn get_devices(platform_name: &str) -> GPUResult<Vec<Device>> {
             msg: "GPU accelerator is disabled!".to_string(),
         });
     }
-
-    let platform = Platform::list()?.into_iter().find(|&p| match p.name() {
-        Ok(p) => p == platform_name,
-        Err(_) => false,
-    });
-    match platform {
-        Some(p) => Ok(Device::list_all(p)?),
-        None => Err(GPUError {
-            msg: "GPU platform not found!".to_string(),
-        }),
+    
+    for platform in Platform::list()? {
+        let name = platform.name()?;
+        if name == platform_name {
+            debug!("GPU Platform {:?} is supported.", name);
+            return Ok(Device::list_all(platform)?)
+        } else {
+            debug!("GPU Platform {:?} is not supported.", name);
+        }
     }
+    
+    return Err(GPUError { msg: "No working GPUs found!".to_string() });
 }
 
 lazy_static::lazy_static! {

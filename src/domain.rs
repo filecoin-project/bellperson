@@ -572,6 +572,7 @@ where
         if let Some(res) = *supported {
             res
         } else {
+            debug!("cmp gpu fft and serial fft result.");
             let elems = (0..test_size)
                 .map(|_| Scalar::<E>(E::Fr::random(rng)))
                 .collect::<Vec<_>>();
@@ -580,11 +581,14 @@ where
             gpu_fft(&mut kern, &mut v1.coeffs, &v1.omega, log_test_size)?;
             serial_fft(&mut v2.coeffs, &v2.omega, log_test_size);
             let res = v1.coeffs == v2.coeffs;
+            if !res {
+                warn!("gpu fft result not eq serial fft result");
+            }
             *supported = Some(res);
             res
         }
     };
-
+    
     if res {
         Ok(kern)
     } else {
