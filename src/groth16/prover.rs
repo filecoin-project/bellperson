@@ -182,7 +182,7 @@ where
     E: Engine,
     C: Circuit<E>,
 {
-    let lck = gpu::lock();
+    let lck = gpu::lock().expect("Cannot obtain prover lock!");
 
     let mut prover = ProvingAssignment {
         a_aux_density: DensityTracker::new(),

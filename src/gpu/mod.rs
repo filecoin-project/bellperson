@@ -38,22 +38,25 @@ lazy_static::lazy_static! {
     pub static ref GPU_NVIDIA_DEVICES: Vec<Device> = get_devices(GPU_NVIDIA_PLATFORM_NAME).unwrap_or_default();
 }
 
+#[derive(Debug)]
+pub struct LockedFile(File);
+
 use std::fs::File;
+
+use std::io;
 pub const LOCK_NAME: &str = "/tmp/bellman.lock";
-pub fn lock() -> File {
-    let file = File::create(LOCK_NAME).unwrap();
+pub fn lock() -> io::Result<LockedFile> {
+    let file = File::create(LOCK_NAME)?;
 
     #[cfg(feature = "gpu")]
     {
-        use std::os::unix::io::AsRawFd;
-        use nix::fcntl::{flock, FlockArg};
-        let fd = file.as_raw_fd();
-        flock(fd, FlockArg::LockExclusive).unwrap();
+        use fs2::FileExt;
+        file.lock_exclusive()?;
     }
 
-    file
+    Ok(LockedFile(file))
 }
 
-pub fn unlock(lock: File) {
+pub fn unlock(lock: LockedFile) {
     drop(lock);
 }
