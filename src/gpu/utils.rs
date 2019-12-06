@@ -71,13 +71,16 @@ pub struct LockedFile(File);
 pub const LOCK_NAME: &str = "/tmp/bellman.lock";
 
 pub fn lock() -> io::Result<LockedFile> {
+    info!("Creating GPU lock file");
     let file = File::create(LOCK_NAME)?;
 
     file.lock_exclusive()?;
 
+    info!("GPU lock file acquired");
     Ok(LockedFile(file))
 }
 
 pub fn unlock(lock: LockedFile) {
     drop(lock);
+    info!("GPU lock file released");
 }
