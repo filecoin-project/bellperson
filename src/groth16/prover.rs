@@ -10,6 +10,7 @@ use paired::Engine;
 
 use super::{ParameterSource, Proof};
 use crate::domain::{gpu_fft_supported, EvaluationDomain, Scalar};
+#[cfg(feature = "gpu")]
 use crate::gpu;
 use crate::multicore::Worker;
 use crate::multiexp::{gpu_multiexp_supported, multiexp, DensityTracker, FullDensity};
@@ -182,6 +183,7 @@ where
     E: Engine,
     C: Circuit<E>,
 {
+    #[cfg(feature = "gpu")]
     let lck = gpu::lock()?;
 
     let mut prover = ProvingAssignment {
@@ -381,6 +383,7 @@ where
     g_c.add_assign(&h.wait()?);
     g_c.add_assign(&l.wait()?);
 
+    #[cfg(feature = "gpu")]
     gpu::unlock(lck);
 
     Ok(Proof {
