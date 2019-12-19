@@ -235,7 +235,7 @@ fn test_mimc() {
     // batch verification
     {
         let start = Instant::now();
-        let valid = verify_proofs(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
+        let valid = verify_proofs(&params.vk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
         println!(
             "Batch verification of {} proofs: {:?} seconds",
             proofs.len(),

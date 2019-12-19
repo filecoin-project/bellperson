@@ -57,7 +57,7 @@ pub fn verify_proof<'a, E: Engine>(
 
 // randomized batch verification - see Appendix B.2 in Zcash spec
 pub fn verify_proofs<'a, E: Engine, R: rand::RngCore>(
-    pvk: &'a PreparedVerifyingKey<E>,
+    vk: &'a VerifyingKey<E>,
     rng: &mut R,
     proofs: &[Proof<E>],
     public_inputs: &[Vec<E::Fr>],
@@ -66,12 +66,14 @@ where
     <<E as ff::ScalarEngine>::Fr as ff::PrimeField>::Repr: From<<E as ff::ScalarEngine>::Fr>,
 {
     for pub_input in public_inputs {
-        if (pub_input.len() + 1) != pvk.ic.len() {
+        if (pub_input.len() + 1) != vk.ic.len() {
             return Err(SynthesisError::MalformedVerifyingKey);
         }
     }
 
-    let pi_num = pvk.ic.len() - 1;
+    let alpha_g1_beta_g2 = E::pairing(vk.alpha_g1, vk.beta_g2);
+
+    let pi_num = vk.ic.len() - 1;
     let proof_num = proofs.len();
 
     // choose random coefficients for combining the proofs
@@ -107,7 +109,7 @@ where
     // create group element corresponding to public input combination
     // This roughly corresponds to Accum_Gamma in spec
     let mut acc_pi = E::G1::zero();
-    for (i, b) in pi_scalars.iter().zip(pvk.ic.iter()) {
+    for (i, b) in pi_scalars.iter().zip(vk.ic.iter()) {
         acc_pi.add_assign(&b.mul(i.into_repr()));
     }
 
@@ -119,7 +121,7 @@ where
     // -Accum_Y
     sum_r.negate();
     // This corresponds to Y^-Accum_Y
-    let acc_y = pvk.alpha_g1_beta_g2.pow(&sum_r.into_repr());
+    let acc_y = alpha_g1_beta_g2.pow(&sum_r.into_repr());
 
     // This corresponds to Accum_Delta
     let mut acc_c = E::G1::zero();
@@ -154,9 +156,9 @@ where
 
     res.mul_assign(&E::miller_loop(&[
         // MillerLoop(Accum_Delta)
-        (&acc_c.into_affine().prepare(), &pvk.neg_delta_g2),
+        (&acc_c.into_affine().prepare(), &vk.delta_g2.prepare()),
         // MillerLoop(\sum Accum_Gamma)
-        (&acc_pi.into_affine().prepare(), &pvk.neg_gamma_g2),
+        (&acc_pi.into_affine().prepare(), &vk.gamma_g2.prepare()),
     ]));
 
     Ok(E::final_exponentiation(&res).unwrap() == acc_y)
