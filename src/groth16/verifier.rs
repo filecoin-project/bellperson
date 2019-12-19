@@ -86,6 +86,7 @@ where
         .map(|i| {
             let mut pi = E::Fr::zero();
             for j in 0..proof_num {
+                // z_j * a_j,i
                 let mut tmp = r[j];
                 tmp.mul_assign(&public_inputs[j][i]);
                 pi.add_assign(&tmp);
@@ -105,11 +106,14 @@ where
     // TODO: why is this not used?
     let acc_pi = acc_pi.into_affine().prepare();
 
+    // This corresponds to Accum_Y
     let mut sum_r = E::Fr::zero();
     for i in r.iter() {
         sum_r.add_assign(i);
     }
+    // -Accum_Y
     sum_r.negate();
+    // This corresponds to Y^-Accum_Y
     let acc_y = pvk.alpha_g1_beta_g2.pow(&sum_r.into_repr());
 
     // This corresponds to Accum_Delta
@@ -119,28 +123,36 @@ where
         tmp.mul_assign(*rand_coeff);
         acc_c.add_assign(&tmp);
     }
-
     let acc_c = acc_c.into_affine().prepare();
 
+    // This corresponds to Accum_AB
     let ml = r
         .par_iter()
         .zip(proofs.par_iter())
         .map(|(rand_coeff, proof)| {
+            // [z_j] pi_j,A
             let mut tmp: E::G1 = proof.a.into();
             tmp.mul_assign(*rand_coeff);
             let g1 = tmp.into_affine().prepare();
+
+            // -pi_j,B
             let mut tmp: E::G2 = proof.b.into();
             tmp.negate();
             let g2 = tmp.into_affine().prepare();
+
             (g1, g2)
         })
         .collect::<Vec<_>>();
-    let parts = ml.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
+    let accum_ab_parts = ml.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
 
-    // acc_ab
-    let mut res = E::miller_loop(&parts);
-    // MillerLoop acc_c
+    // Accum_AB
+    let mut res = E::miller_loop(&accum_ab_parts);
+
+    // MillerLoop(Accum_Delta)
     res.mul_assign(&E::miller_loop(&[(&acc_c, &pvk.neg_delta_g2)]));
+
+    // MillerLoop(\sum Accum_Gamma)
+    res.mul_assign(&E::miller_loop(&[(&acc_pi, &pvk.neg_gamma_g2)]));
 
     Ok(E::final_exponentiation(&res).unwrap() == acc_y)
 }

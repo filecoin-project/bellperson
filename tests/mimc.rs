@@ -242,7 +242,7 @@ fn test_mimc() {
         println!(
             "Batch verification of {} proofs: {:?} seconds",
             proofs.len(),
-            start.elapsed().as_secs(),
+            (start.elapsed().subsec_nanos() as f64) / 1_000_000_000f64,
         );
     }
 }
