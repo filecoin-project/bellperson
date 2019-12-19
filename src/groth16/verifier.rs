@@ -3,7 +3,7 @@ use groupy::{CurveAffine, CurveProjective};
 use paired::{Engine, PairingCurveAffine};
 use rayon::prelude::*;
 
-use super::{PreparedVerifyingKey, Proof, VerifyingKey};
+use super::{BatchPreparedVerifyingKey, PreparedVerifyingKey, Proof, VerifyingKey};
 use crate::SynthesisError;
 
 pub fn prepare_verifying_key<E: Engine>(vk: &VerifyingKey<E>) -> PreparedVerifyingKey<E> {
@@ -16,6 +16,17 @@ pub fn prepare_verifying_key<E: Engine>(vk: &VerifyingKey<E>) -> PreparedVerifyi
         alpha_g1_beta_g2: E::pairing(vk.alpha_g1, vk.beta_g2),
         neg_gamma_g2: gamma.prepare(),
         neg_delta_g2: delta.prepare(),
+        ic: vk.ic.clone(),
+    }
+}
+
+pub fn prepare_batch_verifying_key<E: Engine>(
+    vk: &VerifyingKey<E>,
+) -> BatchPreparedVerifyingKey<E> {
+    BatchPreparedVerifyingKey {
+        alpha_g1_beta_g2: E::pairing(vk.alpha_g1, vk.beta_g2),
+        gamma_g2: vk.gamma_g2.prepare(),
+        delta_g2: vk.delta_g2.prepare(),
         ic: vk.ic.clone(),
     }
 }
@@ -55,9 +66,9 @@ pub fn verify_proof<'a, E: Engine>(
         == pvk.alpha_g1_beta_g2)
 }
 
-// randomized batch verification - see Appendix B.2 in Zcash spec
-pub fn verify_proofs<'a, E: Engine, R: rand::RngCore>(
-    vk: &'a VerifyingKey<E>,
+/// Randomized batch verification - see Appendix B.2 in Zcash spec
+pub fn verify_proofs_batch<'a, E: Engine, R: rand::RngCore>(
+    pvk: &'a BatchPreparedVerifyingKey<E>,
     rng: &mut R,
     proofs: &[Proof<E>],
     public_inputs: &[Vec<E::Fr>],
@@ -66,14 +77,12 @@ where
     <<E as ff::ScalarEngine>::Fr as ff::PrimeField>::Repr: From<<E as ff::ScalarEngine>::Fr>,
 {
     for pub_input in public_inputs {
-        if (pub_input.len() + 1) != vk.ic.len() {
+        if (pub_input.len() + 1) != pvk.ic.len() {
             return Err(SynthesisError::MalformedVerifyingKey);
         }
     }
 
-    let alpha_g1_beta_g2 = E::pairing(vk.alpha_g1, vk.beta_g2);
-
-    let pi_num = vk.ic.len() - 1;
+    let pi_num = pvk.ic.len() - 1;
     let proof_num = proofs.len();
 
     // choose random coefficients for combining the proofs
@@ -113,8 +122,8 @@ where
 
     // create group element corresponding to public input combination
     // This roughly corresponds to Accum_Gamma in spec
-    let mut acc_pi = vk.ic[0].mul(sum_r.into_repr());
-    for (i, b) in pi_scalars.iter().zip(vk.ic.iter().skip(1)) {
+    let mut acc_pi = pvk.ic[0].mul(sum_r.into_repr());
+    for (i, b) in pi_scalars.iter().zip(pvk.ic.iter().skip(1)) {
         acc_pi.add_assign(&b.mul(i.into_repr()));
     }
 
@@ -122,7 +131,7 @@ where
     // -Accum_Y
     sum_r.negate();
     // This corresponds to Y^-Accum_Y
-    let acc_y = alpha_g1_beta_g2.pow(&sum_r.into_repr());
+    let acc_y = pvk.alpha_g1_beta_g2.pow(&sum_r.into_repr());
 
     // This corresponds to Accum_Delta
     let mut acc_c = E::G1::zero();
@@ -157,9 +166,9 @@ where
 
     res.mul_assign(&E::miller_loop(&[
         // MillerLoop(Accum_Delta)
-        (&acc_c.into_affine().prepare(), &vk.delta_g2.prepare()),
+        (&acc_c.into_affine().prepare(), &pvk.delta_g2),
         // MillerLoop(\sum Accum_Gamma)
-        (&acc_pi.into_affine().prepare(), &vk.gamma_g2.prepare()),
+        (&acc_pi.into_affine().prepare(), &pvk.gamma_g2),
     ]));
 
     Ok(E::final_exponentiation(&res).unwrap() == acc_y)

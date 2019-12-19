@@ -16,8 +16,8 @@ use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 
 // We're going to use the Groth16 proving system.
 use bellperson::groth16::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-    verify_proofs, Proof,
+    create_random_proof, generate_random_parameters, prepare_batch_verifying_key,
+    prepare_verifying_key, verify_proof, verify_proofs_batch, Proof,
 };
 
 const MIMC_ROUNDS: usize = 322;
@@ -234,13 +234,30 @@ fn test_mimc() {
 
     // batch verification
     {
+        let pvk = prepare_batch_verifying_key(&params.vk);
+
         let start = Instant::now();
-        let valid = verify_proofs(&params.vk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
+        let valid = verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
         println!(
             "Batch verification of {} proofs: {:?} seconds",
             proofs.len(),
             (start.elapsed().subsec_nanos() as f64) / 1_000_000_000f64,
         );
         assert!(valid, "failed batch verification");
+
+        // check that invalid proofs don't validate
+        let bad_proofs: Vec<_> = proofs
+            .iter()
+            .map(|p| {
+                use groupy::CurveProjective;
+
+                let mut p = p.clone();
+                let mut a: <Bls12 as Engine>::G1 = p.a.into();
+                a.add_assign(&<Bls12 as Engine>::G1::one());
+                p.a = a.into_affine();
+                p
+            })
+            .collect();
+        assert!(!verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &bad_proofs, &images).unwrap());
     }
 }
