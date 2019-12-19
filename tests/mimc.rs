@@ -16,7 +16,8 @@ use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 
 // We're going to use the Groth16 proving system.
 use bellperson::groth16::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof, Proof,
+    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
+    verify_proofs, Proof,
 };
 
 const MIMC_ROUNDS: usize = 322;
@@ -183,6 +184,8 @@ fn test_mimc() {
     // Just a place to put the proof data, so we can
     // benchmark deserialization.
     let mut proof_vec = vec![];
+    let mut proofs = vec![];
+    let mut images = vec![];
 
     for _ in 0..SAMPLES {
         // Generate a random preimage and compute the image
@@ -215,6 +218,8 @@ fn test_mimc() {
         // Check the proof
         assert!(verify_proof(&pvk, &proof, &[image]).unwrap());
         total_verifying += start.elapsed();
+        proofs.push(proof);
+        images.push(vec![image]);
     }
     let proving_avg = total_proving / SAMPLES;
     let proving_avg =
@@ -226,4 +231,18 @@ fn test_mimc() {
 
     println!("Average proving time: {:?} seconds", proving_avg);
     println!("Average verifying time: {:?} seconds", verifying_avg);
+
+    // batch verification
+    {
+        let start = Instant::now();
+        assert!(
+            verify_proofs(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap(),
+            "failed batch verification"
+        );
+        println!(
+            "Batch verification of {} proofs: {:?} seconds",
+            proofs.len(),
+            start.elapsed().as_secs(),
+        );
+    }
 }
