@@ -70,7 +70,7 @@ pub fn verify_proof<'a, E: Engine>(
 pub fn verify_proofs_batch<'a, E: Engine, R: rand::RngCore>(
     pvk: &'a BatchPreparedVerifyingKey<E>,
     rng: &mut R,
-    proofs: &[Proof<E>],
+    proofs: &[&Proof<E>],
     public_inputs: &[Vec<E::Fr>],
 ) -> Result<bool, SynthesisError>
 where

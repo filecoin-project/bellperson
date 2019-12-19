@@ -237,6 +237,7 @@ fn test_mimc() {
         let pvk = prepare_batch_verifying_key(&params.vk);
 
         let start = Instant::now();
+        let proofs: Vec<_> = proofs.iter().collect();
         let valid = verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
         println!(
             "Batch verification of {} proofs: {:?} seconds",
@@ -246,18 +247,21 @@ fn test_mimc() {
         assert!(valid, "failed batch verification");
 
         // check that invalid proofs don't validate
-        let bad_proofs: Vec<_> = proofs
+        let bad_proofs: Vec<Proof<Bls12>> = proofs
             .iter()
             .map(|p| {
                 use groupy::CurveProjective;
 
-                let mut p = p.clone();
+                let mut p = (*p).clone();
                 let mut a: <Bls12 as Engine>::G1 = p.a.into();
                 a.add_assign(&<Bls12 as Engine>::G1::one());
                 p.a = a.into_affine();
                 p
             })
             .collect();
-        assert!(!verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &bad_proofs, &images).unwrap());
+        let bad_proofs: Vec<_> = bad_proofs.iter().collect();
+        assert!(
+            !verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &bad_proofs[..], &images).unwrap()
+        );
     }
 }
