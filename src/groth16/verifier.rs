@@ -91,6 +91,11 @@ where
         r.push(E::Fr::from_repr(el).unwrap());
     }
 
+    let mut sum_r = E::Fr::zero();
+    for i in r.iter() {
+        sum_r.add_assign(i);
+    }
+
     // create corresponding scalars for public input vk elements
     let pi_scalars: Vec<_> = (0..pi_num)
         .into_par_iter()
@@ -108,16 +113,12 @@ where
 
     // create group element corresponding to public input combination
     // This roughly corresponds to Accum_Gamma in spec
-    let mut acc_pi = vk.ic[0].into_projective();
+    let mut acc_pi = vk.ic[0].mul(sum_r.into_repr());
     for (i, b) in pi_scalars.iter().zip(vk.ic.iter().skip(1)) {
         acc_pi.add_assign(&b.mul(i.into_repr()));
     }
 
     // This corresponds to Accum_Y
-    let mut sum_r = E::Fr::zero();
-    for i in r.iter() {
-        sum_r.add_assign(i);
-    }
     // -Accum_Y
     sum_r.negate();
     // This corresponds to Y^-Accum_Y
