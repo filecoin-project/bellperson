@@ -75,9 +75,18 @@ where
     let proof_num = proofs.len();
 
     // choose random coefficients for combining the proofs
-    let mut r = Vec::with_capacity(proof_num);
+    let mut r: Vec<E::Fr> = Vec::with_capacity(proof_num);
     for _ in 0..proof_num {
-        r.push(E::Fr::random(rng));
+        use rand::Rng;
+
+        let t: u128 = rng.gen();
+        let mut el = E::Fr::zero().into_repr();
+        let el_ref: &mut [u64] = el.as_mut();
+        assert!(el_ref.len() > 1);
+        el_ref[0] = (t & (-1i64 as u128) >> 64) as u64;
+        el_ref[1] = (t >> 64) as u64;
+
+        r.push(E::Fr::from_repr(el).unwrap());
     }
 
     // create corresponding scalars for public input vk elements

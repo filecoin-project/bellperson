@@ -235,14 +235,12 @@ fn test_mimc() {
     // batch verification
     {
         let start = Instant::now();
-        assert!(
-            verify_proofs(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap(),
-            "failed batch verification"
-        );
+        let valid = verify_proofs(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
         println!(
             "Batch verification of {} proofs: {:?} seconds",
             proofs.len(),
             (start.elapsed().subsec_nanos() as f64) / 1_000_000_000f64,
         );
+        assert!(valid, "failed batch verification");
     }
 }
