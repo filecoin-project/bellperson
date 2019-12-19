@@ -97,14 +97,10 @@ where
 
     // create group element corresponding to public input combination
     // This roughly corresponds to Accum_Gamma in spec
-    let mut acc_pi = pvk.ic[0].into_projective();
-
-    for (i, b) in pi_scalars.iter().zip(pvk.ic.iter().skip(1)) {
+    let mut acc_pi = E::G1::zero();
+    for (i, b) in pi_scalars.iter().zip(pvk.ic.iter()) {
         acc_pi.add_assign(&b.mul(i.into_repr()));
     }
-
-    // TODO: why is this not used?
-    let acc_pi = acc_pi.into_affine().prepare();
 
     // This corresponds to Accum_Y
     let mut sum_r = E::Fr::zero();
@@ -123,7 +119,6 @@ where
         tmp.mul_assign(*rand_coeff);
         acc_c.add_assign(&tmp);
     }
-    let acc_c = acc_c.into_affine().prepare();
 
     // This corresponds to Accum_AB
     let ml = r
@@ -148,11 +143,12 @@ where
     // Accum_AB
     let mut res = E::miller_loop(&accum_ab_parts);
 
-    // MillerLoop(Accum_Delta)
-    res.mul_assign(&E::miller_loop(&[(&acc_c, &pvk.neg_delta_g2)]));
-
-    // MillerLoop(\sum Accum_Gamma)
-    res.mul_assign(&E::miller_loop(&[(&acc_pi, &pvk.neg_gamma_g2)]));
+    res.mul_assign(&E::miller_loop(&[
+        // MillerLoop(Accum_Delta)
+        (&acc_c.into_affine().prepare(), &pvk.neg_delta_g2),
+        // MillerLoop(\sum Accum_Gamma)
+        (&acc_pi.into_affine().prepare(), &pvk.neg_gamma_g2),
+    ]));
 
     Ok(E::final_exponentiation(&res).unwrap() == acc_y)
 }
