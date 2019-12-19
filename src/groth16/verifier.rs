@@ -1,6 +1,7 @@
 use ff::{Field, PrimeField};
 use groupy::{CurveAffine, CurveProjective};
 use paired::{Engine, PairingCurveAffine};
+use rayon::prelude::*;
 
 use super::{PreparedVerifyingKey, Proof, VerifyingKey};
 use crate::SynthesisError;
@@ -74,22 +75,24 @@ where
     let proof_num = proofs.len();
 
     // choose random coefficients for combining the proofs
-    let mut r = vec![];
+    let mut r = Vec::with_capacity(proof_num);
     for _ in 0..proof_num {
         r.push(E::Fr::random(rng));
     }
 
     // create corresponding scalars for public input vk elements
-    let mut pi_scalars = vec![];
-
-    for i in 0..pi_num {
-        pi_scalars.push(E::Fr::zero());
-        for j in 0..proof_num {
-            let mut tmp = r[j];
-            tmp.mul_assign(&public_inputs[j][i]);
-            pi_scalars[i].add_assign(&tmp);
-        }
-    }
+    let pi_scalars: Vec<_> = (0..pi_num)
+        .into_par_iter()
+        .map(|i| {
+            let mut pi = E::Fr::zero();
+            for j in 0..proof_num {
+                let mut tmp = r[j];
+                tmp.mul_assign(&public_inputs[j][i]);
+                pi.add_assign(&tmp);
+            }
+            pi
+        })
+        .collect();
 
     // create group element corresponding to public input combination
     // This roughly corresponds to Accum_Gamma in spec
@@ -119,19 +122,25 @@ where
 
     let acc_c = acc_c.into_affine().prepare();
 
-    let mut ml_g1 = vec![];
-    let mut ml_g2 = vec![];
-    for (rand_coeff, proof) in r.into_iter().zip(proofs.iter()) {
-        let mut tmp: E::G1 = proof.a.into();
-        tmp.mul_assign(rand_coeff);
-        ml_g1.push(tmp.into_affine().prepare());
-        let mut tmp: E::G2 = proof.b.into();
-        tmp.negate();
-        ml_g2.push(tmp.into_affine().prepare());
-    }
-    let parts = ml_g1.iter().zip(ml_g2.iter()).collect::<Vec<_>>();
-    let mut acc_ab = E::miller_loop(&parts);
-    acc_ab.mul_assign(&E::miller_loop(&[(&acc_c, &pvk.neg_delta_g2)]));
+    let ml = r
+        .par_iter()
+        .zip(proofs.par_iter())
+        .map(|(rand_coeff, proof)| {
+            let mut tmp: E::G1 = proof.a.into();
+            tmp.mul_assign(*rand_coeff);
+            let g1 = tmp.into_affine().prepare();
+            let mut tmp: E::G2 = proof.b.into();
+            tmp.negate();
+            let g2 = tmp.into_affine().prepare();
+            (g1, g2)
+        })
+        .collect::<Vec<_>>();
+    let parts = ml.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
 
-    Ok(E::final_exponentiation(&acc_ab).unwrap() == acc_y)
+    // acc_ab
+    let mut res = E::miller_loop(&parts);
+    // MillerLoop acc_c
+    res.mul_assign(&E::miller_loop(&[(&acc_c, &pvk.neg_delta_g2)]));
+
+    Ok(E::final_exponentiation(&res).unwrap() == acc_y)
 }
