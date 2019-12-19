@@ -108,8 +108,8 @@ where
 
     // create group element corresponding to public input combination
     // This roughly corresponds to Accum_Gamma in spec
-    let mut acc_pi = E::G1::zero();
-    for (i, b) in pi_scalars.iter().zip(vk.ic.iter()) {
+    let mut acc_pi = vk.ic[0].into_projective();
+    for (i, b) in pi_scalars.iter().zip(vk.ic.iter().skip(1)) {
         acc_pi.add_assign(&b.mul(i.into_repr()));
     }
 
