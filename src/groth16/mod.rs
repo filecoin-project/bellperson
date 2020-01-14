@@ -13,6 +13,7 @@ use memmap::{Mmap, MmapOptions};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
+use std::mem;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -227,19 +228,18 @@ impl<E: Engine> VerifyingKey<E> {
         })
     }
 
-    // This method is provided as a proof of concept, but isn't
-    // advantageous to use (can be called by read_cached_params in
-    // rust-fil-proofs repo).  It's equivalent to the existing read
-    // method, in that it loads all parameters to RAM.
     pub fn read_mmap(mmap: &Mmap, offset: &mut usize) -> io::Result<Self> {
-        let u32_len = std::mem::size_of::<u32>();
-        let g1_len = std::mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
-        let g2_len = std::mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
+        let u32_len = mem::size_of::<u32>();
+        let g1_len = mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
+        let g2_len = mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
 
         let read_g1 = |mmap: &Mmap,
                        offset: &mut usize|
          -> Result<<E as paired::Engine>::G1Affine, std::io::Error> {
-            let ptr = &mmap[*offset..*offset + std::mem::size_of::<E::G1Affine>()];
+            let ptr = &mmap[*offset..*offset + g1_len];
+            // Safety: this operation is safe, because it's simply
+            // casting to a known struct at the correct offset, given
+            // the structure of the on-disk data.
             let g1_repr: <E::G1Affine as CurveAffine>::Uncompressed = unsafe {
                 *(ptr as *const [u8] as *const <E::G1Affine as CurveAffine>::Uncompressed)
             };
@@ -253,7 +253,10 @@ impl<E: Engine> VerifyingKey<E> {
         let read_g2 = |mmap: &Mmap,
                        offset: &mut usize|
          -> Result<<E as paired::Engine>::G2Affine, std::io::Error> {
-            let ptr = &mmap[*offset..*offset + std::mem::size_of::<E::G2Affine>()];
+            let ptr = &mmap[*offset..*offset + g2_len];
+            // Safety: this operation is safe, because it's simply
+            // casting to a known struct at the correct offset, given
+            // the structure of the on-disk data.
             let g2_repr: <E::G2Affine as CurveAffine>::Uncompressed = unsafe {
                 *(ptr as *const [u8] as *const <E::G2Affine as CurveAffine>::Uncompressed)
             };
@@ -384,9 +387,9 @@ impl<E: Engine> Parameters<E> {
         let params = File::open(&param_file)?;
         let mmap = unsafe { MmapOptions::new().map(&params)? };
 
-        let u32_len = std::mem::size_of::<u32>();
-        let g1_len = std::mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
-        let g2_len = std::mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
+        let u32_len = mem::size_of::<u32>();
+        let g1_len = mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
+        let g2_len = mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
 
         let read_length = |mmap: &Mmap, offset: &mut usize| -> Result<usize, std::io::Error> {
             let mut raw_len = &mmap[*offset..*offset + u32_len];
@@ -442,14 +445,21 @@ impl<E: Engine> Parameters<E> {
         })
     }
 
+    // This method is provided as a proof of concept, but isn't
+    // advantageous to use (can be called by read_cached_params in
+    // rust-fil-proofs repo).  It's equivalent to the existing read
+    // method, in that it loads all parameters to RAM.
     pub fn read_mmap(mmap: &Mmap, checked: bool) -> io::Result<Self> {
-        let u32_len = std::mem::size_of::<u32>();
-        let g1_len = std::mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
-        let g2_len = std::mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
+        let u32_len = mem::size_of::<u32>();
+        let g1_len = mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
+        let g2_len = mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
 
         let read_g1 = |mmap: &Mmap, offset: &mut usize| -> io::Result<E::G1Affine> {
             let ptr = &mmap[*offset..*offset + g1_len];
             *offset += g1_len;
+            // Safety: this operation is safe, because it's simply
+            // casting to a known struct at the correct offset, given
+            // the structure of the on-disk data.
             let repr: <E::G1Affine as CurveAffine>::Uncompressed = unsafe {
                 *(ptr as *const [u8] as *const <E::G1Affine as CurveAffine>::Uncompressed)
             };
@@ -475,6 +485,9 @@ impl<E: Engine> Parameters<E> {
         let read_g2 = |mmap: &Mmap, offset: &mut usize| -> io::Result<E::G2Affine> {
             let ptr = &mmap[*offset..*offset + g2_len];
             *offset += g2_len;
+            // Safety: this operation is safe, because it's simply
+            // casting to a known struct at the correct offset, given
+            // the structure of the on-disk data.
             let repr: <E::G2Affine as CurveAffine>::Uncompressed = unsafe {
                 *(ptr as *const [u8] as *const <E::G2Affine as CurveAffine>::Uncompressed)
             };
@@ -782,7 +795,9 @@ impl<'a, E: Engine> ParameterSource<E> for &'a Parameters<E> {
     }
 }
 
-// A re-usable method for parameter loading via mmap.
+// A re-usable method for parameter loading via mmap.  Unlike the
+// internal ones used elsewhere, this one does not update offset state
+// and simply does the cast and transform needed.
 fn read_g1<E: Engine>(
     mmap: &Mmap,
     start: usize,
@@ -790,6 +805,9 @@ fn read_g1<E: Engine>(
     checked: bool,
 ) -> Result<E::G1Affine, std::io::Error> {
     let ptr = &mmap[start..end];
+    // Safety: this operation is safe, because it's simply
+    // casting to a known struct at the correct offset, given
+    // the structure of the on-disk data.
     let repr =
         unsafe { *(ptr as *const [u8] as *const <E::G1Affine as CurveAffine>::Uncompressed) };
 
@@ -811,7 +829,9 @@ fn read_g1<E: Engine>(
     })
 }
 
-// A re-usable method for parameter loading via mmap.
+// A re-usable method for parameter loading via mmap.  Unlike the
+// internal ones used elsewhere, this one does not update offset state
+// and simply does the cast and transform needed.
 fn read_g2<E: Engine>(
     mmap: &Mmap,
     start: usize,
@@ -819,6 +839,9 @@ fn read_g2<E: Engine>(
     checked: bool,
 ) -> Result<E::G2Affine, std::io::Error> {
     let ptr = &mmap[start..end];
+    // Safety: this operation is safe, because it's simply
+    // casting to a known struct at the correct offset, given
+    // the structure of the on-disk data.
     let repr =
         unsafe { *(ptr as *const [u8] as *const <E::G2Affine as CurveAffine>::Uncompressed) };
 
@@ -850,6 +873,8 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
 
     fn get_h(&mut self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
         let params = File::open(self.param_file.clone())?;
+        // Safety: this operation is safe, because we are
+        // intentionally memory mapping this file.
         let mmap = unsafe { MmapOptions::new().map(&params)? };
 
         let mut h = vec![];
@@ -867,6 +892,8 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
 
     fn get_l(&mut self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
         let params = File::open(self.param_file.clone())?;
+        // Safety: this operation is safe, because we are
+        // intentionally memory mapping this file.
         let mmap = unsafe { MmapOptions::new().map(&params)? };
 
         let mut l = vec![];
@@ -888,6 +915,8 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         _num_a: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
         let params = File::open(self.param_file.clone())?;
+        // Safety: this operation is safe, because we are
+        // intentionally memory mapping this file.
         let mmap = unsafe { MmapOptions::new().map(&params)? };
 
         let mut a = vec![];
@@ -909,6 +938,8 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         _num_b_g1: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
         let params = File::open(self.param_file.clone())?;
+        // Safety: this operation is safe, because we are
+        // intentionally memory mapping this file.
         let mmap = unsafe { MmapOptions::new().map(&params)? };
 
         let mut b_g1 = vec![];
@@ -930,6 +961,8 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         _num_b_g2: usize,
     ) -> Result<(Self::G2Builder, Self::G2Builder), SynthesisError> {
         let params = File::open(self.param_file.clone())?;
+        // Safety: this operation is safe, because we are
+        // intentionally memory mapping this file.
         let mmap = unsafe { MmapOptions::new().map(&params)? };
 
         let mut b_g2 = vec![];
