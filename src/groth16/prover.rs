@@ -3,6 +3,7 @@ use std::sync::Arc;
 use ff::{Field, PrimeField};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
+use log::warn;
 use paired::Engine;
 use rand_core::RngCore;
 use rayon::prelude::*;
@@ -175,8 +176,6 @@ where
     create_proof::<E, C, P>(circuit, params, r, s)
 }
 
-#[inline(always)]
-
 pub fn create_proof_many<E, C, P: ParameterSource<E>>(
     circuits: Vec<C>,
     mut params: P,
@@ -227,27 +226,8 @@ where
     #[cfg(feature = "gpu")]
     let lock = gpu::lock()?;
 
-    let mut fft_kern = match gpu_fft_supported(log_d) {
-        Ok(k) => {
-            info!("GPU FFT is supported!");
-            Some(k)
-        }
-        Err(e) => {
-            warn!("GPU FFT not supported: error: {}", e);
-            None
-        }
-    };
-
-    let mut multiexp_kern = match gpu_multiexp_supported() {
-        Ok(k) => {
-            info!("GPU Multiexp is supported!");
-            Some(k)
-        }
-        Err(e) => {
-            warn!("GPU multiexp not supported: error: {}", e);
-            None
-        }
-    };
+    let mut fft_kern = create_fft_kernel(log_d);
+    let mut multiexp_kern = create_multiexp_kernel();
 
     let a_s = provers
         .iter_mut()
