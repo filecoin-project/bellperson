@@ -3,7 +3,6 @@ use std::sync::Arc;
 use ff::{Field, PrimeField};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
-use log::warn;
 use paired::Engine;
 use rand_core::RngCore;
 use rayon::prelude::*;
@@ -176,11 +175,27 @@ where
     create_proof::<E, C, P>(circuit, params, r, s)
 }
 
+pub fn create_random_proof_many<E, C, R, P: ParameterSource<E>>(
+    circuits: Vec<C>,
+    params: P,
+    rng: &mut R,
+) -> Result<Vec<Proof<E>>, SynthesisError>
+where
+    E: Engine,
+    C: Circuit<E> + Send,
+    R: RngCore,
+{
+    let r_s = (0..circuits.len()).map(|_| E::Fr::random(rng)).collect();
+    let s_s = (0..circuits.len()).map(|_| E::Fr::random(rng)).collect();
+
+    create_proof_many::<E, C, P>(circuits, params, r_s, s_s)
+}
+
 pub fn create_proof_many<E, C, P: ParameterSource<E>>(
     circuits: Vec<C>,
     mut params: P,
-    r: E::Fr,
-    s: E::Fr,
+    r_s: Vec<E::Fr>,
+    s_s: Vec<E::Fr>,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: Engine,
@@ -405,8 +420,13 @@ where
         .into_iter()
         .zip(l_s.into_iter())
         .zip(inputs.into_iter())
+        .zip(r_s.into_iter())
+        .zip(s_s.into_iter())
         .map(
-            |((h, l), (a_inputs, a_aux, b_g1_inputs, b_g1_aux, b_g2_inputs, b_g2_aux))| {
+            |(
+                (((h, l), (a_inputs, a_aux, b_g1_inputs, b_g1_aux, b_g2_inputs, b_g2_aux)), r),
+                s,
+            )| {
                 if vk.delta_g1.is_zero() || vk.delta_g2.is_zero() {
                     // If this element is zero, someone is trying to perform a
                     // subversion-CRS attack.
