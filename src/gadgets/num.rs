@@ -221,7 +221,7 @@ impl<E: ScalarEngine> AllocatedNum<E> {
         let mut lc = LinearCombination::zero();
         let mut coeff = E::Fr::one();
 
-        for bit in bits.iter() {
+        for bit in bits.iter().rev() {
             lc = lc + (coeff, bit.get_variable());
 
             coeff.double();
