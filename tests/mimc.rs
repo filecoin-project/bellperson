@@ -229,8 +229,8 @@ fn test_mimc() {
     let verifying_avg =
         verifying_avg.subsec_nanos() as f64 / 1_000_000_000f64 + (verifying_avg.as_secs() as f64);
 
-    println!("Average proving time: {:?} seconds", proving_avg);
-    println!("Average verifying time: {:?} seconds", verifying_avg);
+    println!("Average proving time: {:08}s", proving_avg);
+    println!("Average verifying time: {:08}s", verifying_avg);
 
     // batch verification
     {
@@ -240,28 +240,32 @@ fn test_mimc() {
         let proofs: Vec<_> = proofs.iter().collect();
         let valid = verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
         println!(
-            "Batch verification of {} proofs: {:?} seconds",
+            "Batch verification of {} proofs: {:04}s ({:04}s/proof)",
             proofs.len(),
             (start.elapsed().subsec_nanos() as f64) / 1_000_000_000f64,
+            ((start.elapsed().subsec_nanos() as f64) / 1_000_000_000f64) / proofs.len() as f64,
         );
         assert!(valid, "failed batch verification");
 
         // check that invalid proofs don't validate
-        let bad_proofs: Vec<Proof<Bls12>> = proofs
+        let mut bad_proofs = proofs
             .iter()
-            .map(|p| {
-                use groupy::CurveProjective;
+            .map(|p| (*p).clone())
+            .collect::<Vec<Proof<_>>>();
 
-                let mut p = (*p).clone();
-                let mut a: <Bls12 as Engine>::G1 = p.a.into();
-                a.add_assign(&<Bls12 as Engine>::G1::one());
-                p.a = a.into_affine();
-                p
-            })
-            .collect();
-        let bad_proofs: Vec<_> = bad_proofs.iter().collect();
+        for i in 0..proofs.len() {
+            use groupy::CurveProjective;
+
+            let p = &mut bad_proofs[i];
+
+            let mut a: <Bls12 as Engine>::G1 = p.a.into();
+            a.add_assign(&<Bls12 as Engine>::G1::one());
+            p.a = a.into_affine();
+        }
+        let bad_proofs_ref = bad_proofs.iter().collect::<Vec<_>>();
         assert!(
-            !verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &bad_proofs[..], &images).unwrap()
+            !verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &bad_proofs_ref[..], &images)
+                .unwrap()
         );
     }
 }

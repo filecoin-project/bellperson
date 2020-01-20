@@ -159,17 +159,16 @@ where
             (g1, g2)
         })
         .collect::<Vec<_>>();
-    let accum_ab_parts = ml.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
+    let mut parts = ml.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
 
-    // Accum_AB
-    let mut res = E::miller_loop(&accum_ab_parts);
+    // MillerLoop(Accum_Delta)
+    let acc_c_prepared = acc_c.into_affine().prepare();
+    parts.push((&acc_c_prepared, &pvk.delta_g2));
 
-    res.mul_assign(&E::miller_loop(&[
-        // MillerLoop(Accum_Delta)
-        (&acc_c.into_affine().prepare(), &pvk.delta_g2),
-        // MillerLoop(\sum Accum_Gamma)
-        (&acc_pi.into_affine().prepare(), &pvk.gamma_g2),
-    ]));
+    // MillerLoop(\sum Accum_Gamma)
+    let acc_pi_prepared = acc_pi.into_affine().prepare();
+    parts.push((&acc_pi_prepared, &pvk.gamma_g2));
 
+    let res = E::miller_loop(&parts);
     Ok(E::final_exponentiation(&res).unwrap() == acc_y)
 }
