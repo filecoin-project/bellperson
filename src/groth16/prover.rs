@@ -175,7 +175,7 @@ where
     create_proof::<E, C, P>(circuit, params, r, s)
 }
 
-pub fn create_random_proof_many<E, C, R, P: ParameterSource<E>>(
+pub fn create_random_proof_batch<E, C, R, P: ParameterSource<E>>(
     circuits: Vec<C>,
     params: P,
     rng: &mut R,
@@ -188,10 +188,10 @@ where
     let r_s = (0..circuits.len()).map(|_| E::Fr::random(rng)).collect();
     let s_s = (0..circuits.len()).map(|_| E::Fr::random(rng)).collect();
 
-    create_proof_many::<E, C, P>(circuits, params, r_s, s_s)
+    create_proof_batch::<E, C, P>(circuits, params, r_s, s_s)
 }
 
-pub fn create_proof_many<E, C, P: ParameterSource<E>>(
+pub fn create_proof_batch<E, C, P: ParameterSource<E>>(
     circuits: Vec<C>,
     mut params: P,
     r_s: Vec<E::Fr>,

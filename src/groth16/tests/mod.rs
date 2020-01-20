@@ -7,7 +7,7 @@ use self::dummy_engine::*;
 use std::marker::PhantomData;
 
 use super::{
-    create_proof, create_proof_many, generate_parameters, prepare_verifying_key, verify_proof,
+    create_proof, create_proof_batch, generate_parameters, prepare_verifying_key, verify_proof,
 };
 use crate::{Circuit, ConstraintSystem, SynthesisError};
 
@@ -383,8 +383,8 @@ fn test_xordemo() {
 }
 
 #[test]
-fn test_create_many_single() {
-    // test consistency between single and many creation
+fn test_create_batch_single() {
+    // test consistency between single and batch creation
     let g1 = Fr::one();
     let g2 = Fr::one();
     let alpha = Fr::from_str("48577").unwrap();
@@ -419,7 +419,7 @@ fn test_create_many_single() {
     let proof_single_1 = create_proof(c.clone(), &params, r1, s1).unwrap();
     let proof_single_2 = create_proof(c.clone(), &params, r2, s2).unwrap();
 
-    let proof_many = create_proof_many(
+    let proof_batch = create_proof_batch(
         vec![c.clone(), c.clone()],
         &params,
         vec![r1, r2],
@@ -427,12 +427,12 @@ fn test_create_many_single() {
     )
     .unwrap();
 
-    assert_eq!(proof_many[0], proof_single_1);
-    assert_eq!(proof_many[1], proof_single_2);
+    assert_eq!(proof_batch[0], proof_single_1);
+    assert_eq!(proof_batch[1], proof_single_2);
 
     assert!(verify_proof(&pvk, &proof_single_1, &[Fr::one()]).unwrap());
     assert!(verify_proof(&pvk, &proof_single_2, &[Fr::one()]).unwrap());
-    for proof in &proof_many {
+    for proof in &proof_batch {
         assert!(verify_proof(&pvk, &proof, &[Fr::one()]).unwrap());
     }
 }
