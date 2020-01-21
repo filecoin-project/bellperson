@@ -346,46 +346,6 @@ pub fn field_into_allocated_bits_le<E: ScalarEngine, CS: ConstraintSystem<E>, F:
     Ok(bits)
 }
 
-pub fn field_into_allocated_bits_be<E: ScalarEngine, CS: ConstraintSystem<E>, F: PrimeField>(
-    mut cs: CS,
-    value: Option<F>,
-) -> Result<Vec<AllocatedBit>, SynthesisError> {
-    // Deconstruct in big-endian bit order
-    let values = match value {
-        Some(ref value) => {
-            let mut field_char = BitIterator::new(F::char());
-
-            let mut tmp = Vec::with_capacity(F::NUM_BITS as usize);
-
-            let mut found_one = false;
-
-            for b in BitIterator::new(value.into_repr()) {
-                // Skip leading bits
-                found_one |= field_char.next().unwrap();
-                if !found_one {
-                    continue;
-                }
-
-                tmp.push(Some(b));
-            }
-
-            assert_eq!(tmp.len(), F::NUM_BITS as usize);
-
-            tmp
-        }
-        None => vec![None; F::NUM_BITS as usize],
-    };
-
-    // Allocate in big-endian order
-    let bits = values
-        .into_iter()
-        .enumerate()
-        .map(|(i, b)| AllocatedBit::alloc(cs.namespace(|| format!("bit {}", i)), b))
-        .collect::<Result<Vec<_>, SynthesisError>>()?;
-
-    Ok(bits)
-}
-
 /// This is a boolean value which may be either a constant or
 /// an interpretation of an `AllocatedBit`.
 #[derive(Clone)]
@@ -774,10 +734,7 @@ impl From<AllocatedBit> for Boolean {
 
 #[cfg(test)]
 mod test {
-    use super::{
-        field_into_allocated_bits_be, field_into_allocated_bits_le, u64_into_boolean_vec_le,
-        AllocatedBit, Boolean,
-    };
+    use super::{field_into_allocated_bits_le, u64_into_boolean_vec_le, AllocatedBit, Boolean};
     use crate::gadgets::test::*;
     use crate::ConstraintSystem;
     use ff::{Field, PrimeField};
@@ -1600,31 +1557,6 @@ mod test {
         assert_eq!(bits[254 - 5].value.unwrap(), false);
         assert_eq!(bits[254 - 20].value.unwrap(), true);
         assert_eq!(bits[254 - 23].value.unwrap(), true);
-    }
-
-    #[test]
-    fn test_field_into_allocated_bits_be() {
-        let mut cs = TestConstraintSystem::<Bls12>::new();
-
-        let r = Fr::from_str(
-            "9147677615426976802526883532204139322118074541891858454835346926874644257775",
-        )
-        .unwrap();
-
-        let bits = field_into_allocated_bits_be(&mut cs, Some(r)).unwrap();
-
-        assert!(cs.is_satisfied());
-
-        assert_eq!(bits.len(), 255);
-
-        assert_eq!(bits[0].value.unwrap(), false);
-        assert_eq!(bits[1].value.unwrap(), false);
-        assert_eq!(bits[2].value.unwrap(), true);
-        assert_eq!(bits[3].value.unwrap(), false);
-        assert_eq!(bits[4].value.unwrap(), true);
-        assert_eq!(bits[5].value.unwrap(), false);
-        assert_eq!(bits[20].value.unwrap(), true);
-        assert_eq!(bits[23].value.unwrap(), true);
     }
 
     #[test]
