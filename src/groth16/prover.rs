@@ -242,7 +242,6 @@ where
     let lock = gpu::lock()?;
 
     let mut fft_kern = create_fft_kernel(log_d);
-    let mut multiexp_kern = create_multiexp_kernel();
 
     let a_s = provers
         .iter_mut()
@@ -278,6 +277,7 @@ where
         .collect::<Result<Vec<_>, SynthesisError>>()?;
 
     drop(fft_kern);
+    let mut multiexp_kern = create_multiexp_kernel();
 
     let h_s = a_s
         .into_iter()
