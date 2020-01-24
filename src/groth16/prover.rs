@@ -9,13 +9,16 @@ use paired::Engine;
 
 use super::{ParameterSource, Proof};
 use crate::domain::{create_fft_kernel, EvaluationDomain, Scalar};
-use crate::gpu::{LockedKernel, PriorityLock};
+use crate::gpu::LockedKernel;
 use crate::multicore::Worker;
 use crate::multiexp::{create_multiexp_kernel, multiexp, DensityTracker, FullDensity};
 use crate::{
     Circuit, ConstraintSystem, Index, LinearCombination, SynthesisError, Variable, BELLMAN_VERSION,
 };
 use log::info;
+
+#[cfg(feature = "gpu")]
+use crate::gpu::PriorityLock;
 
 fn eval<E: Engine>(
     lc: &LinearCombination<E>,
@@ -188,6 +191,7 @@ where
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
+    #[cfg(feature = "gpu")]
     let _prio_lock = PriorityLock::lock_if_priority(priority);
 
     let mut prover = ProvingAssignment {
