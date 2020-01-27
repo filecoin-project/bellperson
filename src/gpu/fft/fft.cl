@@ -66,3 +66,11 @@ __kernel void radix_fft(__global FIELD* x, // Source buffer
     y[(i+counth)*p] = u[bitreverse(i + counth, deg)];
   }
 }
+
+/// Multiplies all of the elements by `field`
+__kernel void mul_by_field(__global FIELD* elements,
+                        uint n,
+                        FIELD field) {
+  uint gid = get_global_id(0);
+  elements[gid] = FIELD_mul(elements[gid], field);
+}
