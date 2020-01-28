@@ -47,12 +47,9 @@ impl<E: Engine> Circuit<E> for DummyDemo<E> {
 #[cfg(feature = "gpu")]
 #[test]
 pub fn test_parallel_prover() {
-    use bellperson::{
-        gpu::PriorityLock,
-        groth16::{
-            create_random_proof_priority, generate_random_parameters, prepare_verifying_key,
-            verify_proof,
-        },
+    use bellperson::groth16::{
+        create_random_proof_priority, generate_random_parameters, prepare_verifying_key,
+        verify_proof,
     };
     use log::info;
     use paired::bls12_381::Bls12;
@@ -93,7 +90,7 @@ pub fn test_parallel_prover() {
     });
 
     // Have higher prio proof wait long enough to interrupt lower
-    thread::sleep(Duration::from_millis(2000));
+    thread::sleep(Duration::from_millis(1500));
 
     {
         info!("Creating proof from HIGHER priority process...");
