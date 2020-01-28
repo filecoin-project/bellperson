@@ -88,8 +88,8 @@ pub fn test_parallel_prover() {
         info!("Creating proof from LOWER priority process...");
         let rng = &mut thread_rng();
         let proof_lower = create_random_proof_priority(c2, &params2, rng, false).unwrap();
-        let result = verify_proof(&pvk2, &proof_lower, &[]).unwrap();
-        info!("Proof Lower is verified: {}", result);
+        assert!(verify_proof(&pvk2, &proof_lower, &[]).unwrap());
+        info!("Proof Lower is verified!");
     });
 
     // Have higher prio proof wait long enough to interrupt lower
@@ -98,8 +98,8 @@ pub fn test_parallel_prover() {
     {
         info!("Creating proof from HIGHER priority process...");
         let proof_higher = create_random_proof_priority(c, &params, rng, true).unwrap();
-        let result = verify_proof(&pvk, &proof_higher, &[]).unwrap();
-        info!("Proof Higher is verified: {}", result);
+        assert!(verify_proof(&pvk, &proof_higher, &[]).unwrap());
+        info!("Proof Higher is verified!");
     }
 
     lower_thread.join().unwrap();
