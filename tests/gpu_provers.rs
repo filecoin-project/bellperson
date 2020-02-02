@@ -48,8 +48,8 @@ impl<E: Engine> Circuit<E> for DummyDemo<E> {
 #[test]
 pub fn test_parallel_prover() {
     use bellperson::groth16::{
-        create_random_proof_priority, generate_random_parameters, prepare_verifying_key,
-        verify_proof,
+        create_random_proof, create_random_proof_in_priority, generate_random_parameters,
+        prepare_verifying_key, verify_proof,
     };
     use log::info;
     use paired::bls12_381::Bls12;
@@ -84,7 +84,7 @@ pub fn test_parallel_prover() {
     let lower_thread = thread::spawn(move || {
         info!("Creating proof from LOWER priority process...");
         let rng = &mut thread_rng();
-        let proof_lower = create_random_proof_priority(c2, &params2, rng, false).unwrap();
+        let proof_lower = create_random_proof(c2, &params2, rng).unwrap();
         assert!(verify_proof(&pvk2, &proof_lower, &[]).unwrap());
         info!("Proof Lower is verified!");
     });
@@ -94,7 +94,7 @@ pub fn test_parallel_prover() {
 
     {
         info!("Creating proof from HIGHER priority process...");
-        let proof_higher = create_random_proof_priority(c, &params, rng, true).unwrap();
+        let proof_higher = create_random_proof_in_priority(c, &params, rng).unwrap();
         assert!(verify_proof(&pvk, &proof_higher, &[]).unwrap());
         info!("Proof Higher is verified!");
     }
