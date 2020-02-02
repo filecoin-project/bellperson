@@ -1,5 +1,5 @@
 use fs2::FileExt;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -15,16 +15,16 @@ fn tmp_path(filename: &str) -> PathBuf {
 pub struct GPULock(File);
 impl GPULock {
     pub fn lock() -> GPULock {
-        info!("Acquiring GPU lock...");
+        debug!("Acquiring GPU lock...");
         let f = File::create(tmp_path(GPU_LOCK_NAME)).unwrap();
         f.lock_exclusive().unwrap();
-        info!("GPU lock acquired!");
+        debug!("GPU lock acquired!");
         GPULock(f)
     }
 }
 impl Drop for GPULock {
     fn drop(&mut self) {
-        info!("GPU lock released!");
+        debug!("GPU lock released!");
     }
 }
 
@@ -33,10 +33,10 @@ pub struct PriorityLock(File);
 impl PriorityLock {
     pub fn lock_if_priority(priority: bool) -> Option<PriorityLock> {
         if priority {
-            info!("Acquiring priority lock...");
+            debug!("Acquiring priority lock...");
             let f = File::create(tmp_path(PRIORITY_LOCK_NAME)).unwrap();
             f.lock_exclusive().unwrap();
-            info!("Priority lock acquired!");
+            debug!("Priority lock acquired!");
             Some(PriorityLock(f))
         } else {
             None
@@ -51,7 +51,7 @@ impl PriorityLock {
 }
 impl Drop for PriorityLock {
     fn drop(&mut self) {
-        info!("Priority lock released!");
+        debug!("Priority lock released!");
     }
 }
 
