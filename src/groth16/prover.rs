@@ -262,7 +262,7 @@ where
             drop(b);
             a.sub_assign(&worker, &c);
             drop(c);
-            a.divide_by_z_on_coset(&worker, fft_kern.get())?;
+            a.divide_by_z_on_coset(&worker);
             a.icoset_fft(&worker, fft_kern.get())?;
             let mut a = a.into_coeffs();
             let a_len = a.len() - 1;
