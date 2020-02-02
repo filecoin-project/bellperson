@@ -11,6 +11,7 @@ fn tmp_path(filename: &str) -> PathBuf {
     p
 }
 
+/// `GPULock` prevents two kernel objects to be instantiated simultaneously.
 #[derive(Debug)]
 pub struct GPULock(File);
 impl GPULock {
@@ -28,6 +29,10 @@ impl Drop for GPULock {
     }
 }
 
+/// `PrioriyLock` is like a flag. When acquired, it means a high-priority process
+/// needs to acquire the GPU really soon. Acquiring the `PriorityLock` is like
+/// signaling all other processes to release their `GPULock`s.
+/// Only one process can have the `PriorityLock` at a time.
 #[derive(Debug)]
 pub struct PriorityLock(File);
 impl PriorityLock {
