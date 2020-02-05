@@ -383,9 +383,12 @@ where
                 &mut None,
             );
 
+            let mut results = vec![];
             for t in threads {
-                let result = t.join()?;
-                acc.add_assign(&result?);
+                results.push(t.join());
+            }
+            for r in results {
+                acc.add_assign(&r??);
             }
 
             acc.add_assign(&cpu_acc.wait().unwrap());
