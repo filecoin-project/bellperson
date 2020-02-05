@@ -36,16 +36,12 @@ impl Drop for GPULock {
 #[derive(Debug)]
 pub struct PriorityLock(File);
 impl PriorityLock {
-    pub fn lock_if_priority(priority: bool) -> Option<PriorityLock> {
-        if priority {
-            debug!("Acquiring priority lock...");
-            let f = File::create(tmp_path(PRIORITY_LOCK_NAME)).unwrap();
-            f.lock_exclusive().unwrap();
-            debug!("Priority lock acquired!");
-            Some(PriorityLock(f))
-        } else {
-            None
-        }
+    pub fn lock() -> Option<PriorityLock> {
+        debug!("Acquiring priority lock...");
+        let f = File::create(tmp_path(PRIORITY_LOCK_NAME)).unwrap();
+        f.lock_exclusive().unwrap();
+        debug!("Priority lock acquired!");
+        Some(PriorityLock(f))
     }
     pub fn is_locked() -> bool {
         File::create(tmp_path(PRIORITY_LOCK_NAME))
