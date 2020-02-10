@@ -192,7 +192,11 @@ where
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
     #[cfg(feature = "gpu")]
-    let _prio_lock = PriorityLock::lock_if_priority(priority);
+    let _prio_lock = if priority {
+        Some(PriorityLock::lock())
+    } else {
+        None
+    };
 
     let mut provers = circuits
         .into_par_iter()
