@@ -414,6 +414,8 @@ where
         .collect::<Result<Vec<_>, SynthesisError>>()?;
 
     drop(multiexp_kern);
+
+    #[cfg(feature = "gpu")]
     drop(prio_lock);
 
     let proofs = h_s
