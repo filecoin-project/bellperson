@@ -414,7 +414,7 @@ where
         .collect::<Result<Vec<_>, SynthesisError>>()?;
 
     drop(multiexp_kern);
-    drop(prio_lock)
+    drop(prio_lock);
 
     let proofs = h_s
         .into_iter()
