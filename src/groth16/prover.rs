@@ -191,13 +191,6 @@ where
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
-    #[cfg(feature = "gpu")]
-    let _prio_lock = if priority {
-        Some(PriorityLock::lock())
-    } else {
-        None
-    };
-
     let mut provers = circuits
         .into_par_iter()
         .map(|circuit| -> Result<_, SynthesisError> {
@@ -242,6 +235,13 @@ where
     while (1 << log_d) < n {
         log_d += 1;
     }
+
+    #[cfg(feature = "gpu")]
+    let prio_lock = if priority {
+        Some(PriorityLock::lock())
+    } else {
+        None
+    };
 
     let mut fft_kern = LockedKernel::new(|| create_fft_kernel::<E>(log_d), priority);
 
@@ -414,6 +414,7 @@ where
         .collect::<Result<Vec<_>, SynthesisError>>()?;
 
     drop(multiexp_kern);
+    drop(prio_lock)
 
     let proofs = h_s
         .into_iter()
