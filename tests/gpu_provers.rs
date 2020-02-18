@@ -8,12 +8,11 @@ use ff::{Field, PrimeField};
 use paired::Engine;
 
 #[derive(Clone)]
-pub struct DummyDemo<E: Engine> {
-    pub xx: Option<E::Fr>,
+pub struct DummyDemo {
     pub interations: u64,
 }
 
-impl<E: Engine> Circuit<E> for DummyDemo<E> {
+impl<E: Engine> Circuit<E> for DummyDemo {
     fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         let mut x_val = E::Fr::from_str("2");
         let mut x = cs.alloc(|| "", || x_val.ok_or(SynthesisError::AssignmentMissing))?;
@@ -64,18 +63,16 @@ pub fn test_parallel_prover() {
     println!("Creating parameters...");
 
     // Higher prio circuit
-    let c = DummyDemo::<Bls12> {
-        xx: None,
+    let c = DummyDemo {
         interations: 10_000,
     };
     // Lower prio circuit
-    let c2 = DummyDemo::<Bls12> {
-        xx: None,
+    let c2 = DummyDemo {
         interations: 500_000,
     };
 
-    let params = generate_random_parameters(c.clone(), rng).unwrap();
-    let params2 = generate_random_parameters(c2.clone(), rng).unwrap();
+    let params = generate_random_parameters::<Bls12, _, _>(c.clone(), rng).unwrap();
+    let params2 = generate_random_parameters::<Bls12, _, _>(c2.clone(), rng).unwrap();
 
     // Prepare the verification key (for proof verification)
     let pvk = prepare_verifying_key(&params.vk);
