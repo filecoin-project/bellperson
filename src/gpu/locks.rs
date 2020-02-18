@@ -114,7 +114,7 @@ macro_rules! locked_kernel {
                     }
                     res
                 } else {
-                    Err(GPUError::GPUTaken)
+                    Err(GPUError::KernelUninitialized)
                 }
             }
         }
