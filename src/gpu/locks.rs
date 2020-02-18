@@ -109,10 +109,16 @@ macro_rules! locked_kernel {
 
                 if let Some(ref mut k) = self.kernel {
                     let res = f(k);
-                    if let Err(GPUError::GPUTaken) = res {
-                        self.free();
+                    match res {
+                        Err(e) => {
+                            if let GPUError::GPUTaken = e {
+                                self.free();
+                            }
+                            warn!("GPU {} failed! Falling back to CPU... Error: {}", $name, e);
+                            Err(e)
+                        }
+                        Ok(v) => Ok(v),
                     }
-                    res
                 } else {
                     Err(GPUError::KernelUninitialized)
                 }

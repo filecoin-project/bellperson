@@ -273,7 +273,7 @@ where
     S: SourceBuilder<G>,
 {
     if let Some(ref mut kern) = kern {
-        match kern.with(|k: &mut gpu::MultiexpKernel<G::Engine>| {
+        if let Ok(p) = kern.with(|k: &mut gpu::MultiexpKernel<G::Engine>| {
             let mut exps = vec![exponents[0]; exponents.len()];
             let mut n = 0;
             for (&e, d) in exponents.iter().zip(density_map.as_ref().iter()) {
@@ -286,12 +286,7 @@ where
             let (bss, skip) = bases.clone().get();
             k.multiexp(pool, bss, Arc::new(exps.clone()), skip, n)
         }) {
-            Ok(p) => {
-                return Box::new(pool.compute(move || Ok(p)));
-            }
-            Err(e) => {
-                warn!("GPU Multiexp failed! Falling back to CPU... Error: {}", e);
-            }
+            return Box::new(pool.compute(move || Ok(p)));
         }
     }
 

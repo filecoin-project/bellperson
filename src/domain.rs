@@ -295,13 +295,8 @@ fn best_fft<E: Engine, T: Group<E>>(
     log_n: u32,
 ) -> gpu::GPUResult<()> {
     if let Some(ref mut kern) = kern {
-        match kern.with(|k: &mut gpu::FFTKernel<E>| gpu_fft(k, a, omega, log_n)) {
-            Ok(_) => {
-                return Ok(());
-            }
-            Err(e) => {
-                warn!("GPU FFT failed! Falling back to CPU... Error: {}", e);
-            }
+        if let Ok(_) = kern.with(|k: &mut gpu::FFTKernel<E>| gpu_fft(k, a, omega, log_n)) {
+            return Ok(());
         }
     }
 
