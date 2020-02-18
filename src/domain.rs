@@ -295,7 +295,10 @@ fn best_fft<E: Engine, T: Group<E>>(
     log_n: u32,
 ) -> gpu::GPUResult<()> {
     if let Some(ref mut kern) = kern {
-        if let Ok(_) = kern.with(|k: &mut gpu::FFTKernel<E>| gpu_fft(k, a, omega, log_n)) {
+        if kern
+            .with(|k: &mut gpu::FFTKernel<E>| gpu_fft(k, a, omega, log_n))
+            .is_ok()
+        {
             return Ok(());
         }
     }

@@ -108,8 +108,7 @@ macro_rules! locked_kernel {
                 }
 
                 if let Some(ref mut k) = self.kernel {
-                    let res = f(k);
-                    match res {
+                    match f(k) {
                         Err(e) => {
                             if let GPUError::GPUTaken = e {
                                 self.free();
