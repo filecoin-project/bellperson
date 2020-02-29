@@ -360,6 +360,7 @@ impl<E: ScalarEngine> AllocatedNum<E> {
     }
 }
 
+#[derive(Clone)]
 pub struct Num<E: ScalarEngine> {
     value: Option<E::Fr>,
     lc: LinearCombination<E>,
@@ -406,6 +407,43 @@ impl<E: ScalarEngine> Num<E> {
             value: newval,
             lc: self.lc + &bit.lc(one, coeff),
         }
+    }
+
+    pub fn add(self, other: &Self) -> Self {
+        let lc = self.lc + &other.lc;
+        let value = match (self.value, other.value) {
+            (Some(v1), Some(v2)) => {
+                let mut tmp = v1;
+                tmp.add_assign(&v2);
+                Some(tmp)
+            }
+            (Some(v), None) | (None, Some(v)) => Some(v),
+            (None, None) => None,
+        };
+
+        Num { value, lc }
+    }
+
+    pub fn scale(self, scalar: E::Fr) -> Self {
+        let lc =
+            self.lc
+                .as_ref()
+                .iter()
+                .fold(LinearCombination::zero(), |acc, (variable, mut fr)| {
+                    fr.mul_assign(&scalar);
+                    acc + (fr, *variable)
+                });
+
+        let value = match self.value {
+            Some(v) => {
+                let mut tmp = v;
+                tmp.mul_assign(&scalar);
+                Some(tmp)
+            }
+            None => None,
+        };
+
+        Num { value, lc }
     }
 }
 

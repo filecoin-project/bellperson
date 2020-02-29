@@ -214,7 +214,21 @@ impl<E: ScalarEngine> Add<(E::Fr, Variable)> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn add(mut self, (coeff, var): (E::Fr, Variable)) -> LinearCombination<E> {
-        self.0.push((var, coeff));
+        let mut found = false;
+
+        for i in 0..self.0.len() {
+            let (v, mut c) = self.0[i];
+
+            if v.0 == var.0 {
+                c.add_assign(&coeff);
+                self.0[i] = (v, c);
+                found = true;
+            }
+        }
+
+        if !found {
+            self.0.push((var, coeff));
+        }
 
         self
     }
