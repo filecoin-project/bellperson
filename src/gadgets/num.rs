@@ -455,7 +455,7 @@ mod test {
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
-    use super::{AllocatedNum, Boolean};
+    use super::{AllocatedNum, Boolean, Num};
     use crate::gadgets::test::*;
 
     #[test]
@@ -623,5 +623,54 @@ mod test {
                 assert!(cs.is_satisfied());
             }
         }
+    }
+
+    #[test]
+    fn test_num_scale() {
+        use crate::{Index, LinearCombination, Variable};
+
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let n = 5;
+
+        let mut lc = LinearCombination::<Bls12>::zero();
+
+        let mut expected_sums = vec![Fr::zero(); n];
+        let mut value = Fr::zero();
+        for i in 0..n {
+            let coeff = Fr::random(&mut rng);
+            lc = lc + (coeff, Variable::new_unchecked(Index::Aux(i)));
+            let mut tmp = expected_sums[i];
+            tmp.add_assign(&coeff);
+            expected_sums[i] = tmp;
+
+            value.add_assign(&coeff);
+        }
+
+        let scalar = Fr::random(&mut rng);
+        let num = Num {
+            value: Some(value),
+            lc: lc.clone(),
+        };
+
+        let scaled_num = num.clone().scale(scalar);
+
+        let mut scaled_value = num.value.unwrap();
+        scaled_value.mul_assign(&scalar);
+
+        assert_eq!(scaled_value, scaled_num.value.unwrap());
+
+        // Each variable has the expected coefficient, the sume of those added by its Index.
+        scaled_num.lc.0.iter().for_each(|(var, coeff)| match var.0 {
+            Index::Aux(i) => {
+                let mut tmp = expected_sums[i];
+                tmp.mul_assign(&scalar);
+                assert_eq!(tmp, *coeff)
+            }
+            _ => panic!("unexpected variable type"),
+        });
     }
 }
