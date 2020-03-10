@@ -61,19 +61,32 @@ FIELD FIELD_reduce(limb *limbs) {
 
 // Modular multiplication
 FIELD FIELD_mul(FIELD a, FIELD b) {
-
-  // Long multiplication
-  // https://en.wikipedia.org/wiki/Multiplication_algorithm#Long_multiplication
-  limb res[FIELD_LIMBS * 2] = {0};
+  // CIOS Montgomery multiplication, inspired from Tolga Acar's thesis:
+  // https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
+  limb t[FIELD_LIMBS + 2] = {0};
   for(uchar i = 0; i < FIELD_LIMBS; i++) {
     limb carry = 0;
     for(uchar j = 0; j < FIELD_LIMBS; j++)
-      res[i + j] = mac_with_carry(a.val[i], b.val[j], res[i + j], &carry);
-    res[i + FIELD_LIMBS] = carry;
+      t[j] = mac_with_carry(a.val[j], b.val[i], t[j], &carry);
+    t[FIELD_LIMBS] = add_with_carry(t[FIELD_LIMBS], &carry);
+    t[FIELD_LIMBS + 1] = carry;
+
+    carry = 0;
+    limb m = FIELD_INV * t[0];
+    mac_with_carry(m, FIELD_P.val[0], t[0], &carry);
+    for(uchar j = 1; j < FIELD_LIMBS; j++)
+      t[j - 1] = mac_with_carry(m, FIELD_P.val[j], t[j], &carry);
+
+    t[FIELD_LIMBS - 1] = add_with_carry(t[FIELD_LIMBS], &carry);
+    t[FIELD_LIMBS] = t[FIELD_LIMBS + 1] + carry;
   }
 
-  // Result doesn't fit into a FIELD, so a Montgomery reduction is needed.
-  return FIELD_reduce(res);
+  FIELD result;
+  for(uchar i = 0; i < FIELD_LIMBS; i++) result.val[i] = t[i];
+
+  if(FIELD_gte(result, FIELD_P)) result = FIELD_sub_(result, FIELD_P);
+
+  return result;
 }
 
 // Squaring is a special case of multiplication which can be done ~1.5x faster.
