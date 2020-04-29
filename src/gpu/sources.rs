@@ -1,4 +1,4 @@
-use ff::PrimeField;
+use fff::PrimeField;
 use itertools::join;
 use paired::Engine;
 

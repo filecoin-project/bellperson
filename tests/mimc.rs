@@ -5,7 +5,7 @@ use rand::thread_rng;
 use std::time::{Duration, Instant};
 
 // Bring in some tools for using pairing-friendly curves
-use ff::{Field, ScalarEngine};
+use fff::{Field, ScalarEngine};
 use paired::Engine;
 
 // We're going to use the BLS12-381 pairing-friendly elliptic curve.

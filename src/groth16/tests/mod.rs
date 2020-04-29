@@ -1,4 +1,4 @@
-use ff::{Field, PrimeField};
+use fff::{Field, PrimeField};
 use paired::Engine;
 
 mod dummy_engine;

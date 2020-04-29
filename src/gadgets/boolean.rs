@@ -1,6 +1,6 @@
 //! Gadgets for allocating bits in the circuit and performing boolean logic.
 
-use ff::{BitIterator, Field, PrimeField, ScalarEngine};
+use fff::{BitIterator, Field, PrimeField, ScalarEngine};
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
@@ -737,7 +737,7 @@ mod test {
     use super::{field_into_allocated_bits_le, u64_into_boolean_vec_le, AllocatedBit, Boolean};
     use crate::gadgets::test::*;
     use crate::ConstraintSystem;
-    use ff::{Field, PrimeField};
+    use fff::{Field, PrimeField};
     use paired::bls12_381::{Bls12, Fr};
 
     #[test]

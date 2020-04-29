@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ff::{Field, PrimeField};
+use fff::{Field, PrimeField};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
 use paired::Engine;

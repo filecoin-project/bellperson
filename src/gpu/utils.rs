@@ -1,5 +1,5 @@
 use crate::gpu::error::{GPUError, GPUResult};
-use ocl::{Device, Platform};
+use fil_ocl::{Device, Platform};
 
 use log::info;
 use std::collections::HashMap;
@@ -70,8 +70,8 @@ pub fn get_core_count(d: Device) -> GPUResult<usize> {
 }
 
 pub fn get_memory(d: Device) -> GPUResult<u64> {
-    match d.info(ocl::enums::DeviceInfo::GlobalMemSize)? {
-        ocl::enums::DeviceInfoResult::GlobalMemSize(sz) => Ok(sz),
+    match d.info(fil_ocl::enums::DeviceInfo::GlobalMemSize)? {
+        fil_ocl::enums::DeviceInfoResult::GlobalMemSize(sz) => Ok(sz),
         _ => Err(GPUError::Simple("Cannot extract GPU memory!")),
     }
 }

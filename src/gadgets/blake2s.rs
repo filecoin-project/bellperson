@@ -4,7 +4,7 @@
 
 use super::{boolean::Boolean, multieq::MultiEq, uint32::UInt32};
 use crate::{ConstraintSystem, SynthesisError};
-use ff::ScalarEngine;
+use fff::ScalarEngine;
 
 /*
 2.1.  Parameters

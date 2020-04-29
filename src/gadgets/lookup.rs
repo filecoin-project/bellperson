@@ -1,6 +1,6 @@
 //! Window table lookup gadgets.
 
-use ff::{Field, ScalarEngine};
+use fff::{Field, ScalarEngine};
 
 use super::boolean::Boolean;
 use super::num::{AllocatedNum, Num};

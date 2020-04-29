@@ -11,7 +11,7 @@
 //! [`EvaluationDomain`]: crate::domain::EvaluationDomain
 //! [Groth16]: https://eprint.iacr.org/2016/260
 
-use ff::{Field, PrimeField, ScalarEngine};
+use fff::{Field, PrimeField, ScalarEngine};
 use groupy::CurveProjective;
 use paired::Engine;
 

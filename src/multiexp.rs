@@ -1,5 +1,5 @@
 use bit_vec::{self, BitVec};
-use ff::{Field, PrimeField, PrimeFieldRepr, ScalarEngine};
+use fff::{Field, PrimeField, PrimeFieldRepr, ScalarEngine};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
 use log::{info, warn};

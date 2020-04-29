@@ -4,7 +4,7 @@ pub enum GPUError {
     Simple(&'static str),
     #[cfg(feature = "gpu")]
     #[error("Ocl Error: {0}")]
-    Ocl(ocl::Error),
+    Ocl(fil_ocl::Error),
     #[cfg(feature = "gpu")]
     #[error("GPU taken by a high priority process!")]
     GPUTaken,
@@ -16,8 +16,8 @@ pub enum GPUError {
 pub type GPUResult<T> = std::result::Result<T, GPUError>;
 
 #[cfg(feature = "gpu")]
-impl From<ocl::Error> for GPUError {
-    fn from(error: ocl::Error) -> Self {
+impl From<fil_ocl::Error> for GPUError {
+    fn from(error: fil_ocl::Error) -> Self {
         GPUError::Ocl(error)
     }
 }

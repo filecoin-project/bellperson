@@ -763,7 +763,7 @@ mod test_with_bls12_381 {
     use super::*;
     use crate::{Circuit, ConstraintSystem, SynthesisError};
 
-    use ff::Field;
+    use fff::Field;
     use paired::bls12_381::{Bls12, Fr};
     use rand::thread_rng;
 

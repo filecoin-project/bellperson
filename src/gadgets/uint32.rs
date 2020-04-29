@@ -1,7 +1,7 @@
 //! Circuit representation of a [`u32`], with helpers for the [`sha256`]
 //! gadgets.
 
-use ff::{Field, PrimeField, ScalarEngine};
+use fff::{Field, PrimeField, ScalarEngine};
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError};
 
@@ -389,7 +389,7 @@ mod test {
     use crate::gadgets::multieq::MultiEq;
     use crate::gadgets::test::*;
     use crate::ConstraintSystem;
-    use ff::Field;
+    use fff::Field;
     use paired::bls12_381::Bls12;
     use rand_core::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;

@@ -2,9 +2,9 @@ use crate::gpu::{
     error::{GPUError, GPUResult},
     locks, sources, structs, GPU_NVIDIA_DEVICES,
 };
-use ff::Field;
+use fff::Field;
 use log::info;
-use ocl::{Buffer, MemFlags, ProQue};
+use fil_ocl::{Buffer, MemFlags, ProQue};
 use paired::Engine;
 use std::cmp;
 
@@ -126,7 +126,7 @@ where
     }
 
     /// Share some precalculated values between threads to boost the performance
-    fn setup_pq(&mut self, omega: &E::Fr, n: usize, max_deg: u32) -> ocl::Result<()> {
+    fn setup_pq(&mut self, omega: &E::Fr, n: usize, max_deg: u32) -> fil_ocl::Result<()> {
         // Precalculate:
         // [omega^(0/(2^(deg-1))), omega^(1/(2^(deg-1))), ..., omega^((2^(deg-1)-1)/(2^(deg-1)))]
         let mut tpq = vec![structs::PrimeFieldStruct::<E::Fr>::default(); 1 << max_deg >> 1];

@@ -13,18 +13,18 @@ edition = "2018"
 [dependencies]
 bit-vec = "0.6"
 blake2s_simd = "0.5"
-ff = { version = "0.2.0", package = "fff" }
+fff = "0.2"
 futures = "0.1"
 futures-cpupool = { version = "0.1", optional = true }
 groupy = "0.3.1"
 num_cpus = { version = "1", optional = true }
 crossbeam = { version = "0.7", optional = true }
-paired = { version = "0.18.0", optional = true }
+paired = "0.18"
 rand_core = "0.5"
 byteorder = "1"
 log = "0.4.8"
 lazy_static = "1.4.0"
-ocl = { version = "0.19.4", package = "fil-ocl", optional = true }
+fil-ocl = { version = "0.19", optional = true }
 itertools = { version = "0.8.0", optional = true }
 fs2 = { version = "0.4.3", optional = true }
 rand = "0.7"
@@ -40,8 +40,8 @@ env_logger = "0.7.1"
 
 [features]
 default = ["groth16", "multicore"]
-gpu = ["ocl", "itertools", "fs2"]
-groth16 = ["paired"]
+gpu = ["fil-ocl", "itertools", "fs2"]
+groth16 = []
 multicore = ["futures-cpupool", "crossbeam", "num_cpus"]
 
 [[test]]

@@ -2,7 +2,7 @@ use rand_core::RngCore;
 
 use std::sync::Arc;
 
-use ff::{Field, PrimeField};
+use fff::{Field, PrimeField};
 use groupy::{CurveAffine, CurveProjective, Wnaf};
 use paired::Engine;
 

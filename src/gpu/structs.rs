@@ -1,6 +1,6 @@
-use ff::PrimeField;
+use fff::PrimeField;
 use groupy::{CurveAffine, CurveProjective};
-use ocl::traits::OclPrm;
+use fil_ocl::traits::OclPrm;
 
 // Everything that needs to be copied to GPU needs to implement OclPrm trait.
 // This module implements a generic OclPrm version of PrimeField, CurveAffine and CurveProjective

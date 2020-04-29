@@ -1,4 +1,4 @@
-use ff::{
+use fff::{
     Field, LegendreSymbol, PrimeField, PrimeFieldDecodingError, PrimeFieldRepr, ScalarEngine,
     SqrtField,
 };

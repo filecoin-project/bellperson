@@ -1,6 +1,6 @@
 //! Gadgets representing numbers in the scalar field of the underlying curve.
 
-use ff::{BitIterator, Field, PrimeField, PrimeFieldRepr, ScalarEngine};
+use fff::{BitIterator, Field, PrimeField, PrimeFieldRepr, ScalarEngine};
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
@@ -450,7 +450,7 @@ impl<E: ScalarEngine> Num<E> {
 #[cfg(test)]
 mod test {
     use crate::ConstraintSystem;
-    use ff::{BitIterator, Field, PrimeField};
+    use fff::{BitIterator, Field, PrimeField};
     use paired::bls12_381::{Bls12, Fr};
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;

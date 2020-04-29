@@ -1,4 +1,4 @@
-use ff::{Field, PrimeField};
+use fff::{Field, PrimeField, ScalarEngine};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
 use paired::{Engine, PairingCurveAffine};
@@ -79,7 +79,7 @@ pub fn verify_proofs_batch<'a, E: Engine, R: rand::RngCore>(
     public_inputs: &[Vec<E::Fr>],
 ) -> Result<bool, SynthesisError>
 where
-    <<E as ff::ScalarEngine>::Fr as ff::PrimeField>::Repr: From<<E as ff::ScalarEngine>::Fr>,
+    <<E as ScalarEngine>::Fr as PrimeField>::Repr: From<<E as ScalarEngine>::Fr>,
 {
     for pub_input in public_inputs {
         if (pub_input.len() + 1) != pvk.ic.len() {

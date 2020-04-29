@@ -1,6 +1,6 @@
 use super::error::{GPUError, GPUResult};
 use crate::multicore::Worker;
-use ff::{PrimeField, ScalarEngine};
+use fff::{PrimeField, ScalarEngine};
 use groupy::CurveAffine;
 use std::marker::PhantomData;
 use std::sync::Arc;

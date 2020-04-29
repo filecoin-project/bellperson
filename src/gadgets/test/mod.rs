@@ -1,6 +1,6 @@
 //! Helpers for testing circuit implementations.
 
-use ff::{Field, PrimeField, PrimeFieldRepr, ScalarEngine};
+use fff::{Field, PrimeField, PrimeFieldRepr, ScalarEngine};
 
 use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
 
@@ -419,7 +419,7 @@ impl<E: ScalarEngine> ConstraintSystem<E> for TestConstraintSystem<E> {
 
 #[test]
 fn test_cs() {
-    use ff::PrimeField;
+    use fff::PrimeField;
     use paired::bls12_381::{Bls12, Fr};
 
     let mut cs = TestConstraintSystem::<Bls12>::new();

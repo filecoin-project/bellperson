@@ -1,10 +1,11 @@
 extern crate bellperson;
-extern crate ff;
+extern crate fff;
 extern crate log;
 extern crate paired;
 extern crate rand;
+
 use bellperson::{Circuit, ConstraintSystem, SynthesisError};
-use ff::{Field, PrimeField};
+use fff::{Field, PrimeField};
 use paired::Engine;
 
 #[derive(Clone)]

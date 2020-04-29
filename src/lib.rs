@@ -150,13 +150,14 @@ pub mod multiexp;
 #[cfg(feature = "gpu")]
 pub use gpu::GPU_NVIDIA_DEVICES;
 
-use ff::{Field, ScalarEngine};
+use fff::{Field, ScalarEngine};
 
 use std::collections::HashMap;
 use std::io;
 use std::marker::PhantomData;
 use std::ops::{Add, Sub};
 
+#[cfg(feature = "groth16")]
 const BELLMAN_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 /// Computations are expressed in terms of arithmetic circuits, in particular

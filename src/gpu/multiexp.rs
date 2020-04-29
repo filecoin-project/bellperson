@@ -7,11 +7,11 @@ use super::GPU_NVIDIA_DEVICES;
 use crate::multicore::Worker;
 use crate::multiexp::{multiexp as cpu_multiexp, FullDensity};
 use crossbeam::thread;
-use ff::{PrimeField, ScalarEngine};
+use fff::{PrimeField, ScalarEngine};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
 use log::{error, info};
-use ocl::{Buffer, Device, MemFlags, ProQue};
+use fil_ocl::{Buffer, Device, MemFlags, ProQue};
 use paired::Engine;
 use std::sync::Arc;
 
