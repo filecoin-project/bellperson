@@ -77,6 +77,19 @@ struct ProvingAssignment<E: Engine> {
 impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
     type Root = Self;
 
+    fn new() -> Self {
+        ProvingAssignment {
+            a_aux_density: DensityTracker::new(),
+            b_input_density: DensityTracker::new(),
+            b_aux_density: DensityTracker::new(),
+            a: vec![],
+            b: vec![],
+            c: vec![],
+            input_assignment: vec![],
+            aux_assignment: vec![],
+        }
+    }
+
     fn alloc<F, A, AR>(&mut self, _: A, f: F) -> Result<Variable, SynthesisError>
     where
         F: FnOnce() -> Result<E::Fr, SynthesisError>,
@@ -159,6 +172,26 @@ impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
     fn get_root(&mut self) -> &mut Self::Root {
         self
     }
+
+    fn is_extensible() -> bool {
+        true
+    }
+
+    fn extend(&mut self, other: &mut Self) {
+        self.a_aux_density.extend(&mut other.a_aux_density, false);
+        self.b_input_density
+            .extend(&mut other.b_input_density, true);
+        self.b_aux_density.extend(&mut other.b_aux_density, false);
+
+        self.a.extend(other.a.clone());
+        self.b.extend(other.b.clone());
+        self.c.extend(other.c.clone());
+
+        self.input_assignment
+            // Skip first input, which must have been a temporarily allocated one variable.
+            .extend(&other.input_assignment.clone()[1..]);
+        self.aux_assignment.extend(other.aux_assignment.clone());
+    }
 }
 
 pub fn create_random_proof_batch_priority<E, C, R, P: ParameterSource<E>>(
@@ -208,16 +241,7 @@ where
     let mut provers = circuits
         .into_par_iter()
         .map(|circuit| -> Result<_, SynthesisError> {
-            let mut prover = ProvingAssignment {
-                a_aux_density: DensityTracker::new(),
-                b_input_density: DensityTracker::new(),
-                b_aux_density: DensityTracker::new(),
-                a: vec![],
-                b: vec![],
-                c: vec![],
-                input_assignment: vec![],
-                aux_assignment: vec![],
-            };
+            let mut prover = ProvingAssignment::new();
 
             prover.alloc_input(|| "", || Ok(E::Fr::one()))?;
 
@@ -390,6 +414,7 @@ where
                 input_assignment.clone(),
                 &mut multiexp_kern,
             );
+
             let b_g1_aux = multiexp(
                 &worker,
                 b_g1_aux_source,

@@ -165,7 +165,9 @@ const BELLMAN_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 /// CRS generation and during proving.
 pub trait Circuit<E: ScalarEngine> {
     /// Synthesize the circuit into a rank-1 quadratic constraint system
-    fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError>;
+    fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError>
+    where
+        CS: Send;
 }
 
 /// Represents a variable in our constraint system.
@@ -345,10 +347,16 @@ pub enum SynthesisError {
 
 /// Represents a constraint system which can have new variables
 /// allocated and constrains between them formed.
-pub trait ConstraintSystem<E: ScalarEngine>: Sized {
+pub trait ConstraintSystem<E: ScalarEngine>: Sized + Send {
     /// Represents the type of the "root" of this constraint system
     /// so that nested namespaces can minimize indirection.
     type Root: ConstraintSystem<E>;
+
+    fn new() -> Self {
+        unimplemented!(
+                 "ConstraintSystem::new must be implemented for extensible types implementing ConstraintSystem"
+             );
+    }
 
     /// Return the "one" input variable
     fn one() -> Variable {
@@ -408,11 +416,32 @@ pub trait ConstraintSystem<E: ScalarEngine>: Sized {
 
         Namespace(self.get_root(), PhantomData)
     }
+
+    /// Most implementations of ConstraintSystem are not 'extensible': they won't implement a specialized
+    /// version of `extend` and should therefore also keep the default implementation of `is_extensible`
+    /// so callers which optionally make use of `extend` can know to avoid relying on it when unimplemented.
+    fn is_extensible() -> bool {
+        false
+    }
+
+    /// Extend concatenates two constraint systems, destructively modifying the receiver, whose
+    /// inputs, allocated variables, and constraints will precede those of the `other` constraint system.
+    /// The primary use case for this is parallel synthesis of circuits which can be decomposed into
+    /// entirely independent sub-circuits. Each can be synthesized in its own thread, then the
+    /// original `ConstraintSystem` can be extended with each, in the same order they would have
+    /// been synthesized sequentially.
+    fn extend(&mut self, _other: &mut Self) {
+        unimplemented!(
+            "ConstraintSystem::extend must be implemented for types implementing ConstraintSystem"
+        );
+    }
 }
 
 /// This is a "namespaced" constraint system which borrows a constraint system (pushing
 /// a namespace context) and, when dropped, pops out of the namespace context.
 pub struct Namespace<'a, E: ScalarEngine, CS: ConstraintSystem<E>>(&'a mut CS, PhantomData<E>);
+
+unsafe impl<'a, E: ScalarEngine, CS: ConstraintSystem<E>> Send for Namespace<'a, E, CS> {}
 
 impl<'cs, E: ScalarEngine, CS: ConstraintSystem<E>> ConstraintSystem<E> for Namespace<'cs, E, CS> {
     type Root = CS::Root;

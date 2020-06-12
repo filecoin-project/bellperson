@@ -112,8 +112,8 @@ impl<'a> QueryDensity for &'a FullDensity {
 }
 
 pub struct DensityTracker {
-    bv: BitVec,
-    total_density: usize,
+    pub bv: BitVec,
+    pub total_density: usize,
 }
 
 impl<'a> QueryDensity for &'a DensityTracker {
@@ -149,6 +149,39 @@ impl DensityTracker {
 
     pub fn get_total_density(&self) -> usize {
         self.total_density
+    }
+
+    /// Extend by concatenating `other`. If `is_input_density` is true, then we are tracking an input density,
+    /// and other may contain a redundant input for the `One` element. Coalesce those as needed and track the result.
+    pub fn extend(&mut self, other: &mut Self, is_input_density: bool) {
+        self.total_density += other.total_density;
+
+        if is_input_density {
+            self.bv.pop();
+
+            let mut to_skip = 0;
+            if other.bv.len() > 0 && other.bv[0] {
+                // If the bit is set for other's first input,
+
+                if self.bv.len() > 0 {
+                    // Either set the bit for self's first input (if there is one),
+                    self.bv.set(0, true);
+                } else {
+                    // Or else add a bit so other's first input becomes self's first,
+                    self.bv.push(true);
+                    // And skip it so we only have a single One input (and it comes first).
+                    to_skip = 1;
+                }
+            }
+
+            other
+                .bv
+                .iter()
+                .skip(to_skip)
+                .for_each(|b| self.bv.push(b.clone()));
+        } else {
+            self.bv.append(&mut other.bv);
+        }
     }
 }
 
@@ -299,7 +332,6 @@ where
     if let Some(query_size) = density_map.as_ref().get_query_size() {
         // If the density map has a known query size, it should not be
         // inconsistent with the number of exponents.
-
         assert!(query_size == exponents.len());
     }
 
