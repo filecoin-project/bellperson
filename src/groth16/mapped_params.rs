@@ -7,14 +7,12 @@ use memmap::{Mmap, MmapOptions};
 
 use std::fs::File;
 use std::io;
-use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::{ParameterSource, VerifyingKey};
 
-#[derive(Clone)]
 pub struct MappedParameters<E: Engine> {
     // The parameter file we're reading from.  This is stored so that
     // each (bulk) access can re-map the file, rather than trying to
@@ -22,7 +20,8 @@ pub struct MappedParameters<E: Engine> {
     // a much safer way to go (as mmap life-times and consistency
     // guarantees are difficult), and the cost of the mappings should
     // not outweigh the benefits of lazy-loading parameters.
-    pub param_file: PathBuf,
+    pub param_file_path: PathBuf,
+    pub param_file: File,
 
     // This is always loaded (i.e. not lazily loaded).
     pub vk: VerifyingKey<E>,
@@ -48,11 +47,7 @@ pub struct MappedParameters<E: Engine> {
     pub b_g2: Vec<Range<usize>>,
 
     pub checked: bool,
-
-    pub _e: PhantomData<E>,
 }
-
-unsafe impl<E: Engine> Sync for MappedParameters<E> {}
 
 impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     type G1Builder = (Arc<Vec<E::G1Affine>>, usize);
@@ -63,10 +58,9 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_h(&mut self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
-        let params = File::open(self.param_file.clone())?;
         // Safety: this operation is safe, because we are
         // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&params)? };
+        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
 
         let mut h = vec![];
         for i in 0..self.h.len() {
@@ -82,10 +76,9 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_l(&mut self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
-        let params = File::open(self.param_file.clone())?;
         // Safety: this operation is safe, because we are
         // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&params)? };
+        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
 
         let mut l = vec![];
         for i in 0..self.l.len() {
@@ -105,10 +98,9 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_a: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
-        let params = File::open(self.param_file.clone())?;
         // Safety: this operation is safe, because we are
         // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&params)? };
+        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
 
         let mut a = vec![];
         for i in 0..self.a.len() {
@@ -128,10 +120,9 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_b_g1: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
-        let params = File::open(self.param_file.clone())?;
         // Safety: this operation is safe, because we are
         // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&params)? };
+        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
 
         let mut b_g1 = vec![];
         for i in 0..self.b_g1.len() {
@@ -151,10 +142,9 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_b_g2: usize,
     ) -> Result<(Self::G2Builder, Self::G2Builder), SynthesisError> {
-        let params = File::open(self.param_file.clone())?;
         // Safety: this operation is safe, because we are
         // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&params)? };
+        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
 
         let mut b_g2 = vec![];
         for i in 0..self.b_g2.len() {

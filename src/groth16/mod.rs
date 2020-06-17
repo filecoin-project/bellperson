@@ -436,7 +436,8 @@ impl<E: Engine> Parameters<E> {
         get_offsets(&mmap, &mut offset, &mut b_g2, g2_len)?;
 
         Ok(MappedParameters {
-            param_file,
+            param_file_path: param_file,
+            param_file: params,
             vk,
             h,
             l,
@@ -444,7 +445,6 @@ impl<E: Engine> Parameters<E> {
             b_g1,
             b_g2,
             checked,
-            _e: Default::default(),
         })
     }
 
@@ -693,7 +693,7 @@ pub struct BatchPreparedVerifyingKey<E: Engine> {
     ic: Vec<E::G1Affine>,
 }
 
-pub trait ParameterSource<E: Engine>: Send {
+pub trait ParameterSource<E: Engine>: Send + Sync {
     type G1Builder: SourceBuilder<E::G1Affine>;
     type G2Builder: SourceBuilder<E::G2Affine>;
 
