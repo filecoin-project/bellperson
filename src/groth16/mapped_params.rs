@@ -14,36 +14,33 @@ use std::sync::Arc;
 use super::{ParameterSource, VerifyingKey};
 
 pub struct MappedParameters<E: Engine> {
-    // The parameter file we're reading from.  This is stored so that
-    // each (bulk) access can re-map the file, rather than trying to
-    // be clever and keeping a persistent memory map around.  This is
-    // a much safer way to go (as mmap life-times and consistency
-    // guarantees are difficult), and the cost of the mappings should
-    // not outweigh the benefits of lazy-loading parameters.
+    /// The parameter file we're reading from.  
     pub param_file_path: PathBuf,
+    /// The file descriptor we have mmaped.
     pub param_file: File,
+    /// The actual mmap.
     pub params: Mmap,
 
-    // This is always loaded (i.e. not lazily loaded).
+    /// This is always loaded (i.e. not lazily loaded).
     pub vk: VerifyingKey<E>,
 
-    // Elements of the form ((tau^i * t(tau)) / delta) for i between 0 and
-    // m-2 inclusive. Never contains points at infinity.
+    /// Elements of the form ((tau^i * t(tau)) / delta) for i between 0 and
+    /// m-2 inclusive. Never contains points at infinity.
     pub h: Vec<Range<usize>>,
 
-    // Elements of the form (beta * u_i(tau) + alpha v_i(tau) + w_i(tau)) / delta
-    // for all auxiliary inputs. Variables can never be unconstrained, so this
-    // never contains points at infinity.
+    /// Elements of the form (beta * u_i(tau) + alpha v_i(tau) + w_i(tau)) / delta
+    /// for all auxiliary inputs. Variables can never be unconstrained, so this
+    /// never contains points at infinity.
     pub l: Vec<Range<usize>>,
 
-    // QAP "A" polynomials evaluated at tau in the Lagrange basis. Never contains
-    // points at infinity: polynomials that evaluate to zero are omitted from
-    // the CRS and the prover can deterministically skip their evaluation.
+    /// QAP "A" polynomials evaluated at tau in the Lagrange basis. Never contains
+    /// points at infinity: polynomials that evaluate to zero are omitted from
+    /// the CRS and the prover can deterministically skip their evaluation.
     pub a: Vec<Range<usize>>,
 
-    // QAP "B" polynomials evaluated at tau in the Lagrange basis. Needed in
-    // G1 and G2 for C/B queries, respectively. Never contains points at
-    // infinity for the same reason as the "A" polynomials.
+    /// QAP "B" polynomials evaluated at tau in the Lagrange basis. Needed in
+    /// G1 and G2 for C/B queries, respectively. Never contains points at
+    /// infinity for the same reason as the "A" polynomials.
     pub b_g1: Vec<Range<usize>>,
     pub b_g2: Vec<Range<usize>>,
 
@@ -54,39 +51,42 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     type G1Builder = (Arc<Vec<E::G1Affine>>, usize);
     type G2Builder = (Arc<Vec<E::G2Affine>>, usize);
 
-    fn get_vk(&mut self, _: usize) -> Result<VerifyingKey<E>, SynthesisError> {
+    fn get_vk(&self, _: usize) -> Result<VerifyingKey<E>, SynthesisError> {
         Ok(self.vk.clone())
     }
 
-    fn get_h(&mut self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
+    fn get_h(&self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
         let builder = self
             .h
             .iter()
-            .map(|h| read_g1::<E>(&self.params, h.start, h.end, self.checked))
+            .cloned()
+            .map(|h| read_g1::<E>(&self.params, h, self.checked))
             .collect::<Result<_, _>>()?;
 
         Ok((Arc::new(builder), 0))
     }
 
-    fn get_l(&mut self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
+    fn get_l(&self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
         let builder = self
             .l
             .iter()
-            .map(|l| read_g1::<E>(&self.params, l.start, l.end, self.checked))
+            .cloned()
+            .map(|l| read_g1::<E>(&self.params, l, self.checked))
             .collect::<Result<_, _>>()?;
 
         Ok((Arc::new(builder), 0))
     }
 
     fn get_a(
-        &mut self,
+        &self,
         num_inputs: usize,
         _num_a: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
         let builder = self
             .a
             .iter()
-            .map(|a| read_g1::<E>(&self.params, a.start, a.end, self.checked))
+            .cloned()
+            .map(|a| read_g1::<E>(&self.params, a, self.checked))
             .collect::<Result<_, _>>()?;
 
         let builder: Arc<Vec<_>> = Arc::new(builder);
@@ -95,14 +95,15 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_b_g1(
-        &mut self,
+        &self,
         num_inputs: usize,
         _num_b_g1: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
         let builder = self
             .b_g1
             .iter()
-            .map(|b_g1| read_g1::<E>(&self.params, b_g1.start, b_g1.end, self.checked))
+            .cloned()
+            .map(|b_g1| read_g1::<E>(&self.params, b_g1, self.checked))
             .collect::<Result<_, _>>()?;
 
         let builder: Arc<Vec<_>> = Arc::new(builder);
@@ -111,14 +112,15 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_b_g2(
-        &mut self,
+        &self,
         num_inputs: usize,
         _num_b_g2: usize,
     ) -> Result<(Self::G2Builder, Self::G2Builder), SynthesisError> {
         let builder = self
             .b_g2
             .iter()
-            .map(|b_g2| read_g2::<E>(&self.params, b_g2.start, b_g2.end, self.checked))
+            .cloned()
+            .map(|b_g2| read_g2::<E>(&self.params, b_g2, self.checked))
             .collect::<Result<_, _>>()?;
 
         let builder: Arc<Vec<_>> = Arc::new(builder);
@@ -132,11 +134,10 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
 // and simply does the cast and transform needed.
 pub fn read_g1<E: Engine>(
     mmap: &Mmap,
-    start: usize,
-    end: usize,
+    range: Range<usize>,
     checked: bool,
 ) -> Result<E::G1Affine, std::io::Error> {
-    let ptr = &mmap[start..end];
+    let ptr = &mmap[range];
     // Safety: this operation is safe, because it's simply
     // casting to a known struct at the correct offset, given
     // the structure of the on-disk data.
@@ -166,11 +167,10 @@ pub fn read_g1<E: Engine>(
 // and simply does the cast and transform needed.
 pub fn read_g2<E: Engine>(
     mmap: &Mmap,
-    start: usize,
-    end: usize,
+    range: Range<usize>,
     checked: bool,
 ) -> Result<E::G2Affine, std::io::Error> {
-    let ptr = &mmap[start..end];
+    let ptr = &mmap[range];
     // Safety: this operation is safe, because it's simply
     // casting to a known struct at the correct offset, given
     // the structure of the on-disk data.
