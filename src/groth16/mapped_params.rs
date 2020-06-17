@@ -59,31 +59,23 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_h(&mut self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
-        let mut h = vec![];
-        for i in 0..self.h.len() {
-            h.push(read_g1::<E>(
-                &self.params,
-                self.h[i].start,
-                self.h[i].end,
-                self.checked,
-            )?);
-        }
+        let builder = self
+            .h
+            .iter()
+            .map(|h| read_g1::<E>(&self.params, h.start, h.end, self.checked))
+            .collect::<Result<_, _>>()?;
 
-        Ok((Arc::new(h), 0))
+        Ok((Arc::new(builder), 0))
     }
 
     fn get_l(&mut self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
-        let mut l = vec![];
-        for i in 0..self.l.len() {
-            l.push(read_g1::<E>(
-                &self.params,
-                self.l[i].start,
-                self.l[i].end,
-                self.checked,
-            )?);
-        }
+        let builder = self
+            .l
+            .iter()
+            .map(|l| read_g1::<E>(&self.params, l.start, l.end, self.checked))
+            .collect::<Result<_, _>>()?;
 
-        Ok((Arc::new(l), 0))
+        Ok((Arc::new(builder), 0))
     }
 
     fn get_a(
@@ -91,17 +83,15 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_a: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
-        let mut a = vec![];
-        for i in 0..self.a.len() {
-            a.push(read_g1::<E>(
-                &self.params,
-                self.a[i].start,
-                self.a[i].end,
-                self.checked,
-            )?);
-        }
+        let builder = self
+            .a
+            .iter()
+            .map(|a| read_g1::<E>(&self.params, a.start, a.end, self.checked))
+            .collect::<Result<_, _>>()?;
 
-        Ok(((Arc::new(a.clone()), 0), (Arc::new(a), num_inputs)))
+        let builder: Arc<Vec<_>> = Arc::new(builder);
+
+        Ok(((builder.clone(), 0), (builder, num_inputs)))
     }
 
     fn get_b_g1(
@@ -109,17 +99,15 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_b_g1: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
-        let mut b_g1 = vec![];
-        for i in 0..self.b_g1.len() {
-            b_g1.push(read_g1::<E>(
-                &self.params,
-                self.b_g1[i].start,
-                self.b_g1[i].end,
-                self.checked,
-            )?);
-        }
+        let builder = self
+            .b_g1
+            .iter()
+            .map(|b_g1| read_g1::<E>(&self.params, b_g1.start, b_g1.end, self.checked))
+            .collect::<Result<_, _>>()?;
 
-        Ok(((Arc::new(b_g1.clone()), 0), (Arc::new(b_g1), num_inputs)))
+        let builder: Arc<Vec<_>> = Arc::new(builder);
+
+        Ok(((builder.clone(), 0), (builder, num_inputs)))
     }
 
     fn get_b_g2(
@@ -127,17 +115,15 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_b_g2: usize,
     ) -> Result<(Self::G2Builder, Self::G2Builder), SynthesisError> {
-        let mut b_g2 = vec![];
-        for i in 0..self.b_g2.len() {
-            b_g2.push(read_g2::<E>(
-                &self.params,
-                self.b_g2[i].start,
-                self.b_g2[i].end,
-                self.checked,
-            )?);
-        }
+        let builder = self
+            .b_g2
+            .iter()
+            .map(|b_g2| read_g2::<E>(&self.params, b_g2.start, b_g2.end, self.checked))
+            .collect::<Result<_, _>>()?;
 
-        Ok(((Arc::new(b_g2.clone()), 0), (Arc::new(b_g2), num_inputs)))
+        let builder: Arc<Vec<_>> = Arc::new(builder);
+
+        Ok(((builder.clone(), 0), (builder, num_inputs)))
     }
 }
 
