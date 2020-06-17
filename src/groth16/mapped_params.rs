@@ -3,7 +3,7 @@ use paired::Engine;
 
 use crate::SynthesisError;
 
-use memmap::{Mmap, MmapOptions};
+use memmap::Mmap;
 
 use std::fs::File;
 use std::io;
@@ -22,6 +22,7 @@ pub struct MappedParameters<E: Engine> {
     // not outweigh the benefits of lazy-loading parameters.
     pub param_file_path: PathBuf,
     pub param_file: File,
+    pub params: Mmap,
 
     // This is always loaded (i.e. not lazily loaded).
     pub vk: VerifyingKey<E>,
@@ -58,14 +59,10 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_h(&mut self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
-        // Safety: this operation is safe, because we are
-        // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
-
         let mut h = vec![];
         for i in 0..self.h.len() {
             h.push(read_g1::<E>(
-                &mmap,
+                &self.params,
                 self.h[i].start,
                 self.h[i].end,
                 self.checked,
@@ -76,14 +73,10 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     }
 
     fn get_l(&mut self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
-        // Safety: this operation is safe, because we are
-        // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
-
         let mut l = vec![];
         for i in 0..self.l.len() {
             l.push(read_g1::<E>(
-                &mmap,
+                &self.params,
                 self.l[i].start,
                 self.l[i].end,
                 self.checked,
@@ -98,14 +91,10 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_a: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
-        // Safety: this operation is safe, because we are
-        // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
-
         let mut a = vec![];
         for i in 0..self.a.len() {
             a.push(read_g1::<E>(
-                &mmap,
+                &self.params,
                 self.a[i].start,
                 self.a[i].end,
                 self.checked,
@@ -120,14 +109,10 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_b_g1: usize,
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
-        // Safety: this operation is safe, because we are
-        // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
-
         let mut b_g1 = vec![];
         for i in 0..self.b_g1.len() {
             b_g1.push(read_g1::<E>(
-                &mmap,
+                &self.params,
                 self.b_g1[i].start,
                 self.b_g1[i].end,
                 self.checked,
@@ -142,14 +127,10 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
         num_inputs: usize,
         _num_b_g2: usize,
     ) -> Result<(Self::G2Builder, Self::G2Builder), SynthesisError> {
-        // Safety: this operation is safe, because we are
-        // intentionally memory mapping this file.
-        let mmap = unsafe { MmapOptions::new().map(&self.param_file)? };
-
         let mut b_g2 = vec![];
         for i in 0..self.b_g2.len() {
             b_g2.push(read_g2::<E>(
-                &mmap,
+                &self.params,
                 self.b_g2[i].start,
                 self.b_g2[i].end,
                 self.checked,

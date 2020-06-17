@@ -383,19 +383,19 @@ impl<E: Engine> Parameters<E> {
     // parameter offsets and caches the verifying key (vk) for quick
     // access via reference.
     pub fn build_mapped_parameters(
-        param_file: PathBuf,
+        param_file_path: PathBuf,
         checked: bool,
     ) -> io::Result<MappedParameters<E>> {
         let mut offset: usize = 0;
-        let params = File::open(&param_file)?;
-        let mmap = unsafe { MmapOptions::new().map(&params)? };
+        let param_file = File::open(&param_file_path)?;
+        let params = unsafe { MmapOptions::new().map(&param_file)? };
 
         let u32_len = mem::size_of::<u32>();
         let g1_len = mem::size_of::<<E::G1Affine as CurveAffine>::Uncompressed>();
         let g2_len = mem::size_of::<<E::G2Affine as CurveAffine>::Uncompressed>();
 
-        let read_length = |mmap: &Mmap, offset: &mut usize| -> Result<usize, std::io::Error> {
-            let mut raw_len = &mmap[*offset..*offset + u32_len];
+        let read_length = |params: &Mmap, offset: &mut usize| -> Result<usize, std::io::Error> {
+            let mut raw_len = &params[*offset..*offset + u32_len];
             *offset += u32_len;
 
             match raw_len.read_u32::<BigEndian>() {
@@ -404,12 +404,12 @@ impl<E: Engine> Parameters<E> {
             }
         };
 
-        let get_offsets = |mmap: &Mmap,
+        let get_offsets = |params: &Mmap,
                            offset: &mut usize,
                            param: &mut Vec<Range<usize>>,
                            range_len: usize|
          -> Result<(), std::io::Error> {
-            let len = read_length(&mmap, &mut *offset)?;
+            let len = read_length(&params, &mut *offset)?;
             for _ in 0..len {
                 (*param).push(Range {
                     start: *offset,
@@ -421,7 +421,7 @@ impl<E: Engine> Parameters<E> {
             Ok(())
         };
 
-        let vk = VerifyingKey::<E>::read_mmap(&mmap, &mut offset)?;
+        let vk = VerifyingKey::<E>::read_mmap(&params, &mut offset)?;
 
         let mut h = vec![];
         let mut l = vec![];
@@ -429,15 +429,16 @@ impl<E: Engine> Parameters<E> {
         let mut b_g1 = vec![];
         let mut b_g2 = vec![];
 
-        get_offsets(&mmap, &mut offset, &mut h, g1_len)?;
-        get_offsets(&mmap, &mut offset, &mut l, g1_len)?;
-        get_offsets(&mmap, &mut offset, &mut a, g1_len)?;
-        get_offsets(&mmap, &mut offset, &mut b_g1, g1_len)?;
-        get_offsets(&mmap, &mut offset, &mut b_g2, g2_len)?;
+        get_offsets(&params, &mut offset, &mut h, g1_len)?;
+        get_offsets(&params, &mut offset, &mut l, g1_len)?;
+        get_offsets(&params, &mut offset, &mut a, g1_len)?;
+        get_offsets(&params, &mut offset, &mut b_g1, g1_len)?;
+        get_offsets(&params, &mut offset, &mut b_g2, g2_len)?;
 
         Ok(MappedParameters {
-            param_file_path: param_file,
-            param_file: params,
+            param_file_path,
+            param_file,
+            params,
             vk,
             h,
             l,
