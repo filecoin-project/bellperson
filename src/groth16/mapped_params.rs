@@ -51,8 +51,8 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     type G1Builder = (Arc<Vec<E::G1Affine>>, usize);
     type G2Builder = (Arc<Vec<E::G2Affine>>, usize);
 
-    fn get_vk(&self, _: usize) -> Result<VerifyingKey<E>, SynthesisError> {
-        Ok(self.vk.clone())
+    fn get_vk(&self, _: usize) -> Result<&VerifyingKey<E>, SynthesisError> {
+        Ok(&self.vk)
     }
 
     fn get_h(&self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
