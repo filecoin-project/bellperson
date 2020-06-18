@@ -155,7 +155,6 @@ impl DensityTracker {
     /// Extend by concatenating `other`. If `is_input_density` is true, then we are tracking an input density,
     /// and other may contain a redundant input for the `One` element. Coalesce those as needed and track the result.
     pub fn extend(&mut self, other: Self, is_input_density: bool) {
-        dbg!("extending", &self, &other, is_input_density);
         self.total_density += other.total_density;
 
         if is_input_density {
@@ -176,7 +175,6 @@ impl DensityTracker {
                 }
             }
 
-            dbg!(to_skip);
             self.bv.extend(other.bv.iter().skip(to_skip as usize));
         } else {
             self.bv.extend(other.bv);
