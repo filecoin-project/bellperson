@@ -158,13 +158,13 @@ impl DensityTracker {
         self.total_density += other.total_density;
 
         if is_input_density {
-            // self.bv.pop();
+            self.bv.pop();
 
             let mut to_skip = false;
-            if other.bv.len() > 0 && other.bv[0] {
+            if !other.bv.is_empty() && other.bv[0] {
                 // If the bit is set for other's first input,
 
-                if self.bv.len() > 0 {
+                if !self.bv.is_empty() {
                     // Either set the bit for self's first input (if there is one),
                     self.bv.set(0, true);
                 } else {
@@ -470,7 +470,7 @@ mod tests {
     use rand_xorshift::XorShiftRng;
 
     #[test]
-    fn test_extend_density() {
+    fn test_extend_density_regular() {
         let mut rng = XorShiftRng::from_seed([
             0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
             0xbc, 0xe5,
@@ -504,12 +504,6 @@ mod tests {
                         partial_trackers[index].inc(idx);
                     }
                 }
-
-                let mut tracker_combined = DensityTracker::new();
-                for tracker in partial_trackers.clone().into_iter() {
-                    tracker_combined.extend(tracker, true);
-                }
-                assert_eq!(tracker_combined, tracker_full);
 
                 let mut tracker_combined = DensityTracker::new();
                 for tracker in partial_trackers.into_iter() {
