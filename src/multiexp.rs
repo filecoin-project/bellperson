@@ -153,7 +153,7 @@ impl DensityTracker {
 
     /// Extend by concatenating `other`. If `is_input_density` is true, then we are tracking an input density,
     /// and other may contain a redundant input for the `One` element. Coalesce those as needed and track the result.
-    pub fn extend(&mut self, other: &mut Self, is_input_density: bool) {
+    pub fn extend(&mut self, mut other: Self, is_input_density: bool) {
         self.total_density += other.total_density;
 
         if is_input_density {

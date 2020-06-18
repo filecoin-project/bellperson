@@ -78,7 +78,7 @@ impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
     type Root = Self;
 
     fn new() -> Self {
-        ProvingAssignment {
+        Self {
             a_aux_density: DensityTracker::new(),
             b_input_density: DensityTracker::new(),
             b_aux_density: DensityTracker::new(),
@@ -177,20 +177,19 @@ impl<E: Engine> ConstraintSystem<E> for ProvingAssignment<E> {
         true
     }
 
-    fn extend(&mut self, other: &mut Self) {
-        self.a_aux_density.extend(&mut other.a_aux_density, false);
-        self.b_input_density
-            .extend(&mut other.b_input_density, true);
-        self.b_aux_density.extend(&mut other.b_aux_density, false);
+    fn extend(&mut self, other: Self) {
+        self.a_aux_density.extend(other.a_aux_density, false);
+        self.b_input_density.extend(other.b_input_density, true);
+        self.b_aux_density.extend(other.b_aux_density, false);
 
-        self.a.extend(other.a.clone());
-        self.b.extend(other.b.clone());
-        self.c.extend(other.c.clone());
+        self.a.extend(other.a);
+        self.b.extend(other.b);
+        self.c.extend(other.c);
 
         self.input_assignment
             // Skip first input, which must have been a temporarily allocated one variable.
-            .extend(&other.input_assignment.clone()[1..]);
-        self.aux_assignment.extend(other.aux_assignment.clone());
+            .extend(&other.input_assignment[1..]);
+        self.aux_assignment.extend(other.aux_assignment);
     }
 }
 
