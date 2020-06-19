@@ -157,10 +157,13 @@ impl DensityTracker {
     pub fn extend(&mut self, other: Self, is_input_density: bool) {
         if is_input_density {
             if !other.bv.is_empty() {
-                self.total_density -= (self.total_density > 0) as usize;
-
                 if other.bv[0] {
                     // If the bit is set for other's first input,
+
+                    let first_input_bit_set = !self.bv.is_empty() && self.bv[0];
+                    // If own first input is also set, decrement total density so the final total density sum doesn't overcount.
+                    self.total_density -= first_input_bit_set as usize;
+
                     if !self.bv.is_empty() {
                         // Either set the bit for self's first input (if there is one),
                         self.bv.set(0, true);
