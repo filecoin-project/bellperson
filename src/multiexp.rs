@@ -155,30 +155,27 @@ impl DensityTracker {
     /// Extend by concatenating `other`. If `is_input_density` is true, then we are tracking an input density,
     /// and other may contain a redundant input for the `One` element. Coalesce those as needed and track the result.
     pub fn extend(&mut self, other: Self, is_input_density: bool) {
-        self.total_density += other.total_density;
-
         if is_input_density {
-            self.bv.pop();
+            if !other.bv.is_empty() {
+                self.total_density -= (self.total_density > 0) as usize;
 
-            let mut to_skip = false;
-            if !other.bv.is_empty() && other.bv[0] {
-                // If the bit is set for other's first input,
-
-                if !self.bv.is_empty() {
-                    // Either set the bit for self's first input (if there is one),
-                    self.bv.set(0, true);
-                } else {
-                    // Or else add a bit so other's first input becomes self's first,
-                    self.bv.push(true);
-                    // And skip it so we only have a single One input (and it comes first).
-                    to_skip = true;
+                if other.bv[0] {
+                    // If the bit is set for other's first input,
+                    if !self.bv.is_empty() {
+                        // Either set the bit for self's first input (if there is one),
+                        self.bv.set(0, true);
+                    } else {
+                        // Or else add a bit so other's first input becomes self's first.
+                        self.bv.push(true);
+                    }
                 }
             }
 
-            self.bv.extend(other.bv.iter().skip(to_skip as usize));
+            self.bv.extend(other.bv.iter().skip(1));
         } else {
             self.bv.extend(other.bv);
         }
+        self.total_density += other.total_density;
     }
 }
 
