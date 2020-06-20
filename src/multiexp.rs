@@ -523,4 +523,115 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_extend_density_input() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        let trials = 10;
+        let max_bits = 10;
+        let max_density = max_bits;
+
+        // Create an empty DensityTracker.
+        let empty = || DensityTracker::new();
+
+        // Create a random DensityTracker with first bit unset.
+        let unset = |rng: &mut XorShiftRng| {
+            let mut dt = DensityTracker::new();
+            dt.add_element();
+            let n = rng.gen_range(1, max_bits);
+            let target_density = rng.gen_range(0, max_density);
+            for _ in 1..n {
+                dt.add_element();
+            }
+
+            for _ in 0..target_density {
+                if n > 1 {
+                    let to_inc = rng.gen_range(1, n);
+                    dt.inc(to_inc);
+                }
+            }
+            assert!(!dt.bv[0]);
+            assert_eq!(n, dt.bv.len());
+            dbg!(&target_density, &dt.total_density);
+
+            dt
+        };
+
+        // Create a random DensityTracker with first bit set.
+        let set = |mut rng: &mut XorShiftRng| {
+            let mut dt = unset(&mut rng);
+            dt.inc(0);
+            dt
+        };
+
+        for _ in 0..trials {
+            {
+                // Both empty.
+                let (mut e1, e2) = (empty(), empty());
+                e1.extend(e2, true);
+                assert_eq!(empty(), e1);
+            }
+            {
+                // First empty, second unset.
+                let (mut e1, u1) = (empty(), unset(&mut rng));
+                e1.extend(u1.clone(), true);
+                assert_eq!(u1, e1);
+            }
+            {
+                // First empty, second set.
+                let (mut e1, s1) = (empty(), set(&mut rng));
+                e1.extend(s1.clone(), true);
+                assert_eq!(s1, e1);
+            }
+            {
+                // First set, second empty.
+                let (mut s1, e1) = (set(&mut rng), empty());
+                let s2 = s1.clone();
+                s1.extend(e1, true);
+                assert_eq!(s1, s2);
+            }
+            {
+                // First unset, second empty.
+                let (mut u1, e1) = (unset(&mut rng), empty());
+                let u2 = u1.clone();
+                u1.extend(e1, true);
+                assert_eq!(u1, u2);
+            }
+            {
+                // First unset, second unset.
+                let (mut u1, u2) = (unset(&mut rng), unset(&mut rng));
+                let expected_total = u1.total_density + u2.total_density;
+                u1.extend(u2, true);
+                assert_eq!(expected_total, u1.total_density);
+                assert!(!u1.bv[0]);
+            }
+            {
+                // First unset, second set.
+                let (mut u1, s1) = (unset(&mut rng), set(&mut rng));
+                let expected_total = u1.total_density + s1.total_density;
+                u1.extend(s1, true);
+                assert_eq!(expected_total, u1.total_density);
+                assert!(u1.bv[0]);
+            }
+            {
+                // First set, second unset.
+                let (mut s1, u1) = (set(&mut rng), unset(&mut rng));
+                let expected_total = s1.total_density + u1.total_density;
+                s1.extend(u1, true);
+                assert_eq!(expected_total, s1.total_density);
+                assert!(s1.bv[0]);
+            }
+            {
+                // First set, second set.
+                let (mut s1, s2) = (set(&mut rng), set(&mut rng));
+                let expected_total = s1.total_density + s2.total_density - 1;
+                s1.extend(s2, true);
+                assert_eq!(expected_total, s1.total_density);
+                assert!(s1.bv[0]);
+            }
+        }
+    }
 }
