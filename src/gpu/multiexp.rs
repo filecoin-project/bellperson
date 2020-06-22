@@ -10,6 +10,7 @@ use crossbeam::thread;
 use ff::{PrimeField, ScalarEngine};
 use futures::Future;
 use groupy::{CurveAffine, CurveProjective};
+use log::debug;
 use log::{error, info};
 use ocl::{Buffer, Device, MemFlags, ProQue};
 use paired::Engine;
@@ -126,12 +127,21 @@ where
         let n = std::cmp::min(max_n, best_n);
         let max_bucket_len = 1 << MAX_WINDOW_SIZE;
 
-        let pq = ProQue::builder()
+        let pq_result = ProQue::builder()
             .platform(platform)
             .device(d)
             .src(src)
             .dims(1)
-            .build()?;
+            .build();
+
+        match pq_result {
+            Err(ref e) => {
+                debug!("{:?}", e);
+            }
+            _ => (),
+        };
+
+        let pq = pq_result?;
 
         // Each group will have `num_windows` threads and as there are `num_groups` groups, there will
         // be `num_groups` * `num_windows` threads in total.
