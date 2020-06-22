@@ -46,7 +46,7 @@ where
         multiexp("G1", "Fr"),
         field2("Fq2", "Fq"),
         ec("Fq2", "G2"),
-        multiexp("G2", "Exp"),
+        multiexp("G2", "Fr"),
     ];
 
     let source_code = s.join("\n\n");
