@@ -52,6 +52,76 @@ impl<E: Engine> PartialEq for Parameters<E> {
 }
 
 impl<E: Engine> Parameters<E> {
+    pub fn write_unsafe<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        let write_g1s = |writer: &mut W, g1s: &Vec<E::G1Affine>| -> io::Result<()> {
+            writer.write_u32::<BigEndian>(g1s.len() as u32)?;
+            writer.write_all(unsafe {
+                std::slice::from_raw_parts(
+                    g1s.as_ptr() as *const E::G1Affine as *const u8,
+                    g1s.len() * std::mem::size_of::<E::G1Affine>(),
+                )
+            })?;
+            Ok(())
+        };
+        let write_g2s = |writer: &mut W, g2s: &Vec<E::G2Affine>| -> io::Result<()> {
+            writer.write_u32::<BigEndian>(g2s.len() as u32)?;
+            writer.write_all(unsafe {
+                std::slice::from_raw_parts(
+                    g2s.as_ptr() as *const E::G2Affine as *const u8,
+                    g2s.len() * std::mem::size_of::<E::G2Affine>(),
+                )
+            })?;
+            Ok(())
+        };
+
+        self.vk.write(&mut writer)?;
+        write_g1s(&mut writer, &self.h)?;
+        write_g1s(&mut writer, &self.l)?;
+        write_g1s(&mut writer, &self.a)?;
+        write_g1s(&mut writer, &self.b_g1)?;
+        write_g2s(&mut writer, &self.b_g2)?;
+
+        Ok(())
+    }
+
+    pub fn read_unsafe<R: Read>(&self, mut reader: R) -> io::Result<Self> {
+        let read_g1s = |reader: &mut R| -> io::Result<Vec<E::G1Affine>> {
+            let len = reader.read_u32::<BigEndian>()? as usize;
+            let mut buffer = vec![0u8; std::mem::size_of::<E::G1Affine>() * len];
+            reader.read_exact(&mut buffer)?;
+            Ok(unsafe {
+                std::slice::from_raw_parts(buffer.as_ptr() as *const u8 as *const E::G1Affine, len)
+            }
+            .to_vec())
+        };
+        let read_g2s = |reader: &mut R| -> io::Result<Vec<E::G2Affine>> {
+            let len = reader.read_u32::<BigEndian>()? as usize;
+            let mut buffer = vec![0u8; std::mem::size_of::<E::G2Affine>() * len];
+            reader.read_exact(&mut buffer)?;
+            Ok(unsafe {
+                std::slice::from_raw_parts(buffer.as_ptr() as *const u8 as *const E::G2Affine, len)
+            }
+            .to_vec())
+        };
+
+        let vk = VerifyingKey::<E>::read(&mut reader)?;
+
+        let h = Arc::new(read_g1s(&mut reader)?);
+        let l = Arc::new(read_g1s(&mut reader)?);
+        let a = Arc::new(read_g1s(&mut reader)?);
+        let b_g1 = Arc::new(read_g1s(&mut reader)?);
+        let b_g2 = Arc::new(read_g2s(&mut reader)?);
+
+        Ok(Parameters {
+            vk,
+            h,
+            l,
+            a,
+            b_g1,
+            b_g2,
+        })
+    }
+
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
         self.vk.write(&mut writer)?;
 
