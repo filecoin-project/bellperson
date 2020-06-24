@@ -52,7 +52,7 @@ impl<E: Engine> PartialEq for Parameters<E> {
 }
 
 impl<E: Engine> Parameters<E> {
-    pub fn write_unsafe<W: Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write_unchecked<W: Write>(&self, mut writer: W) -> io::Result<()> {
         let write_g1s = |writer: &mut W, g1s: &Vec<E::G1Affine>| -> io::Result<()> {
             writer.write_u32::<BigEndian>(g1s.len() as u32)?;
             writer.write_all(unsafe {
@@ -84,7 +84,7 @@ impl<E: Engine> Parameters<E> {
         Ok(())
     }
 
-    pub fn read_unsafe<R: Read>(&self, mut reader: R) -> io::Result<Self> {
+    pub fn read_unchecked<R: Read>(&self, mut reader: R) -> io::Result<Self> {
         let read_g1s = |reader: &mut R| -> io::Result<Vec<E::G1Affine>> {
             let len = reader.read_u32::<BigEndian>()? as usize;
             let mut buffer = vec![0u8; std::mem::size_of::<E::G1Affine>() * len];
