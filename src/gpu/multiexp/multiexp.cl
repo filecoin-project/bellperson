@@ -28,8 +28,8 @@ __kernel void POINT_bellman_multiexp(
   // Each thread has its own set of buckets in global memory.
   buckets += bucket_len * gid;
 
-  const POINT_projective tmp = POINT_ZERO;
-  for(uint i = 0; i < bucket_len; i++) buckets[i] = tmp;
+  const POINT_projective local_zero = POINT_ZERO;
+  for(uint i = 0; i < bucket_len; i++) buckets[i] = local_zero;
 
   const uint len = (uint)ceil(n / (float)num_groups); // Num of elements in each group
 

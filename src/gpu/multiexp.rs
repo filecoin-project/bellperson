@@ -127,21 +127,16 @@ where
         let n = std::cmp::min(max_n, best_n);
         let max_bucket_len = 1 << MAX_WINDOW_SIZE;
 
-        let pq_result = ProQue::builder()
+        let pq = ProQue::builder()
             .platform(platform)
             .device(d)
             .src(src)
             .dims(1)
-            .build();
-
-        match pq_result {
-            Err(ref e) => {
-                debug!("{:?}", e);
-            }
-            _ => (),
-        };
-
-        let pq = pq_result?;
+            .build()
+            .map_err(|err| {
+                debug!("{:?}", err);
+                err
+            })? ;
 
         // Each group will have `num_windows` threads and as there are `num_groups` groups, there will
         // be `num_groups` * `num_windows` threads in total.

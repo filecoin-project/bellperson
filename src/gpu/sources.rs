@@ -38,7 +38,7 @@ pub fn kernel<E>() -> String
 where
     E: Engine,
 {
-    let s = vec![
+    vec![
         ffgen::field::<E::Fr>("Fr"),
         fft("Fr"),
         ffgen::field::<E::Fq>("Fq"),
@@ -47,11 +47,5 @@ where
         field2("Fq2", "Fq"),
         ec("Fq2", "G2"),
         multiexp("G2", "Fr"),
-    ];
-
-    let source_code = s.join("\n\n");
-
-    debug!("Source code: \n{}", source_code);
-
-    source_code
+    ].join("\n\n")
 }

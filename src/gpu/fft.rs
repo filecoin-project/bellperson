@@ -1,5 +1,4 @@
 use crate::gpu::get_platform;
-#[allow(unused_imports)]
 use crate::gpu::{
     error::{GPUError, GPUResult},
     get_devices, locks, sources, structs,
