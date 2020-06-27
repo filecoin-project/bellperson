@@ -585,7 +585,7 @@ mod tests {
 
     #[test]
     pub fn gpu_fft_consistency() {
-        env_logger::init();
+        let _ = env_logger::try_init();
         gpu::dump_device_list();
 
         use paired::bls12_381::{Bls12, Fr};

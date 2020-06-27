@@ -78,10 +78,12 @@ Depending on the size of the proof being passed to the gpu for work, certain car
 
 | Device Name            | Cores | Comments       |
 |------------------------|-------|----------------|
+| Quadro RTX 6000        | 4608  |                |
 | TITAN RTX              | 4608  |                |
 | Tesla V100             | 5120  |                |
 | Tesla P100             | 3584  |                |
 | Tesla T4               | 2560  |                |
+| Quadro M5000           | 2048  |                |
 | GeForce RTX 2080 Ti    | 4352  |                |
 | GeForce RTX 2080 SUPER | 3072  |                |
 | GeForce RTX 2080       | 2944  |                |

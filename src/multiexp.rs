@@ -421,7 +421,7 @@ pub fn gpu_multiexp_consistency() {
     use paired::bls12_381::Bls12;
     use std::time::Instant;
 
-    env_logger::init();
+    let _ = env_logger::try_init();
     gpu::dump_device_list();
 
     const MAX_LOG_D: usize = 20;
