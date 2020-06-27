@@ -47,5 +47,6 @@ where
         field2("Fq2", "Fq"),
         ec("Fq2", "G2"),
         multiexp("G2", "Fr"),
-    ].join("\n\n")
+    ]
+    .join("\n\n")
 }

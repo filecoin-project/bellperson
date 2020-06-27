@@ -136,7 +136,7 @@ where
             .map_err(|err| {
                 debug!("{:?}", err);
                 err
-            })? ;
+            })?;
 
         // Each group will have `num_windows` threads and as there are `num_groups` groups, there will
         // be `num_groups` * `num_windows` threads in total.
