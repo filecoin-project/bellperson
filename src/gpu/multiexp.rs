@@ -385,7 +385,12 @@ where
         let (cpu_bases, bases) = bases.split_at(cpu_n);
         let (cpu_exps, exps) = exps.split_at(cpu_n);
 
-        let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
+        // chunk by gpu numbers
+        let chunk_size = if n > self.kernels[0].n {
+            ((n as f64) / (num_devices as f64)).ceil() as usize
+        } else {
+            self.kernels[0].n as usize
+        };
 
         match thread::scope(|s| -> Result<<G as CurveAffine>::Projective, GPUError> {
             let mut acc = <G as CurveAffine>::Projective::zero();
