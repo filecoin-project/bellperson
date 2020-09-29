@@ -7,7 +7,6 @@
 
 #[cfg(feature = "multicore")]
 mod implementation {
-    use crossbeam::{self, thread::Scope};
     use futures::{Future, IntoFuture, Poll};
     use futures_cpupool::{CpuFuture, CpuPool};
     use lazy_static::lazy_static;
@@ -28,31 +27,19 @@ mod implementation {
             .num_threads(*NUM_CPUS)
             .build()
             .unwrap();
+        static ref CPU_POOL: CpuPool = CpuPool::new(*NUM_CPUS);
     }
 
     #[derive(Clone)]
-    pub struct Worker {
-        cpus: usize,
-        pool: CpuPool,
-    }
+    pub struct Worker {}
 
     impl Worker {
-        // We don't expose this outside the library so that
-        // all `Worker` instances have the same number of
-        // CPUs configured.
-        pub(crate) fn new_with_cpus(cpus: usize) -> Worker {
-            Worker {
-                cpus,
-                pool: CpuPool::new(cpus),
-            }
-        }
-
         pub fn new() -> Worker {
-            Self::new_with_cpus(*NUM_CPUS)
+            Worker {}
         }
 
         pub fn log_num_cpus(&self) -> u32 {
-            log2_floor(self.cpus)
+            log2_floor(*NUM_CPUS)
         }
 
         pub fn compute<F, R>(&self, f: F) -> WorkerFuture<R::Item, R::Error>
@@ -64,23 +51,22 @@ mod implementation {
             R::Error: Send + 'static,
         {
             WorkerFuture {
-                future: self.pool.spawn_fn(f),
+                future: CPU_POOL.spawn_fn(f),
             }
         }
 
         pub fn scope<'a, F, R>(&self, elements: usize, f: F) -> R
         where
-            F: FnOnce(&Scope<'a>, usize) -> R,
+            F: FnOnce(&rayon::Scope<'a>, usize) -> R + Send,
+            R: Send,
         {
-            let chunk_size = if elements < self.cpus {
+            let chunk_size = if elements < *NUM_CPUS {
                 1
             } else {
-                elements / self.cpus
+                elements / *NUM_CPUS
             };
 
-            // TODO: Handle case where threads fail
-            crossbeam::scope(|scope| f(scope, chunk_size))
-                .expect("Threads aren't allowed to fail yet")
+            THREAD_POOL.scope(|scope| f(scope, chunk_size))
         }
     }
 
