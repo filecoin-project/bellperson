@@ -154,7 +154,7 @@ mod implementation {
 
         /// One off sending.
         pub fn done(val: T) -> Self {
-            Waiter { val }
+            Waiter { val: Some(val) }
         }
     }
 

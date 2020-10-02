@@ -197,7 +197,6 @@ fn multiexp_inner<Q, D, G, S>(
     density_map: D,
     exponents: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
     c: u32,
-    handle_trivial: bool,
 ) -> Result<<G as CurveAffine>::Projective, SynthesisError>
 where
     for<'a> &'a Q: QueryDensity,
@@ -209,8 +208,7 @@ where
     let this = move |bases: S,
                      density_map: D,
                      exponents: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
-                     skip: u32,
-                     handle_trivial: bool|
+                     skip: u32|
           -> Result<_, SynthesisError> {
         // Accumulate the result
         let mut acc = G::Projective::zero();
@@ -223,6 +221,9 @@ where
 
         let zero = <G::Engine as ScalarEngine>::Fr::zero().into_repr();
         let one = <G::Engine as ScalarEngine>::Fr::one().into_repr();
+
+        // only the first round uses this
+        let handle_trivial = skip == 0;
 
         // Sort the bases into buckets
         for (&exp, density) in exponents.iter().zip(density_map.as_ref().iter()) {
@@ -265,17 +266,7 @@ where
     let parts = (0..<G::Engine as ScalarEngine>::Fr::NUM_BITS)
         .into_par_iter()
         .step_by(c as usize)
-        .enumerate()
-        .map(|(i, skip)| {
-            let handle_trivial = if i == 0 { handle_trivial } else { false };
-            this(
-                bases.clone(),
-                density_map.clone(),
-                exponents.clone(),
-                skip,
-                handle_trivial,
-            )
-        })
+        .map(|skip| this(bases.clone(), density_map.clone(), exponents.clone(), skip))
         .collect::<Vec<Result<_, _>>>();
 
     let mut acc = <G as CurveAffine>::Projective::zero();
@@ -338,7 +329,7 @@ where
         assert!(query_size == exponents.len());
     }
 
-    let result = pool.compute(move || multiexp_inner(bases, density_map, exponents, c, true));
+    let result = pool.compute(move || multiexp_inner(bases, density_map, exponents, c));
 
     #[cfg(feature = "gpu")]
     {
