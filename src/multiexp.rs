@@ -269,18 +269,17 @@ where
         .map(|skip| this(bases.clone(), density_map.clone(), exponents.clone(), skip))
         .collect::<Vec<Result<_, _>>>();
 
-    let mut acc = <G as CurveAffine>::Projective::zero();
-
-    for (i, part) in parts.into_iter().enumerate().rev() {
-        acc.add_assign(&part?);
-        if i > 0 {
+    parts
+        .into_iter()
+        .rev()
+        .try_fold(<G as CurveAffine>::Projective::zero(), |mut acc, part| {
             for _ in 0..c {
                 acc.double();
             }
-        }
-    }
 
-    Ok(acc)
+            acc.add_assign(&part?);
+            Ok(acc)
+        })
 }
 
 /// Perform multi-exponentiation. The caller is responsible for ensuring the
