@@ -265,7 +265,7 @@ fn prefetch<T>(p: *const T) {
 fn prefetch<T>(p: *const T) {
     unsafe {
         use std::arch::aarch64::*;
-        _prefetch(p, _PREFETCH_READ, _PREFETCH_LOCALITY3);
+        _prefetch(p as *const _, _PREFETCH_READ, _PREFETCH_LOCALITY3);
     }
 }
 
