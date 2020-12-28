@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 const GPU_LOCK_NAME: &str = "bellman.gpu.lock";
 const PRIORITY_LOCK_NAME: &str = "bellman.priority.lock";
+pub const BELLMAN_NO_GPU: &str = "BELLMAN_NO_GPU";
+
 fn tmp_path(filename: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
     p.push(filename);
@@ -116,7 +118,7 @@ macro_rules! locked_kernel {
             where
                 F: FnMut(&mut $kern<E>) -> GPUResult<R>,
             {
-                if std::env::var("BELLMAN_NO_GPU").is_ok() {
+                if std::env::var(BELLMAN_NO_GPU).is_ok() {
                     return Err(GPUError::GPUDisabled);
                 }
 

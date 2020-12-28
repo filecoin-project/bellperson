@@ -80,6 +80,18 @@ pub fn dump_device_list() {
 }
 
 #[cfg(feature = "gpu")]
+pub fn has_gpu() -> bool {
+    use super::locks::BELLMAN_NO_GPU;
+    if std::env::var(BELLMAN_NO_GPU).is_ok() {
+        return false;
+    }
+
+    opencl::Device::all()
+        .map(|d| !d.is_empty())
+        .unwrap_or(false)
+}
+
+#[cfg(feature = "gpu")]
 #[test]
 pub fn test_list_devices() {
     let _ = env_logger::try_init();

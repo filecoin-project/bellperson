@@ -18,7 +18,7 @@ use crate::{
 use log::info;
 
 #[cfg(feature = "gpu")]
-use crate::gpu::PriorityLock;
+use crate::gpu::{has_gpu, PriorityLock};
 
 fn eval<E: Engine>(
     lc: &LinearCombination<E>,
@@ -328,7 +328,7 @@ where
     }
 
     #[cfg(feature = "gpu")]
-    let prio_lock = if priority {
+    let prio_lock = if priority && has_gpu() {
         Some(PriorityLock::lock())
     } else {
         None
