@@ -4,6 +4,7 @@ use groupy::{CurveAffine, EncodedPoint};
 use crate::SynthesisError;
 
 use memmap::Mmap;
+use rayon::prelude::*;
 
 use std::fs::File;
 use std::io;
@@ -59,7 +60,7 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     fn get_h(&self, _num_h: usize) -> Result<Self::G1Builder, SynthesisError> {
         let builder = self
             .h
-            .iter()
+            .par_iter()
             .cloned()
             .map(|h| read_g1::<E>(&self.params, h, self.checked))
             .collect::<Result<_, _>>()?;
@@ -70,7 +71,7 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     fn get_l(&self, _num_l: usize) -> Result<Self::G1Builder, SynthesisError> {
         let builder = self
             .l
-            .iter()
+            .par_iter()
             .cloned()
             .map(|l| read_g1::<E>(&self.params, l, self.checked))
             .collect::<Result<_, _>>()?;
@@ -85,7 +86,7 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
         let builder = self
             .a
-            .iter()
+            .par_iter()
             .cloned()
             .map(|a| read_g1::<E>(&self.params, a, self.checked))
             .collect::<Result<_, _>>()?;
@@ -102,7 +103,7 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     ) -> Result<(Self::G1Builder, Self::G1Builder), SynthesisError> {
         let builder = self
             .b_g1
-            .iter()
+            .par_iter()
             .cloned()
             .map(|b_g1| read_g1::<E>(&self.params, b_g1, self.checked))
             .collect::<Result<_, _>>()?;
@@ -119,7 +120,7 @@ impl<'a, E: Engine> ParameterSource<E> for &'a MappedParameters<E> {
     ) -> Result<(Self::G2Builder, Self::G2Builder), SynthesisError> {
         let builder = self
             .b_g2
-            .iter()
+            .par_iter()
             .cloned()
             .map(|b_g2| read_g2::<E>(&self.params, b_g2, self.checked))
             .collect::<Result<_, _>>()?;
