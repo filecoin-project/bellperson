@@ -93,6 +93,18 @@ Depending on the size of the proof being passed to the gpu for work, certain car
 
 ### Running Tests
 
+To run using the `pairing` backend, you can use:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo test --release --all --no-default-features --features pairing
+```
+
+To run using both the `gpu` and `blst` backend, you can use:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo test --release --all --no-default-features --features gpu,blst
+```
+
 To run the multiexp_consistency test you can use:
 
 ```bash

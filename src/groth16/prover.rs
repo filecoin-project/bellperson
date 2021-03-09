@@ -15,7 +15,9 @@ use crate::multiexp::{multiexp, DensityTracker, FullDensity};
 use crate::{
     Circuit, ConstraintSystem, Index, LinearCombination, SynthesisError, Variable, BELLMAN_VERSION,
 };
-use log::{info, trace};
+use log::info;
+#[cfg(feature = "gpu")]
+use log::trace;
 
 #[cfg(feature = "gpu")]
 use crate::gpu::PriorityLock;
