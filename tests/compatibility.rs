@@ -110,13 +110,11 @@ fn compute_test_vector<R: RngCore>(r: &mut R) -> TestVector {
     eg2.write_all(g2.into_compressed().as_ref()).unwrap();
     let mut egt: Vec<u8> = Vec::new();
     gt.write_compressed(&mut egt).unwrap();
-    let vector = TestVector {
+    TestVector {
         g1: eg1,
         g2: eg2,
         gt: egt,
-    };
-
-    vector
+    }
 }
 
 fn verify_test_vector(t: TestVector) {
