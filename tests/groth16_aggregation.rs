@@ -269,6 +269,7 @@ impl Record {
 }
 
 #[test]
+#[ignore]
 fn test_groth16_bench() {
     let n_average = 3; // number of times we do the benchmarking to average out results
     let nb_proofs = vec![8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
