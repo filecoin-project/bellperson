@@ -1,11 +1,12 @@
+use std::io;
+use std::iter;
+use std::sync::Arc;
+
 use bit_vec::{self, BitVec};
 use ff::{Field, PrimeField, PrimeFieldRepr, ScalarEngine};
 use groupy::{CurveAffine, CurveProjective};
 use log::{info, warn};
 use rayon::prelude::*;
-use std::io;
-use std::iter;
-use std::sync::Arc;
 
 use super::multicore::{Waiter, Worker};
 use super::SynthesisError;

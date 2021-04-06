@@ -111,7 +111,7 @@ impl<'a, 'b, F: Field> Div<&'a DensePolynomial<F>> for &'b DensePolynomial<F> {
         } else {
             // Now we know that self.degree() >= divisor.degree();
             let mut quotient = vec![F::zero(); self.degree() - divisor.degree() + 1];
-            let mut remainder: DensePolynomial<F> = self.clone().into();
+            let mut remainder: DensePolynomial<F> = self.clone();
             // Can unwrap here because we know self is not zero.
             let divisor_leading_inv = divisor.coeffs.last().unwrap().inverse().unwrap();
             while !remainder.is_zero() && remainder.degree() >= divisor.degree() {

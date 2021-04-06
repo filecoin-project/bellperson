@@ -50,7 +50,7 @@ pub fn get_window_table<T: CurveProjective>(
         });
     multiples_of_g
         .par_iter()
-        .map(|s| s.into_iter().map(|s| s.into_affine()).collect())
+        .map(|s| s.iter().map(|s| s.into_affine()).collect())
         .collect()
 }
 

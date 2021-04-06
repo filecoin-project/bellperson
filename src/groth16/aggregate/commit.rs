@@ -128,7 +128,7 @@ where
     /// final values.
     pub fn first(&self) -> (G, G) {
         assert!(self.has_correct_len(1));
-        (self.a[0].clone(), self.b[0].clone())
+        (self.a[0], self.b[0])
     }
 }
 
