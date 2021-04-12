@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use sha2::Sha256;
 
 use super::{
-    accumulator::PairingCheck, inner_product,
+    accumulator::PairingChecks, inner_product,
     prove::polynomial_evaluation_product_form_from_transcript, structured_scalar_power,
     AggregateProof, KZGOpening, VerifierSRS,
 };
@@ -22,9 +22,10 @@ use crate::SynthesisError;
 use std::default::Default;
 use std::time::Instant;
 
-pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug>(
+pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Send>(
     ip_verifier_srs: &VerifierSRS<E>,
     pvk: &PreparedVerifyingKey<E>,
+    rng: R,
     public_inputs: &[Vec<E::Fr>],
     proof: &AggregateProof<E>,
 ) -> Result<bool, SynthesisError> {
@@ -44,23 +45,21 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug>(
         }
     }
 
-    let (valid_send, valid_rcv) = bounded(1);
-    rayon::scope(move |s| {
-        // channel used to aggregate all pairing tuples
-        let (send_tuple, rcv_tuple) = bounded(10);
+    let pairing_checks = PairingChecks::new(rng);
+    let pairing_checks_copy = &pairing_checks;
 
+    rayon::scope(move |s| {
         // 1.Check TIPA proof ab
         // 2.Check TIPA proof c
-        let tipa_ab = send_tuple.clone();
         s.spawn(move |_| {
             let now = Instant::now();
-            let tuple = verify_tipp_mipp::<E>(
+            verify_tipp_mipp::<E, R>(
                 ip_verifier_srs,
                 proof,
                 &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
+                pairing_checks_copy,
             );
             debug!("TIPP took {} ms", now.elapsed().as_millis(),);
-            tipa_ab.send(tuple).unwrap();
         });
 
         // Check aggregate pairing product equation
@@ -80,34 +79,6 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug>(
         // randomized already. When merging all pairing checks together, this will be the only one
         // non-randomized.
         //
-        // 3. Compute left part of the final pairing equation
-        let p1 = send_tuple.clone();
-        s.spawn(move |_| {
-            let mut alpha_g1_r_sum = pvk.alpha_g1;
-            alpha_g1_r_sum.mul_assign(r_sum);
-            let tuple = PairingCheck::<E>::new_from_miller_output(
-                E::miller_loop(&[(&alpha_g1_r_sum.into_affine().prepare(), &pvk.beta_g2)]),
-                E::Fqk::one(),
-            );
-
-            p1.send(tuple).unwrap();
-        });
-
-        // 4. Compute right part of the final pairing equation
-        let p3 = send_tuple.clone();
-        s.spawn(move |_| {
-            let tuple = PairingCheck::new_from_miller_output(
-                E::miller_loop(&[(
-                    // e(c^r vector form, h^delta)
-                    // let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&c, r_vec)
-                    &proof.agg_c.into_affine().prepare(),
-                    &pvk.delta_g2,
-                )]),
-                E::Fqk::one(),
-            );
-            p3.send(tuple).unwrap();
-        });
-
         let (r_vec_sender, r_vec_receiver) = bounded(1);
         s.spawn(move |_| {
             let now = Instant::now();
@@ -118,67 +89,78 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug>(
             debug!("generation of r vector: {}ms", elapsed);
         });
 
-        // 5. compute the middle part of the final pairing equation, the one
-        //    with the public inputs
-        //let p2 = send_tuple.clone();
-        s.spawn(move |_| {
-            // We want to compute MUL(i:0 -> l) S_i ^ (SUM(j:0 -> n) ai,j * r^j)
-            // this table keeps tracks of incremental computation of each i-th
-            // exponent to later multiply with S_i
-            // The index of the table is i, which is an index of the public
-            // input element
-            // We incrementally build the r vector and the table
-            // NOTE: in this version it's not r^2j but simply r^j
+        par! {
+            // 3. Compute left part of the final pairing equation
+            let left = {
+                let mut alpha_g1_r_sum = pvk.alpha_g1;
+                alpha_g1_r_sum.mul_assign(r_sum);
 
-            let l = public_inputs[0].len();
-            let mut g_ic = pvk.ic_projective[0];
-            g_ic.mul_assign(r_sum);
+                E::miller_loop(&[(&alpha_g1_r_sum.into_affine().prepare(), &pvk.beta_g2)])
+            },
+            // 4. Compute right part of the final pairing equation
+            let right = {
+                E::miller_loop(&[(
+                    // e(c^r vector form, h^delta)
+                    // let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&c, r_vec)
+                    &proof.agg_c.into_affine().prepare(),
+                    &pvk.delta_g2,
+                )])
+            },
+            // 5. compute the middle part of the final pairing equation, the one
+            //    with the public inputs
+            let middle = {
+                    // We want to compute MUL(i:0 -> l) S_i ^ (SUM(j:0 -> n) ai,j * r^j)
+                    // this table keeps tracks of incremental computation of each i-th
+                    // exponent to later multiply with S_i
+                    // The index of the table is i, which is an index of the public
+                    // input element
+                    // We incrementally build the r vector and the table
+                    // NOTE: in this version it's not r^2j but simply r^j
 
-            let powers = r_vec_receiver.recv().unwrap();
+                    let l = public_inputs[0].len();
+                    let mut g_ic = pvk.ic_projective[0];
+                    g_ic.mul_assign(r_sum);
 
-            let now = Instant::now();
-            // now we do the multi exponentiation
-            let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
-                // i denotes the column of the public input, and j denotes which public input
-                let mut c = public_inputs[0][i];
-                for j in 1..public_inputs.len() {
-                    let mut ai = public_inputs[j][i];
-                    ai.mul_assign(&powers[j]);
-                    c.add_assign(&ai);
-                }
-                c.into_repr()
-            };
+                    let powers = r_vec_receiver.recv().unwrap();
 
-            let totsi = par_multiscalar::<_, E::G1Affine>(
-                &ScalarList::Getter(getter, l),
-                &pvk.multiscalar.at_point(1),
-                std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
-            );
+                    let now = Instant::now();
+                    // now we do the multi exponentiation
+                    let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
+                        // i denotes the column of the public input, and j denotes which public input
+                        let mut c = public_inputs[0][i];
+                        for j in 1..public_inputs.len() {
+                            let mut ai = public_inputs[j][i];
+                            ai.mul_assign(&powers[j]);
+                            c.add_assign(&ai);
+                        }
+                        c.into_repr()
+                    };
 
-            g_ic.add_assign(&totsi);
+                    let totsi = par_multiscalar::<_, E::G1Affine>(
+                        &ScalarList::Getter(getter, l),
+                        &pvk.multiscalar.at_point(1),
+                        std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
+                    );
 
-            let tuple = PairingCheck::new_from_miller_output(
-                E::miller_loop(&[(&g_ic.into_affine().prepare(), &pvk.gamma_g2)]),
-                E::Fqk::one(),
-            );
-            let elapsed = now.elapsed().as_millis();
-            debug!("table generation: {}ms", elapsed);
+                    g_ic.add_assign(&totsi);
 
-            send_tuple.send(tuple).unwrap();
-        });
+                    let ml = E::miller_loop(&[(&g_ic.into_affine().prepare(), &pvk.gamma_g2)]);
+                    let elapsed = now.elapsed().as_millis();
+                    debug!("table generation: {}ms", elapsed);
 
-        s.spawn(move |_| {
+                    ml
+            }
+        };
+
+        pairing_checks_copy.merge_nonrandom(
+            vec![left, middle, right],
             // final value ip_ab is what we want to compare in the groth16
             // aggregated equation A * B
-            let mut acc = PairingCheck::new_from_miller_output(E::Fqk::one(), proof.ip_ab.clone());
-            while let Ok(tuple) = rcv_tuple.recv() {
-                acc.merge(&tuple);
-            }
-            valid_send.send(acc.verify()).unwrap();
-        });
+            proof.ip_ab.clone(),
+        );
     });
 
-    let res = valid_rcv.recv().unwrap();
+    let res = pairing_checks.verify();
     info!("aggregate verify done");
 
     Ok(res)
@@ -187,11 +169,12 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug>(
 /// verify_tipp_mipp returns a pairing equation to check the tipp proof.  $r$ is
 /// the randomness used to produce a random linear combination of A and B and
 /// used in the MIPP part with C
-fn verify_tipp_mipp<E: Engine>(
+fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     v_srs: &VerifierSRS<E>,
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
-) -> PairingCheck<E> {
+    pairing_checks: &PairingChecks<E, R>,
+) {
     info!("verify with srs shift");
     let now = Instant::now();
     // (T,U), Z for TIPP and MIPP  and all challenges
@@ -231,22 +214,24 @@ fn verify_tipp_mipp<E: Engine>(
     let now = Instant::now();
     par! {
         // check the opening proof for v
-        let vtuple = verify_kzg_opening_g2(
+        let _vtuple = verify_kzg_opening_g2(
             v_srs,
             &fvkey,
             &proof.tmipp.vkey_opening,
             &challenges_inv,
             &E::Fr::one(),
             &c,
+            pairing_checks,
         ),
         // check the opening proof for w - note that w has been rescaled by $r^{-1}$
-        let wtuple = verify_kzg_opening_g1(
+        let _wtuple = verify_kzg_opening_g1(
             v_srs,
             &fwkey,
             &proof.tmipp.wkey_opening,
             &challenges,
             &r_shift.inverse().unwrap(),
             &c,
+            pairing_checks,
         ),
         //
         // We create a sequence of pairing tuple that we aggregate together at
@@ -254,12 +239,12 @@ fn verify_tipp_mipp<E: Engine>(
         //
         // TIPP
         // z = e(A,B)
-        let check_z = PairingCheck::<E>::new_random_from_miller_inputs(&[(final_a, final_b)], final_zab),
+        let _check_z = pairing_checks.merge_miller_inputs(&[(final_a, final_b)], final_zab),
         //  final_aB.0 = T = e(A,v1)e(w1,B)
-        let check_ab0 = PairingCheck::<E>::new_random_from_miller_inputs(&[(final_a, &fvkey.0),(&fwkey.0, final_b)], final_tab),
+        let _check_ab0 = pairing_checks.merge_miller_inputs(&[(final_a, &fvkey.0),(&fwkey.0, final_b)], final_tab),
 
         //  final_aB.1 = U = e(A,v2)e(w2,B)
-        let check_ab1 = PairingCheck::<E>::new_random_from_miller_inputs(&[(final_a, &fvkey.1),(&fwkey.1, final_b)], final_uab),
+        let _check_ab1 = pairing_checks.merge_miller_inputs(&[(final_a, &fvkey.1),(&fwkey.1, final_b)], final_uab),
 
         // MIPP
         // Verify base inner product commitment
@@ -269,9 +254,9 @@ fn verify_tipp_mipp<E: Engine>(
             &[final_r.clone()]),
         // Check commiment correctness
         // T = e(C,v1)
-        let check_t = PairingCheck::<E>::new_random_from_miller_inputs(&[(final_c,&fvkey.0)],final_tc),
+        let _check_t = pairing_checks.merge_miller_inputs(&[(final_c,&fvkey.0)],final_tc),
         // U = e(A,v2)
-        let check_u = PairingCheck::<E>::new_random_from_miller_inputs(&[(final_c,&fvkey.1)],final_uc)
+        let _check_u = pairing_checks.merge_miller_inputs(&[(final_c,&fvkey.1)],final_uc)
     };
 
     debug!(
@@ -283,18 +268,8 @@ fn verify_tipp_mipp<E: Engine>(
     // only check that doesn't require pairing so we can give a tuple that will
     // render the equation wrong in case it's false
     if !b {
-        return PairingCheck::new_invalid();
+        pairing_checks.invalidate();
     }
-    let now = Instant::now();
-    let mut acc = vtuple;
-    acc.merge(&check_z);
-    acc.merge(&check_ab0);
-    acc.merge(&check_ab1);
-    acc.merge(&check_t);
-    acc.merge(&check_u);
-    acc.merge(&wtuple);
-    debug!("TIPP verify: final merge {}ms", now.elapsed().as_millis());
-    acc
 }
 
 /// gipa_verify_tipp_mipp recurse on the proof and statement and produces the final
@@ -475,14 +450,15 @@ fn gipa_verify_tipp_mipp<E: Engine>(
 /// verify_kzg_opening_g2 takes a KZG opening, the final commitment key, SRS and
 /// any shift (in TIPP we shift the v commitment by r^-1) and returns a pairing
 /// tuple to check if the opening is correct or not.
-pub fn verify_kzg_opening_g2<E: Engine>(
+pub fn verify_kzg_opening_g2<E: Engine, R: rand::RngCore + Send>(
     v_srs: &VerifierSRS<E>,
     final_vkey: &(E::G2Affine, E::G2Affine),
     vkey_opening: &KZGOpening<E::G2Affine>,
     challenges: &[E::Fr],
     r_shift: &E::Fr,
     kzg_challenge: &E::Fr,
-) -> PairingCheck<E> {
+    pairing_checks: &PairingChecks<E, R>,
+) {
     // f_v(z)
     let vpoly_eval_z =
         polynomial_evaluation_product_form_from_transcript(challenges, kzg_challenge, r_shift);
@@ -494,7 +470,7 @@ pub fn verify_kzg_opening_g2<E: Engine>(
     par! {
         // verify first part of opening - v1
         // e(g, v1 h^{-af_v(z)})
-        let check1 = PairingCheck::<E>::new_random_from_miller_inputs(&[(
+        let _check1 = pairing_checks.merge_miller_inputs(&[(
             &ng.into_affine(),
             // in additive notation: final_vkey = uH,
             // uH - f_v(z)H = (u - f_v)H --> v1h^{-af_v(z)}
@@ -509,11 +485,11 @@ pub fn verify_kzg_opening_g2<E: Engine>(
             &sub!(v_srs.g_alpha, &mul!(v_srs.g, kzg_challenge.clone()))
                 .into_affine(),
             &vkey_opening.0,
-        )],&E::Fqk::one()),
+        )], &E::Fqk::one()),
 
         // verify second part of opening - v2 - similar but changing secret exponent
         // e(g, v2 h^{-bf_v(z)})
-        let check2 = PairingCheck::<E>::new_random_from_miller_inputs(&[(
+        let _check2 = pairing_checks.merge_miller_inputs(&[(
             &ng.into_affine(),
             // in additive notation: final_vkey = uH,
             // uH - f_v(z)H = (u - f_v)H --> v1h^{-f_v(z)}
@@ -528,22 +504,20 @@ pub fn verify_kzg_opening_g2<E: Engine>(
             &sub!(v_srs.g_beta, &mul!(v_srs.g, kzg_challenge.clone()))
                 .into_affine(),
             &vkey_opening.1,
-        )],&E::Fqk::one())
+        )], &E::Fqk::one())
     };
-    let mut final_check = check1;
-    final_check.merge(&check2);
-    final_check
 }
 
 /// Similar to verify_kzg_opening_g2 but for g1.
-pub fn verify_kzg_opening_g1<E: Engine>(
+pub fn verify_kzg_opening_g1<E: Engine, R: rand::RngCore + Send>(
     v_srs: &VerifierSRS<E>,
     final_wkey: &(E::G1Affine, E::G1Affine),
     wkey_opening: &KZGOpening<E::G1Affine>,
     challenges: &[E::Fr],
     r_shift: &E::Fr,
     kzg_challenge: &E::Fr,
-) -> PairingCheck<E> {
+    pairing_checks: &PairingChecks<E, R>,
+) {
     let wkey_poly_eval =
         polynomial_evaluation_product_form_from_transcript(challenges, kzg_challenge, r_shift);
 
@@ -557,7 +531,7 @@ pub fn verify_kzg_opening_g1<E: Engine>(
         // first check on w1
         // let K = g^{a^{n+1}}
         // e(w1 K^{-f_w(z)},h)
-        let check1 = PairingCheck::<E>::new_random_from_miller_inputs(&[(
+        let _check1 = pairing_checks.merge_miller_inputs(&[(
             &sub!(
                 final_wkey.0.into_projective(),
                 &mul!(v_srs.g_alpha_n1, wkey_poly_eval)
@@ -570,11 +544,11 @@ pub fn verify_kzg_opening_g1<E: Engine>(
             &wkey_opening.0,
             &sub!(v_srs.h_alpha, &mul!(v_srs.h, *kzg_challenge))
                 .into_affine(),
-        )],&E::Fqk::one()),
+        )], &E::Fqk::one()),
         // then do second check
         // let K = g^{b^{n+1}}
         // e(w2 K^{-f_w(z)},h)
-        let check2 = PairingCheck::<E>::new_random_from_miller_inputs(&[(
+        let _check2 = pairing_checks.merge_miller_inputs(&[(
             &sub!(
                 final_wkey.1.into_projective(),
                 &mul!(v_srs.g_beta_n1, wkey_poly_eval)
@@ -587,11 +561,8 @@ pub fn verify_kzg_opening_g1<E: Engine>(
             &wkey_opening.1,
             &sub!(v_srs.h_beta, &mul!(v_srs.h, *kzg_challenge))
                 .into_affine(),
-        )],&E::Fqk::one())
+        )], &E::Fqk::one())
     };
-    let mut final_check = check1;
-    final_check.merge(&check2);
-    final_check
 }
 
 /// Keeps track of the variables that have been sent by the prover and must
