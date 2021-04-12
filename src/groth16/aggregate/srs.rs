@@ -69,9 +69,9 @@ pub struct VerifierSRS<E: Engine> {
     pub g_beta: E::G1,
     pub h_alpha: E::G2,
     pub h_beta: E::G2,
-    /// equals to $g^{alpha^{n+1}}$
+    /// equals to $g^{alpha^{n}}$
     pub g_alpha_n1: E::G1,
-    /// equals to $g^{beta^{n+1}}$
+    /// equals to $g^{beta^{n}}$
     pub g_beta_n1: E::G1,
 }
 
@@ -114,19 +114,16 @@ impl<E: Engine> GenericSRS<E> {
     /// size of the generic srs otherwise it panics.
     pub fn specialize(&self, num_proofs: usize) -> (ProverSRS<E>, VerifierSRS<E>) {
         assert!(num_proofs.is_power_of_two());
-        let tn = 2 * num_proofs + 1; // size of the CRS we need
+        let tn = 2 * num_proofs; // size of the CRS we need
         assert!(self.g_alpha_powers.len() >= tn);
         assert!(self.h_alpha_powers.len() >= tn);
         assert!(self.g_beta_powers.len() >= tn);
         assert!(self.h_beta_powers.len() >= tn);
         let n = num_proofs;
-        // we skip the first one since g^a^0 = g which is not part of the commitment
-        // key (i.e. we don't use it in the prover's code) so for g we skip directly to
-        // g^a^{n+1}
-        let g_low = n + 1;
-        // we need powers up to 2n
+        // g^n -> g^{n-1}
+        let g_low = n;
         let g_up = g_low + n;
-        let h_low = 1;
+        let h_low = 0;
         let h_up = h_low + n;
         let g_alpha_powers_table =
             precompute_fixed_window(&self.g_alpha_powers[g_low..g_up], WINDOW_SIZE);
@@ -266,22 +263,21 @@ pub fn setup_fake_srs<E: Engine, R: rand::RngCore>(rng: &mut R, size: usize) -> 
         let beta = &beta;
         let g_alpha_powers = &mut g_alpha_powers;
         s.spawn(move |_| {
-            // +1 because we go to power 2n included and we start at power g^a^n
-            *g_alpha_powers = structured_generators_scalar_power(2 * size + 1, g, alpha);
+            *g_alpha_powers = structured_generators_scalar_power(2 * size, g, alpha);
         });
         let g_beta_powers = &mut g_beta_powers;
         s.spawn(move |_| {
-            *g_beta_powers = structured_generators_scalar_power(2 * size + 1, g, beta);
+            *g_beta_powers = structured_generators_scalar_power(2 * size, g, beta);
         });
 
         let h_alpha_powers = &mut h_alpha_powers;
         s.spawn(move |_| {
-            *h_alpha_powers = structured_generators_scalar_power(2 * size + 1, h, alpha);
+            *h_alpha_powers = structured_generators_scalar_power(2 * size, h, alpha);
         });
 
         let h_beta_powers = &mut h_beta_powers;
         s.spawn(move |_| {
-            *h_beta_powers = structured_generators_scalar_power(2 * size + 1, h, beta);
+            *h_beta_powers = structured_generators_scalar_power(2 * size, h, beta);
         });
     });
 

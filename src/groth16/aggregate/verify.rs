@@ -476,7 +476,7 @@ pub fn verify_kzg_opening_g2<E: Engine, R: rand::RngCore + Send>(
             // uH - f_v(z)H = (u - f_v)H --> v1h^{-af_v(z)}
             &sub!(
                 final_vkey.0.into_projective(),
-                &mul!(v_srs.h_alpha, vpoly_eval_z)
+                &mul!(v_srs.h, vpoly_eval_z)
             )
             .into_affine(),
         ),
@@ -495,7 +495,7 @@ pub fn verify_kzg_opening_g2<E: Engine, R: rand::RngCore + Send>(
             // uH - f_v(z)H = (u - f_v)H --> v1h^{-f_v(z)}
             &sub!(
                 final_vkey.1.into_projective(),
-                &mul!(v_srs.h_beta, vpoly_eval_z)
+                &mul!(v_srs.h, vpoly_eval_z)
             )
             .into_affine(),
         ),
@@ -529,7 +529,7 @@ pub fn verify_kzg_opening_g1<E: Engine, R: rand::RngCore + Send>(
 
     par! {
         // first check on w1
-        // let K = g^{a^{n+1}}
+        // let K = g^{a^n}
         // e(w1 K^{-f_w(z)},h)
         let _check1 = pairing_checks.merge_miller_inputs(&[(
             &sub!(
@@ -546,7 +546,7 @@ pub fn verify_kzg_opening_g1<E: Engine, R: rand::RngCore + Send>(
                 .into_affine(),
         )], &E::Fqk::one()),
         // then do second check
-        // let K = g^{b^{n+1}}
+        // let K = g^{b^{n}}
         // e(w2 K^{-f_w(z)},h)
         let _check2 = pairing_checks.merge_miller_inputs(&[(
             &sub!(

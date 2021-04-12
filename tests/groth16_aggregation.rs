@@ -495,6 +495,7 @@ fn test_groth16_aggregation() {
         aggregate_proofs::<Bls12>(&pk, &proofs).expect("failed to aggregate proofs");
     let result = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &aggregate_proof)
         .expect("these proofs should have been valid");
+    println!("results {:?}", result);
     assert!(result);
 
     // 2. Non power of two
