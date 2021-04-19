@@ -5,8 +5,8 @@ parameters:
     type: string
     default: "nightly-2020-11-20"
 
-orbs:
-  codecov: codecov/codecov@1
+#orbs:
+#  codecov: codecov/codecov@1.1.4
 
 executors:
   default:
@@ -256,9 +256,9 @@ jobs:
             # Only export the coverage of this project, we don't care about coverage of
             # dependencies
             llvm-cov export --ignore-filename-regex=".cargo|.rustup" --format=lcov -instr-profile=default.profdata --object=${OBJECT_FILES} > lcov.info
-      # Codecov automatically merges the reports in case there are several ones uploaded
-      - codecov/upload:
-          file: lcov.info
+      ## Codecov automatically merges the reports in case there are several ones uploaded
+      #- codecov/upload:
+      #    file: lcov.info
 
 workflows:
   version: 2.1
@@ -294,21 +294,21 @@ workflows:
           requires:
             - cargo_fetch
 
-      - coverage_run:
-          name: coverage_default_features
-          requires:
-            - cargo_fetch
-      - coverage_run:
-          name: coverage_gpu_feature_lib
-          cargo-args: "--features gpu --lib"
-          # If run in parallel the GPU tests will block and hence fail
-          test-args: "--test-threads=1"
-          requires:
-            - cargo_fetch
-      - coverage_run:
-          name: coverage_gpu_feature_integration
-          cargo-args: "--features gpu --test '*'"
-          # If run in parallel the GPU tests will block and hence fail
-          test-args: "--test-threads=1"
-          requires:
-            - cargo_fetch
+      #- coverage_run:
+      #    name: coverage_default_features
+      #    requires:
+      #      - cargo_fetch
+      #- coverage_run:
+      #    name: coverage_gpu_feature_lib
+      #    cargo-args: "--features gpu --lib"
+      #    # If run in parallel the GPU tests will block and hence fail
+      #    test-args: "--test-threads=1"
+      #    requires:
+      #      - cargo_fetch
+      #- coverage_run:
+      #    name: coverage_gpu_feature_integration
+      #    cargo-args: "--features gpu --test '*'"
+      #    # If run in parallel the GPU tests will block and hence fail
+      #    test-args: "--test-threads=1"
+      #    requires:
+      #      - cargo_fetch
