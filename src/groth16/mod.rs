@@ -2,7 +2,9 @@
 //!
 //! [Groth16]: https://eprint.iacr.org/2016/260
 
-#[cfg(test)]
+// The `DummyEngine` currently only works on the CPU as G1/G2 is using `Fr` and `Fr` isn't
+// supported by the GPU kernels
+#[cfg(all(test, not(feature = "gpu")))]
 mod tests;
 
 mod ext;
