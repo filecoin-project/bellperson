@@ -179,16 +179,12 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     info!("verify with srs shift");
     let now = Instant::now();
     // (T,U), Z for TIPP and MIPP  and all challenges
-    let (final_res, mut challenges, mut challenges_inv) = gipa_verify_tipp_mipp(&proof);
+    let (final_res, final_r, challenges, challenges_inv) = gipa_verify_tipp_mipp(&proof, r_shift);
     debug!(
         "TIPP verify: gipa verify tipp {}ms",
         now.elapsed().as_millis()
     );
 
-    // we reverse the order so the KZG polynomial have them in the expected
-    // order to construct them in logn time.
-    challenges.reverse();
-    challenges_inv.reverse();
     // Verify commitment keys wellformed
     let fvkey = proof.tmipp.gipa.final_vkey;
     let fwkey = proof.tmipp.gipa.final_wkey;
@@ -206,7 +202,6 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     let final_a = &proof.tmipp.gipa.final_a;
     let final_b = &proof.tmipp.gipa.final_b;
     let final_c = &proof.tmipp.gipa.final_c;
-    let final_r = &proof.tmipp.gipa.final_r;
     let final_zab = &final_res.zab;
     let final_tab = &final_res.tab;
     let final_uab = &final_res.uab;
@@ -252,7 +247,7 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
         // Z ==  c ^ r
         let final_z =
             inner_product::multiexponentiation::<E::G1Affine>(&[final_c.clone()],
-            &[final_r.clone()]),
+            &[final_r]),
         // Check commiment correctness
         // T = e(C,v1)
         let _check_t = pairing_checks.merge_miller_inputs(&[(final_c,&fvkey.0)],final_tc),
@@ -287,7 +282,8 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
 /// between them, such as the KZG proof for commitment keys.
 fn gipa_verify_tipp_mipp<E: Engine>(
     proof: &AggregateProof<E>,
-) -> (GipaTUZ<E>, Vec<E::Fr>, Vec<E::Fr>) {
+    r_shift: &E::Fr,
+) -> (GipaTUZ<E>, E::Fr, Vec<E::Fr>, Vec<E::Fr>) {
     info!("gipa verify TIPP");
     let gipa = &proof.tmipp.gipa;
     // COM(A,B) = PROD e(A,B) given by prover
@@ -443,13 +439,25 @@ fn gipa_verify_tipp_mipp<E: Engine>(
             acc_res.merge(&res);
             acc_res
         });
+    // we reverse the order because the polynomial evaluation routine expects
+    // the challenges in reverse order.Doing it here allows us to compute the final_r
+    // in log time. Challenges are used as well in the KZG verification checks.
+    challenges.reverse();
+    challenges_inv.reverse();
 
-    final_res.merge(&res);
+    let ref_final_res = &mut final_res;
+    let ref_challenges_inv = &challenges_inv;
+
+    par! {
+        let _e = { ref_final_res.merge(&res); () },
+        let final_r = polynomial_evaluation_product_form_from_transcript(
+            ref_challenges_inv,r_shift,&E::Fr::one())
+    };
     debug!(
         "TIPP verify: gipa prep and accumulate took {}ms",
         now.elapsed().as_millis()
     );
-    (final_res, challenges, challenges_inv)
+    (final_res, final_r, challenges, challenges_inv)
 }
 
 /// verify_kzg_opening_g2 takes a KZG opening, the final commitment key, SRS and

@@ -1,6 +1,5 @@
 use std::io::{Read, Write};
 
-use ff::{PrimeField, PrimeFieldRepr};
 use groupy::{CurveAffine, CurveProjective, EncodedPoint};
 use serde::{Deserialize, Serialize};
 
@@ -169,7 +168,6 @@ pub struct GipaProof<E: Engine> {
     pub final_a: E::G1Affine,
     pub final_b: E::G2Affine,
     pub final_c: E::G1Affine,
-    pub final_r: E::Fr,
     /// final commitment keys $v$ and $w$ - there is only one element at the
     /// end for v1 and v2 hence it's a tuple.
     #[serde(bound(
@@ -194,7 +192,6 @@ impl<E: Engine> PartialEq for GipaProof<E> {
             && self.final_a == other.final_a
             && self.final_b == other.final_b
             && self.final_c == other.final_c
-            && self.final_r == other.final_r
             && self.final_vkey == other.final_vkey
             && self.final_wkey == other.final_wkey
     }
@@ -251,9 +248,6 @@ impl<E: Engine> GipaProof<E> {
 
         // final_c
         out.write_all(self.final_c.into_compressed().as_ref())?;
-
-        // final_r
-        self.final_r.into_repr().write_le(&mut out)?;
 
         // final_vkey
         out.write_all(self.final_vkey.0.into_compressed().as_ref())?;
@@ -318,11 +312,6 @@ impl<E: Engine> GipaProof<E> {
         let final_b = read_affine(&mut source)?;
         let final_c = read_affine(&mut source)?;
 
-        let mut final_r_repr = <E::Fr as PrimeField>::Repr::default();
-        final_r_repr.read_le(&mut source)?;
-        let final_r = <E::Fr as PrimeField>::from_repr(final_r_repr)
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string()))?;
-
         let final_vkey = (read_affine(&mut source)?, read_affine(&mut source)?);
         let final_wkey = (read_affine(&mut source)?, read_affine(&mut source)?);
 
@@ -335,7 +324,6 @@ impl<E: Engine> GipaProof<E> {
             final_a,
             final_b,
             final_c,
-            final_r,
             final_vkey,
             final_wkey,
         })
@@ -426,8 +414,7 @@ fn read_affine<G: CurveAffine, R: std::io::Read>(mut source: R) -> std::io::Resu
 mod tests {
     use super::*;
 
-    use crate::bls::{Bls12, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-    use ff::Field;
+    use crate::bls::{Bls12, G1Affine, G1Projective, G2Affine, G2Projective};
 
     fn fake_proof() -> AggregateProof<Bls12> {
         // create pairing, as pairing results can be compressed
@@ -453,7 +440,6 @@ mod tests {
                     final_a: G1Affine::one(),
                     final_b: G2Affine::one(),
                     final_c: G1Affine::one(),
-                    final_r: Fr::one(),
                     final_vkey: (G2Affine::one(), G2Affine::one()),
                     final_wkey: (G1Affine::one(), G1Affine::one()),
                 },

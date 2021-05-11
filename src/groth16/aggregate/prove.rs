@@ -298,7 +298,7 @@ fn gipa_tipp_mipp<E: Engine>(
     assert!(vkey.a.len() == 1 && vkey.b.len() == 1);
     assert!(wkey.a.len() == 1 && wkey.b.len() == 1);
 
-    let (final_a, final_b, final_c, final_r) = (m_a[0], m_b[0], m_c[0], m_r[0]);
+    let (final_a, final_b, final_c) = (m_a[0], m_b[0], m_c[0]);
     let (final_vkey, final_wkey) = (vkey.first(), wkey.first());
     Ok((
         GipaProof {
@@ -310,7 +310,6 @@ fn gipa_tipp_mipp<E: Engine>(
             final_a,
             final_b,
             final_c,
-            final_r,
             final_vkey,
             final_wkey,
         },
