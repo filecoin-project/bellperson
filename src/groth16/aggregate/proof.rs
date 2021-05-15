@@ -455,7 +455,7 @@ mod tests {
         let proof = fake_proof();
         let mut buffer = Vec::new();
         proof.write(&mut buffer).unwrap();
-        assert_eq!(buffer.len(), 8_244);
+        assert_eq!(buffer.len(), 8_212);
 
         let out = AggregateProof::<Bls12>::read(std::io::Cursor::new(&buffer)).unwrap();
         assert_eq!(proof, out);
