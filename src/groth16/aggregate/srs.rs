@@ -194,7 +194,7 @@ impl<E: Engine> GenericSRS<E> {
         })
     }
 
-    pub fn read_mmap(reader: &Mmap) -> io::Result<Self> {
+    pub fn read_mmap(reader: &Mmap, max_len: usize) -> io::Result<Self> {
         fn read_length(mmap: &Mmap, offset: &mut usize) -> Result<usize, std::io::Error> {
             let u32_len = size_of::<u32>();
             let mut raw_len = &mmap[*offset..*offset + u32_len];
@@ -206,7 +206,9 @@ impl<E: Engine> GenericSRS<E> {
             }
         }
 
-        fn mmap_read_vec<G: CurveAffine>(mmap: &Mmap, offset: &mut usize) -> io::Result<Vec<G>> {
+        // The 'max_len' argument allows us to read up to that max
+        // (e.g.. 2 << 14), rather then entire vec_len (i.e. 2 << 19)
+        fn mmap_read_vec<G: CurveAffine>(mmap: &Mmap, offset: &mut usize, max_len: usize) -> io::Result<Vec<G>> {
             let point_len = size_of::<G::Compressed>();
             let vec_len = read_length(mmap, offset)?;
             if vec_len > MAX_SRS_SIZE {
@@ -215,7 +217,8 @@ impl<E: Engine> GenericSRS<E> {
                     format!("invalid SRS vector length {}", vec_len,),
                 ));
             }
-            let vec: Vec<G> = (0..vec_len)
+
+            let vec: Vec<G> = (0..max_len)
                 .into_par_iter()
                 .map(|i| {
                     let data_start = *offset + (i * point_len);
@@ -237,10 +240,10 @@ impl<E: Engine> GenericSRS<E> {
         }
 
         let mut offset: usize = 0;
-        let g_alpha_powers = mmap_read_vec::<E::G1Affine>(&reader, &mut offset)?;
-        let g_beta_powers = mmap_read_vec::<E::G1Affine>(&reader, &mut offset)?;
-        let h_alpha_powers = mmap_read_vec::<E::G2Affine>(&reader, &mut offset)?;
-        let h_beta_powers = mmap_read_vec::<E::G2Affine>(&reader, &mut offset)?;
+        let g_alpha_powers = mmap_read_vec::<E::G1Affine>(&reader, &mut offset, max_len)?;
+        let g_beta_powers = mmap_read_vec::<E::G1Affine>(&reader, &mut offset, max_len)?;
+        let h_alpha_powers = mmap_read_vec::<E::G2Affine>(&reader, &mut offset, max_len)?;
+        let h_beta_powers = mmap_read_vec::<E::G2Affine>(&reader, &mut offset, max_len)?;
         Ok(Self {
             g_alpha_powers,
             g_beta_powers,
