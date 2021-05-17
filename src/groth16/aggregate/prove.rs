@@ -1,8 +1,6 @@
-use digest::Digest;
 use ff::{Field, PrimeField};
 use groupy::{CurveAffine, CurveProjective};
 use rayon::prelude::*;
-use sha2::Sha256;
 
 use super::{
     commit,
@@ -56,12 +54,17 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
 
     // Derive a random scalar to perform a linear combination of proofs
     let mut transcript = Transcript::new("snarkpack");
-    transcript.domain_sep("random-r");
-    transcript.append(&tov!(&com_ab.0, &com_ab.1, &com_c.0, &com_c.1));
-    transcript.append(&tov!(&public_inputs.iter().flatten().collect::<Vec<_>>()));
-    let r: E::Fr = transcript.derive_challenge();
+    let r = transcript
+        .write_domain_separator("random-r")
+        .write(&com_ab.0)
+        .write(&com_ab.1)
+        .write(&com_c.0)
+        .write(&com_c.1)
+        .write(&public_inputs)
+        .read_challenge();
+
     // 1,r, r^2, r^3, r^4 ...
-    let r_vec = structured_scalar_power(proofs.len(), &r);
+    let r_vec: Vec<E::Fr> = structured_scalar_power(proofs.len(), &*r);
     // 1,r^-1, r^-2, r^-3
     let r_inv = r_vec
         .par_iter()
@@ -82,7 +85,7 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         // compute C^r for the verifier
         let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&refc, &refr_vec)
     };
-    transcript.append(&tov!(&ip_ab, &agg_c));
+    transcript.write(&ip_ab).write(&agg_c);
 
     // w^{r^{-1}}
     let wkey_r_inv = srs.wkey.scale(&r_inv)?;
@@ -111,7 +114,7 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
 /// challenges of GIPA would be different, two KZG proofs would be needed.
 fn prove_tipp_mipp<E: Engine>(
     srs: &ProverSRS<E>,
-    transcript: &mut Transcript,
+    transcript: &mut Transcript<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
@@ -132,16 +135,14 @@ fn prove_tipp_mipp<E: Engine>(
     let r_inverse = r_shift.inverse().unwrap();
 
     // KZG challenge point
-    transcript.domain_sep("random-z");
-    let input = tov!(
-        &challenges[0],
-        &proof.final_vkey.0,
-        &proof.final_vkey.1,
-        &proof.final_wkey.0,
-        &proof.final_wkey.1
-    );
-    transcript.append(&input);
-    let z: E::Fr = transcript.derive_challenge();
+    let z = transcript
+        .write_domain_separator("random-z")
+        .write(&challenges[0])
+        .write(&proof.final_vkey.0)
+        .write(&proof.final_vkey.1)
+        .write(&proof.final_wkey.0)
+        .write(&proof.final_wkey.1)
+        .read_challenge();
 
     // Complete KZG proofs
     par! {
@@ -174,7 +175,7 @@ fn prove_tipp_mipp<E: Engine>(
 /// the challenges generated necessary to do the polynomial commitment proof
 /// later in TIPP.
 fn gipa_tipp_mipp<E: Engine>(
-    transcript: &mut Transcript,
+    transcript: &mut Transcript<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
@@ -196,8 +197,8 @@ fn gipa_tipp_mipp<E: Engine>(
     let mut challenges: Vec<E::Fr> = Vec::new();
     let mut challenges_inv: Vec<E::Fr> = Vec::new();
 
-    transcript.domain_sep("gipa");
-    let i: E::Fr = transcript.derive_challenge();
+    transcript.write_domain_separator("gipa");
+    let _i = transcript.read_challenge();
 
     while m_a.len() > 1 {
         // recursive step
@@ -246,12 +247,20 @@ fn gipa_tipp_mipp<E: Engine>(
 
         // Fiat-Shamir challenge
         // combine both TIPP and MIPP transcript
-        let input = tov!(
-            &zab_l, &zab_r, &zc_l, &zc_r, &tab_l.0, &tab_l.1, &tab_r.0, &tab_r.1, &tuc_l.0,
-            &tuc_l.1, &tuc_r.0, &tuc_r.1
-        );
-        transcript.append(&input);
-        let c_inv: E::Fr = transcript.derive_challenge();
+        let c_inv = transcript
+            .write(&zab_l)
+            .write(&zab_r)
+            .write(&zc_l)
+            .write(&zc_r)
+            .write(&tab_l.0)
+            .write(&tab_l.1)
+            .write(&tab_r.0)
+            .write(&tab_r.1)
+            .write(&tuc_l.0)
+            .write(&tuc_l.1)
+            .write(&tuc_r.0)
+            .write(&tuc_r.1)
+            .read_challenge();
 
         // Optimization for multiexponentiation to rescale G2 elements with
         // 128-bit challenge Swap 'c' and 'c_inv' since can't control bit size
@@ -287,7 +296,7 @@ fn gipa_tipp_mipp<E: Engine>(
         z_ab.push((zab_l, zab_r));
         z_c.push((zc_l, zc_r));
         challenges.push(c);
-        challenges_inv.push(c_inv);
+        challenges_inv.push(*c_inv);
     }
 
     assert!(m_a.len() == 1 && m_b.len() == 1);

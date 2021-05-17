@@ -1,14 +1,3 @@
-macro_rules! tov {
-    // https://fromherotozero.dev/blog/introduction-to-rust-macros/
-    ( $( $x:expr), * ) => {{
-            let mut hash_input = Vec::new();
-            $(
-                bincode::serialize_into(&mut hash_input, $x).expect("vec");
-            )*
-            hash_input
-    }};
-}
-
 macro_rules! try_par {
     ($(let $name:ident = $f:expr),+) => {
         $(
