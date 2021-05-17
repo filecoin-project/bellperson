@@ -15,7 +15,9 @@ use std::mem::size_of;
 
 /// Maximum size of the generic SRS constructed from Filecoin and Zcash power of
 /// taus.
-pub const MAX_SRS_SIZE: usize = 2 << 19;
+///
+/// https://github.com/nikkolasg/taupipp/blob/baca1426266bf39416c45303e35c966d69f4f8b4/src/bin/assemble.rs#L12
+pub const MAX_SRS_SIZE: usize = (2 << 19) + 1;
 
 /// It contains the maximum number of raw elements of the SRS needed to aggregate and verify
 /// Groth16 proofs. One can derive specialized prover and verifier key for _specific_ size of
