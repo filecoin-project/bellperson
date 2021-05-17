@@ -208,7 +208,11 @@ impl<E: Engine> GenericSRS<E> {
 
         // The 'max_len' argument allows us to read up to that max
         // (e.g.. 2 << 14), rather then entire vec_len (i.e. 2 << 19)
-        fn mmap_read_vec<G: CurveAffine>(mmap: &Mmap, offset: &mut usize, max_len: usize) -> io::Result<Vec<G>> {
+        fn mmap_read_vec<G: CurveAffine>(
+            mmap: &Mmap,
+            offset: &mut usize,
+            max_len: usize,
+        ) -> io::Result<Vec<G>> {
             let point_len = size_of::<G::Compressed>();
             let vec_len = read_length(mmap, offset)?;
             if vec_len > MAX_SRS_SIZE {

@@ -224,7 +224,8 @@ fn test_groth16_srs_io() {
     };
 
     let max_len = (2 << 14) + 1;
-    let srs3 = GenericSRS::<Bls12>::read_mmap(&mmap, max_len).expect("failed to read srs from cache file");
+    let srs3 =
+        GenericSRS::<Bls12>::read_mmap(&mmap, max_len).expect("failed to read srs from cache file");
 
     // Ensure that the parameters match
     assert_eq!(srs, srs3);
