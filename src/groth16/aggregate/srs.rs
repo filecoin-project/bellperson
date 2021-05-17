@@ -222,11 +222,7 @@ impl<E: Engine> GenericSRS<E> {
                 ));
             }
 
-            let max_len = if max_len > vec_len {
-                vec_len
-            } else {
-                max_len
-            };
+            let max_len = if max_len > vec_len { vec_len } else { max_len };
 
             let vec: Vec<G> = (0..max_len)
                 .into_par_iter()
