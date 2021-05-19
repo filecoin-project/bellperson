@@ -16,9 +16,19 @@ use crate::groth16::{multiscalar::*, Proof};
 use crate::SynthesisError;
 
 /// Aggregate `n` zkSnark proofs, where `n` must be a power of two.
+/// WARNING: transcript_include represents everything that should be included in
+/// the transcript from outside the boundary of this function. This is especially
+/// relevant for ALL public inputs of ALL individual proofs. In the regular case,
+/// one should input ALL public inputs from ALL proofs aggregated. However, IF ALL the
+/// public inputs are **fixed, and public before the aggregation time**, then there is
+/// no need to hash those. The reason we specify this extra assumption is because hashing
+/// the public inputs from the decoded form can take quite some time depending on the
+/// number of proofs and public inputs (+100ms in our case). In the case of Filecoin, the only
+/// non-fixed part of the public inputs are the challenges derived from a seed. Even though this
+/// seed comes from a random beeacon, we are hashing this as a safety precaution.
 pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
     srs: &ProverSRS<E>,
-    public_inputs: &[Vec<E::Fr>],
+    transcript_include: &[u8],
     proofs: &[Proof<E>],
 ) -> Result<AggregateProof<E>, SynthesisError> {
     if proofs.len() < 2 {
@@ -60,9 +70,7 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         .write(&com_ab.1)
         .write(&com_c.0)
         .write(&com_c.1)
-        // See verify::verify_aggregate_proof comment to understand why it is
-        // safe.
-        //.write(&public_inputs)
+        .write(&transcript_include)
         .read_challenge();
 
     // 1,r, r^2, r^3, r^4 ...
