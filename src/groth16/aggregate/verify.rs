@@ -23,20 +23,23 @@ use std::time::Instant;
 /// Verifies the aggregated proofs thanks to the Groth16 verifying key, the
 /// verifier SRS from the aggregation scheme, all the public inputs of the
 /// proofs and the aggregated proof.
-/// WARNING: This implementation assumes that public inputs are fixed and
-/// constant **before** the aggregation of the proofs happens. In the case of
-/// Filecoin, these public inputs are fixed on chain before an aggregation can
-/// be submitted so this assumption is guaranteed. In the case this assumption
-/// is NOT guaranteed, this library is NOT to be used as is. The reason we
-/// removed this is because of performance issues, for 350 public inputs with
-/// some large number of individual proofs aggregated, it can quickly increase
-/// the verification time of 100ms more.
+/// WARNING: transcript_include represents everything that should be included in
+/// the transcript from outside the boundary of this function. This is especially
+/// relevant for ALL public inputs of ALL individual proofs. In the regular case,
+/// one should input ALL public inputs from ALL proofs aggregated. However, IF ALL the
+/// public inputs are **fixed, and public before the aggregation time**, then there is
+/// no need to hash those. The reason we specify this extra assumption is because hashing
+/// the public inputs from the decoded form can take quite some time depending on the
+/// number of proofs and public inputs (+100ms in our case). In the case of Filecoin, the only
+/// non-fixed part of the public inputs are the challenges derived from a seed. Even though this
+/// seed comes from a random beeacon, we are hashing this as a safety precaution.
 pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Send>(
     ip_verifier_srs: &VerifierSRS<E>,
     pvk: &PreparedVerifyingKey<E>,
     rng: R,
     public_inputs: &[Vec<E::Fr>],
     proof: &AggregateProof<E>,
+    transcript_include: &[u8],
 ) -> Result<bool, SynthesisError> {
     info!("verify_aggregate_proof");
     proof.parsing_check()?;
@@ -54,8 +57,7 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         .write(&proof.com_ab.1)
         .write(&proof.com_c.0)
         .write(&proof.com_c.1)
-        // See function comments to see why it is safe
-        //.write(&public_inputs)
+        .write(&transcript_include)
         .read_challenge();
 
     transcript.write(&proof.ip_ab).write(&proof.agg_c);
