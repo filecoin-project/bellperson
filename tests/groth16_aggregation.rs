@@ -223,7 +223,9 @@ fn test_groth16_srs_io() {
             .expect("failed to mmap")
     };
 
-    let srs3 = GenericSRS::<Bls12>::read_mmap(&mmap).expect("failed to read srs from cache file");
+    let max_len = (2 << 19) + 1;
+    let srs3 =
+        GenericSRS::<Bls12>::read_mmap(&mmap, max_len).expect("failed to read srs from cache file");
 
     // Ensure that the parameters match
     assert_eq!(srs, srs3);
@@ -301,6 +303,7 @@ fn test_groth16_bench() {
     let mut buf = Vec::new();
     proofs[0].write(&mut buf).expect("buffer");
     let proof_size = buf.len();
+    let inclusion = vec![1, 2, 3];
     for i in nb_proofs {
         let mut records = Vec::new();
         for _ in 0..n_average {
@@ -309,8 +312,8 @@ fn test_groth16_bench() {
             // Aggregate proofs using inner product proofs
             let start = Instant::now();
             println!("\t-Aggregation...");
-            let aggregate_proof =
-                aggregate_proofs::<Bls12>(&pk, &proofs[..i]).expect("failed to aggregate proofs");
+            let aggregate_proof = aggregate_proofs::<Bls12>(&pk, &inclusion, &proofs[..i])
+                .expect("failed to aggregate proofs");
             let prover_time = start.elapsed().as_millis();
             println!("\t-Aggregate Verification ...");
 
@@ -320,8 +323,14 @@ fn test_groth16_bench() {
             let deserialized =
                 AggregateProof::<Bls12>::read(std::io::Cursor::new(&buffer)).unwrap();
 
-            let result =
-                verify_aggregate_proof(&vk, &pvk, &mut rng, &statements[..i], &deserialized);
+            let result = verify_aggregate_proof(
+                &vk,
+                &pvk,
+                &mut rng,
+                &statements[..i],
+                &deserialized,
+                &inclusion,
+            );
             assert!(result.unwrap());
             let verifier_time = start.elapsed().as_millis();
 
@@ -489,17 +498,38 @@ fn test_groth16_aggregation() {
         proofs.push(proof);
         statements.push(statement);
     }
-
+    let to_include = vec![1, 2, 3];
     // 1. Valid proofs
     println!("Aggregating {} Groth16 proofs...", proofs.len());
     let mut aggregate_proof =
-        aggregate_proofs::<Bls12>(&pk, &proofs).expect("failed to aggregate proofs");
-    let result = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &aggregate_proof)
-        .expect("these proofs should have been valid");
+        aggregate_proofs::<Bls12>(&pk, &to_include, &proofs).expect("failed to aggregate proofs");
+    let result = verify_aggregate_proof(
+        &vk,
+        &pvk,
+        &mut rng,
+        &statements,
+        &aggregate_proof,
+        &to_include,
+    )
+    .expect("these proofs should have been valid");
     assert!(result);
 
+    // Invalid transcript inclusion
+    assert_eq!(
+        verify_aggregate_proof(
+            &vk,
+            &pvk,
+            &mut rng,
+            &statements,
+            &aggregate_proof,
+            &vec![4, 5, 6],
+        )
+        .unwrap(),
+        false
+    );
+
     // 2. Non power of two
-    let err = aggregate_proofs::<Bls12>(&pk, &proofs[0..NUM_PROOFS - 1]).unwrap_err();
+    let err = aggregate_proofs::<Bls12>(&pk, &to_include, &proofs[0..NUM_PROOFS - 1]).unwrap_err();
     assert!(match err {
         SynthesisError::NonPowerOfTwo => true,
         _ => false,
@@ -508,27 +538,27 @@ fn test_groth16_aggregation() {
     // 3. aggregate invalid proof content (random A, B, and C)
     let old_a = proofs[0].a.clone();
     proofs[0].a = <Bls12 as Engine>::G1::random(&mut rng).into_affine();
-    let invalid_agg =
-        aggregate_proofs::<Bls12>(&pk, &proofs).expect("I should be able to aggregate");
-    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &invalid_agg)
+    let invalid_agg = aggregate_proofs::<Bls12>(&pk, &to_include, &proofs)
+        .expect("I should be able to aggregate");
+    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &invalid_agg, &to_include)
         .expect("no synthesis");
     assert!(res == false);
     proofs[0].a = old_a;
 
     let old_b = proofs[0].b.clone();
     proofs[0].b = <Bls12 as Engine>::G2::random(&mut rng).into_affine();
-    let invalid_agg =
-        aggregate_proofs::<Bls12>(&pk, &proofs).expect("I should be able to aggregate");
-    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &invalid_agg)
+    let invalid_agg = aggregate_proofs::<Bls12>(&pk, &to_include, &proofs)
+        .expect("I should be able to aggregate");
+    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &invalid_agg, &to_include)
         .expect("no synthesis");
     assert!(res == false);
     proofs[0].b = old_b;
 
     let old_c = proofs[0].c.clone();
     proofs[0].c = <Bls12 as Engine>::G1::random(&mut rng).into_affine();
-    let invalid_agg =
-        aggregate_proofs::<Bls12>(&pk, &proofs).expect("I should be able to aggregate");
-    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &invalid_agg)
+    let invalid_agg = aggregate_proofs::<Bls12>(&pk, &to_include, &proofs)
+        .expect("I should be able to aggregate");
+    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &invalid_agg, &to_include)
         .expect("no synthesis");
     assert!(res == false);
     proofs[0].c = old_c;
@@ -537,16 +567,30 @@ fn test_groth16_aggregation() {
     // first invalid commitment
     let old_aggc = aggregate_proof.agg_c.clone();
     aggregate_proof.agg_c = <Bls12 as Engine>::G1::random(&mut rng);
-    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &aggregate_proof)
-        .expect("no synthesis");
+    let res = verify_aggregate_proof(
+        &vk,
+        &pvk,
+        &mut rng,
+        &statements,
+        &aggregate_proof,
+        &to_include,
+    )
+    .expect("no synthesis");
     assert!(res == false);
     aggregate_proof.agg_c = old_aggc;
 
     // 5. invalid gipa element
     let old_finala = aggregate_proof.tmipp.gipa.final_a.clone();
     aggregate_proof.tmipp.gipa.final_a = <Bls12 as Engine>::G1::random(&mut rng).into_affine();
-    let res = verify_aggregate_proof(&vk, &pvk, &mut rng, &statements, &aggregate_proof)
-        .expect("no synthesis");
+    let res = verify_aggregate_proof(
+        &vk,
+        &pvk,
+        &mut rng,
+        &statements,
+        &aggregate_proof,
+        &to_include,
+    )
+    .expect("no synthesis");
     assert!(res == false);
     aggregate_proof.tmipp.gipa.final_a = old_finala;
 }
@@ -617,17 +661,19 @@ fn test_groth16_aggregation_mimc() {
         proofs.push(proof);
         images.push(vec![image]);
     }
+    let inclusion = vec![1, 2, 3];
 
     // Aggregate proofs using inner product proofs
     let start = Instant::now();
     println!("Aggregating {} Groth16 proofs...", NUM_PROOFS_TO_AGGREGATE);
     let aggregate_proof =
-        aggregate_proofs::<Bls12>(&pk, &proofs).expect("failed to aggregate proofs");
+        aggregate_proofs::<Bls12>(&pk, &inclusion, &proofs).expect("failed to aggregate proofs");
     let prover_time = start.elapsed().as_millis();
 
     println!("Verifying aggregated proof...");
     let start = Instant::now();
-    let result = verify_aggregate_proof(&vk, &pvk, &mut rng, &images, &aggregate_proof).unwrap();
+    let result =
+        verify_aggregate_proof(&vk, &pvk, &mut rng, &images, &aggregate_proof, &inclusion).unwrap();
     let verifier_time = start.elapsed().as_millis();
     assert!(result);
 

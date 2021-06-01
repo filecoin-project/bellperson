@@ -13,6 +13,7 @@ mod poly;
 mod proof;
 mod prove;
 mod srs;
+mod transcript;
 mod verify;
 
 pub use self::commit::*;

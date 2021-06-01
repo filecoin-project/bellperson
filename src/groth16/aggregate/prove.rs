@@ -1,23 +1,34 @@
-use digest::Digest;
 use ff::{Field, PrimeField};
 use groupy::{CurveAffine, CurveProjective};
 use rayon::prelude::*;
-use sha2::Sha256;
 
 use super::{
     commit,
     commit::{VKey, WKey},
     compress, inner_product,
     poly::DensePolynomial,
-    structured_scalar_power, AggregateProof, GipaProof, KZGOpening, ProverSRS, TippMippProof,
+    structured_scalar_power,
+    transcript::Transcript,
+    AggregateProof, GipaProof, KZGOpening, ProverSRS, TippMippProof,
 };
 use crate::bls::Engine;
 use crate::groth16::{multiscalar::*, Proof};
 use crate::SynthesisError;
 
 /// Aggregate `n` zkSnark proofs, where `n` must be a power of two.
+/// WARNING: transcript_include represents everything that should be included in
+/// the transcript from outside the boundary of this function. This is especially
+/// relevant for ALL public inputs of ALL individual proofs. In the regular case,
+/// one should input ALL public inputs from ALL proofs aggregated. However, IF ALL the
+/// public inputs are **fixed, and public before the aggregation time**, then there is
+/// no need to hash those. The reason we specify this extra assumption is because hashing
+/// the public inputs from the decoded form can take quite some time depending on the
+/// number of proofs and public inputs (+100ms in our case). In the case of Filecoin, the only
+/// non-fixed part of the public inputs are the challenges derived from a seed. Even though this
+/// seed comes from a random beeacon, we are hashing this as a safety precaution.
 pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
     srs: &ProverSRS<E>,
+    transcript_include: &[u8],
     proofs: &[Proof<E>],
 ) -> Result<AggregateProof<E>, SynthesisError> {
     if proofs.len() < 2 {
@@ -51,16 +62,19 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         let com_c = commit::single_g1::<E>(&srs.vkey, refc)
     };
 
-    // Random linear combination of proofs
-    let r = oracle!(
-        "randomr".to_string(),
-        &com_ab.0,
-        &com_ab.1,
-        &com_c.0,
-        &com_c.1
-    );
+    // Derive a random scalar to perform a linear combination of proofs
+    let mut transcript = Transcript::new("snarkpack");
+    let r = transcript
+        .write_domain_separator("random-r")
+        .write(&com_ab.0)
+        .write(&com_ab.1)
+        .write(&com_c.0)
+        .write(&com_c.1)
+        .write(&transcript_include)
+        .read_challenge();
+
     // 1,r, r^2, r^3, r^4 ...
-    let r_vec = structured_scalar_power(proofs.len(), &r);
+    let r_vec: Vec<E::Fr> = structured_scalar_power(proofs.len(), &*r);
     // 1,r^-1, r^-2, r^-3
     let r_inv = r_vec
         .par_iter()
@@ -74,18 +88,20 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         .map(|(bi, ri)| mul!(bi.into_projective(), ri.into_repr()).into_affine())
         .collect::<Vec<_>>();
     let refb_r = &b_r;
-    // w^{r^{-1}}
-    let wkey_r_inv = srs.wkey.scale(&r_inv)?;
-
-    // we prove tipp and mipp using the same recursive loop
-    let proof = prove_tipp_mipp::<E>(&srs, &a, &b_r, &c, &wkey_r_inv, &r_vec)?;
+    let refr_vec = &r_vec;
     try_par! {
         // compute A * B^r for the verifier
         let ip_ab = inner_product::pairing::<E>(&refa, &refb_r),
         // compute C^r for the verifier
-        let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&refc, &r_vec)
+        let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&refc, &refr_vec)
     };
+    transcript.write(&ip_ab).write(&agg_c);
 
+    // w^{r^{-1}}
+    let wkey_r_inv = srs.wkey.scale(&r_inv)?;
+
+    // we prove tipp and mipp using the same recursive loop
+    let proof = prove_tipp_mipp::<E>(&srs, &mut transcript, &a, &b_r, &c, &wkey_r_inv, &r_vec)?;
     debug_assert!({
         let computed_com_ab = commit::pair::<E>(&srs.vkey, &wkey_r_inv, &a, &b_r).unwrap();
         com_ab == computed_com_ab
@@ -108,6 +124,7 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
 /// challenges of GIPA would be different, two KZG proofs would be needed.
 fn prove_tipp_mipp<E: Engine>(
     srs: &ProverSRS<E>,
+    transcript: &mut Transcript<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
@@ -117,7 +134,7 @@ fn prove_tipp_mipp<E: Engine>(
     let r_shift = r_vec[1].clone();
     // Run GIPA
     let (proof, mut challenges, mut challenges_inv) =
-        gipa_tipp_mipp::<E>(a, b, c, &srs.vkey, &wkey, r_vec)?;
+        gipa_tipp_mipp::<E>(transcript, a, b, c, &srs.vkey, &wkey, r_vec)?;
 
     // Prove final commitment keys are wellformed
     // we reverse the transcript so the polynomial in kzg opening is constructed
@@ -128,14 +145,14 @@ fn prove_tipp_mipp<E: Engine>(
     let r_inverse = r_shift.inverse().unwrap();
 
     // KZG challenge point
-    let z = oracle!(
-        "randomz".to_string(),
-        &challenges[0],
-        &proof.final_vkey.0,
-        &proof.final_vkey.1,
-        &proof.final_wkey.0,
-        &proof.final_wkey.1
-    );
+    let z = transcript
+        .write_domain_separator("random-z")
+        .write(&challenges[0])
+        .write(&proof.final_vkey.0)
+        .write(&proof.final_vkey.1)
+        .write(&proof.final_wkey.0)
+        .write(&proof.final_wkey.1)
+        .read_challenge();
 
     // Complete KZG proofs
     par! {
@@ -168,6 +185,7 @@ fn prove_tipp_mipp<E: Engine>(
 /// the challenges generated necessary to do the polynomial commitment proof
 /// later in TIPP.
 fn gipa_tipp_mipp<E: Engine>(
+    transcript: &mut Transcript<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
@@ -188,6 +206,9 @@ fn gipa_tipp_mipp<E: Engine>(
     let mut z_c = Vec::new();
     let mut challenges: Vec<E::Fr> = Vec::new();
     let mut challenges_inv: Vec<E::Fr> = Vec::new();
+
+    transcript.write_domain_separator("gipa");
+    let _i = transcript.read_challenge();
 
     while m_a.len() > 1 {
         // recursive step
@@ -235,26 +256,21 @@ fn gipa_tipp_mipp<E: Engine>(
         };
 
         // Fiat-Shamir challenge
-        let default_transcript = E::Fr::zero();
-        let transcript = challenges.last().unwrap_or(&default_transcript);
-
         // combine both TIPP and MIPP transcript
-        let c_inv = oracle!(
-            "randomgipa".to_string(),
-            &transcript,
-            &zab_l,
-            &zab_r,
-            &zc_l,
-            &zc_r,
-            &tab_l.0,
-            &tab_l.1,
-            &tab_r.0,
-            &tab_r.1,
-            &tuc_l.0,
-            &tuc_l.1,
-            &tuc_r.0,
-            &tuc_r.1
-        );
+        let c_inv = transcript
+            .write(&zab_l)
+            .write(&zab_r)
+            .write(&zc_l)
+            .write(&zc_r)
+            .write(&tab_l.0)
+            .write(&tab_l.1)
+            .write(&tab_r.0)
+            .write(&tab_r.1)
+            .write(&tuc_l.0)
+            .write(&tuc_l.1)
+            .write(&tuc_r.0)
+            .write(&tuc_r.1)
+            .read_challenge();
 
         // Optimization for multiexponentiation to rescale G2 elements with
         // 128-bit challenge Swap 'c' and 'c_inv' since can't control bit size
@@ -290,7 +306,7 @@ fn gipa_tipp_mipp<E: Engine>(
         z_ab.push((zab_l, zab_r));
         z_c.push((zc_l, zc_r));
         challenges.push(c);
-        challenges_inv.push(c_inv);
+        challenges_inv.push(*c_inv);
     }
 
     assert!(m_a.len() == 1 && m_b.len() == 1);

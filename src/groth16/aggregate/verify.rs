@@ -1,16 +1,14 @@
 use crossbeam_channel::bounded;
-use digest::Digest;
 use ff::{Field, PrimeField};
 use groupy::{CurveAffine, CurveProjective};
 use log::debug;
 use log::*;
 use rayon::prelude::*;
-use sha2::Sha256;
 
 use super::{
     accumulator::PairingChecks, inner_product,
     prove::polynomial_evaluation_product_form_from_transcript, structured_scalar_power,
-    AggregateProof, KZGOpening, VerifierSRS,
+    transcript::Transcript, AggregateProof, KZGOpening, VerifierSRS,
 };
 use crate::bls::{Engine, PairingCurveAffine};
 use crate::groth16::{
@@ -22,30 +20,47 @@ use crate::SynthesisError;
 use std::default::Default;
 use std::time::Instant;
 
+/// Verifies the aggregated proofs thanks to the Groth16 verifying key, the
+/// verifier SRS from the aggregation scheme, all the public inputs of the
+/// proofs and the aggregated proof.
+/// WARNING: transcript_include represents everything that should be included in
+/// the transcript from outside the boundary of this function. This is especially
+/// relevant for ALL public inputs of ALL individual proofs. In the regular case,
+/// one should input ALL public inputs from ALL proofs aggregated. However, IF ALL the
+/// public inputs are **fixed, and public before the aggregation time**, then there is
+/// no need to hash those. The reason we specify this extra assumption is because hashing
+/// the public inputs from the decoded form can take quite some time depending on the
+/// number of proofs and public inputs (+100ms in our case). In the case of Filecoin, the only
+/// non-fixed part of the public inputs are the challenges derived from a seed. Even though this
+/// seed comes from a random beeacon, we are hashing this as a safety precaution.
 pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Send>(
     ip_verifier_srs: &VerifierSRS<E>,
     pvk: &PreparedVerifyingKey<E>,
     rng: R,
     public_inputs: &[Vec<E::Fr>],
     proof: &AggregateProof<E>,
+    transcript_include: &[u8],
 ) -> Result<bool, SynthesisError> {
     info!("verify_aggregate_proof");
     proof.parsing_check()?;
-
-    // Random linear combination of proofs
-    let r = oracle!(
-        "randomr".to_string(),
-        &proof.com_ab.0,
-        &proof.com_ab.1,
-        &proof.com_c.0,
-        &proof.com_c.1
-    );
-
     for pub_input in public_inputs {
         if (pub_input.len() + 1) != pvk.ic.len() {
             return Err(SynthesisError::MalformedVerifyingKey);
         }
     }
+
+    // Random linear combination of proofs
+    let mut transcript = Transcript::new("snarkpack");
+    let r = transcript
+        .write_domain_separator("random-r")
+        .write(&proof.com_ab.0)
+        .write(&proof.com_ab.1)
+        .write(&proof.com_c.0)
+        .write(&proof.com_c.1)
+        .write(&transcript_include)
+        .read_challenge();
+
+    transcript.write(&proof.ip_ab).write(&proof.agg_c);
 
     let pairing_checks = PairingChecks::new(rng);
     let pairing_checks_copy = &pairing_checks;
@@ -56,6 +71,7 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         s.spawn(move |_| {
             let now = Instant::now();
             verify_tipp_mipp::<E, R>(
+                &mut transcript,
                 ip_verifier_srs,
                 proof,
                 &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
@@ -71,7 +87,7 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         info!("checking aggregate pairing");
         let mut r_sum = r.pow(&[public_inputs.len() as u64]);
         r_sum.sub_assign(&E::Fr::one());
-        let b = sub!(r, &E::Fr::one()).inverse().unwrap();
+        let b = sub!(*r, &E::Fr::one()).inverse().unwrap();
         r_sum.mul_assign(&b);
 
         // The following parts 3 4 5 are independently computing the parts of the Groth16
@@ -85,7 +101,7 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         s.spawn(move |_| {
             let now = Instant::now();
             r_vec_sender
-                .send(structured_scalar_power(public_inputs.len(), &r))
+                .send(structured_scalar_power(public_inputs.len(), &*r))
                 .unwrap();
             let elapsed = now.elapsed().as_millis();
             debug!("generation of r vector: {}ms", elapsed);
@@ -171,6 +187,7 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
 /// the randomness used to produce a random linear combination of A and B and
 /// used in the MIPP part with C
 fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
+    transcript: &mut Transcript<E>,
     v_srs: &VerifierSRS<E>,
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
@@ -179,7 +196,8 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     info!("verify with srs shift");
     let now = Instant::now();
     // (T,U), Z for TIPP and MIPP  and all challenges
-    let (final_res, final_r, challenges, challenges_inv) = gipa_verify_tipp_mipp(&proof, r_shift);
+    let (final_res, final_r, challenges, challenges_inv) =
+        gipa_verify_tipp_mipp(transcript, &proof, r_shift);
     debug!(
         "TIPP verify: gipa verify tipp {}ms",
         now.elapsed().as_millis()
@@ -189,14 +207,14 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     let fvkey = proof.tmipp.gipa.final_vkey;
     let fwkey = proof.tmipp.gipa.final_wkey;
     // KZG challenge point
-    let c = oracle!(
-        "randomz".to_string(),
-        &challenges.first().unwrap(),
-        &fvkey.0,
-        &fvkey.1,
-        &fwkey.0,
-        &fwkey.1
-    );
+    let c = transcript
+        .write_domain_separator("random-z")
+        .write(&challenges.first().unwrap())
+        .write(&fvkey.0)
+        .write(&fvkey.1)
+        .write(&fwkey.0)
+        .write(&fwkey.1)
+        .read_challenge();
 
     // we take reference so they are able to be copied in the par! macro
     let final_a = &proof.tmipp.gipa.final_a;
@@ -281,6 +299,7 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
 /// MIPP share the same challenges however, enabling to re-use common operations
 /// between them, such as the KZG proof for commitment keys.
 fn gipa_verify_tipp_mipp<E: Engine>(
+    transcript: &mut Transcript<E>,
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
 ) -> (GipaTUZ<E>, E::Fr, Vec<E::Fr>, Vec<E::Fr>) {
@@ -299,7 +318,7 @@ fn gipa_verify_tipp_mipp<E: Engine>(
     let mut challenges = Vec::new();
     let mut challenges_inv = Vec::new();
 
-    let default_transcript = E::Fr::zero();
+    transcript.write_domain_separator("gipa");
 
     // We first generate all challenges as this is the only consecutive process
     // that can not be parallelized then we scale the commitments in a
@@ -314,26 +333,24 @@ fn gipa_verify_tipp_mipp<E: Engine>(
         let (tc_l, tc_r) = comm_c;
         let (zc_l, zc_r) = z_c;
         // Fiat-Shamir challenge
-        let transcript = challenges.last().unwrap_or(&default_transcript);
-        let c_inv = oracle!(
-            "randomgipa".to_string(),
-            &transcript,
-            &zab_l,
-            &zab_r,
-            &zc_l,
-            &zc_r,
-            &tab_l.0,
-            &tab_l.1,
-            &tab_r.0,
-            &tab_r.1,
-            &tc_l.0,
-            &tc_l.1,
-            &tc_r.0,
-            &tc_r.1
-        );
+        let c_inv = transcript
+            .write(&zab_l)
+            .write(&zab_r)
+            .write(&zc_l)
+            .write(&zc_r)
+            .write(&tab_l.0)
+            .write(&tab_l.1)
+            .write(&tab_r.0)
+            .write(&tab_r.1)
+            .write(&tc_l.0)
+            .write(&tc_l.1)
+            .write(&tc_r.0)
+            .write(&tc_r.1)
+            .read_challenge();
+
         let c = c_inv.inverse().unwrap();
         challenges.push(c);
-        challenges_inv.push(c_inv);
+        challenges_inv.push(*c_inv);
     }
 
     debug!(

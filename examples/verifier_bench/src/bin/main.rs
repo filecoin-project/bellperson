@@ -20,7 +20,7 @@ use bellperson::{
 };
 use fff::{Field, PrimeField, ScalarEngine};
 use groupy::CurveProjective;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use structopt::StructOpt;
 
 macro_rules! timer {
@@ -157,7 +157,7 @@ struct Opts {
 }
 
 fn main() {
-    let rng = &mut thread_rng();
+    let mut rng = rand::rngs::OsRng;
     pretty_env_logger::init_timed();
 
     let opts = Opts::from_args();
@@ -174,15 +174,15 @@ fn main() {
     let circuits = vec![circuit.clone(); opts.proofs];
 
     let params = if opts.dummy {
-        dummy_params::<Bls12, _>(opts.public, opts.private, rng)
+        dummy_params::<Bls12, _>(opts.public, opts.private, &mut rng)
     } else {
         println!("Generating params... (You can skip this by passing `--dummy` flag)");
-        generate_random_parameters(circuit.clone(), rng).unwrap()
+        generate_random_parameters(circuit.clone(), &mut rng).unwrap()
     };
     let pvk = prepare_verifying_key(&params.vk);
 
     let srs = if opts.aggregate {
-        let x = setup_fake_srs(rng, opts.proofs).specialize(opts.proofs);
+        let x = setup_fake_srs(&mut rng, opts.proofs).specialize(opts.proofs);
         Some(x)
     } else {
         None
@@ -193,7 +193,7 @@ fn main() {
 
         for _ in 0..opts.samples {
             let (_proofs, took) =
-                timer!(create_random_proof_batch(circuits.clone(), &params, rng).unwrap());
+                timer!(create_random_proof_batch(circuits.clone(), &params, &mut rng).unwrap());
             println!("Proof generation finished in {}ms", took);
         }
     }
@@ -201,18 +201,21 @@ fn main() {
     if opts.verify {
         println!("Verifying...");
 
+        let includes = [1u8; 32];
+
         let (inputs, proofs, agg_proof) = if opts.dummy {
-            let proofs = dummy_proofs::<Bls12, _>(opts.proofs, rng);
+            let proofs = dummy_proofs::<Bls12, _>(opts.proofs, &mut rng);
+            let inputs = dummy_inputs::<Bls12, _>(opts.public, &mut rng);
+            let pis = vec![inputs.clone(); opts.proofs];
 
             let agg_proof = srs.as_ref().map(|srs| {
-                let (agg, took) = timer!(aggregate_proofs::<Bls12>(&srs.0, &proofs).unwrap());
+                let (agg, took) =
+                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs).unwrap());
                 println!("Proof aggregation finished in {}ms", took);
                 agg
             });
 
-            let inputs = dummy_inputs::<Bls12, _>(opts.public, rng);
-
-            (inputs, proofs, agg_proof)
+            (pis, proofs, agg_proof)
         } else {
             let mut inputs = Vec::new();
             let mut num = Fr::one();
@@ -223,16 +226,19 @@ fn main() {
             }
             println!("(Generating valid proofs...)");
             let (proofs, took) =
-                timer!(create_random_proof_batch(circuits.clone(), &params, rng).unwrap());
+                timer!(create_random_proof_batch(circuits.clone(), &params, &mut rng).unwrap());
             println!("Proof generation finished in {}ms", took);
 
+            let pis = vec![inputs.clone(); opts.proofs];
+
             let agg_proof = srs.as_ref().map(|srs| {
-                let (agg, took) = timer!(aggregate_proofs::<Bls12>(&srs.0, &proofs).unwrap());
+                let (agg, took) =
+                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs).unwrap());
                 println!("Proof aggregation finished in {}ms", took);
                 agg
             });
 
-            (inputs, proofs, agg_proof)
+            (pis, proofs, agg_proof)
         };
 
         for _ in 0..opts.samples {
@@ -242,8 +248,8 @@ fn main() {
                 opts.proofs, opts.public
             );
 
-            let pis = vec![inputs.clone(); opts.proofs];
-            let (valid, took) = timer!(verify_proofs_batch(&pvk, rng, &pref[..], &pis).unwrap());
+            let (valid, took) =
+                timer!(verify_proofs_batch(&pvk, &mut rng, &pref[..], &inputs).unwrap());
             println!(
                 "Verification finished in {}ms (Valid: {}) (Proof Size: {} bytes)",
                 took,
@@ -253,8 +259,10 @@ fn main() {
 
             if let Some(ref agg_proof) = agg_proof {
                 let srs = srs.as_ref().unwrap();
-                let (valid, took) =
-                    timer!(verify_aggregate_proof(&srs.1, &pvk, &pis, agg_proof,).unwrap());
+                let (valid, took) = timer!(verify_aggregate_proof(
+                    &srs.1, &pvk, rng, &inputs, agg_proof, &includes,
+                )
+                .unwrap());
                 println!(
                     "Verification aggregated finished in {}ms (Valid: {}) (Proof Size: {} bytes, {})",
                     took,
