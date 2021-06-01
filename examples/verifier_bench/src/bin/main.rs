@@ -201,13 +201,16 @@ fn main() {
     if opts.verify {
         println!("Verifying...");
 
+        let includes = [1u8; 32];
+
         let (inputs, proofs, agg_proof) = if opts.dummy {
             let proofs = dummy_proofs::<Bls12, _>(opts.proofs, &mut rng);
             let inputs = dummy_inputs::<Bls12, _>(opts.public, &mut rng);
             let pis = vec![inputs.clone(); opts.proofs];
 
             let agg_proof = srs.as_ref().map(|srs| {
-                let (agg, took) = timer!(aggregate_proofs::<Bls12>(&srs.0, &pis, &proofs).unwrap());
+                let (agg, took) =
+                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs).unwrap());
                 println!("Proof aggregation finished in {}ms", took);
                 agg
             });
@@ -229,7 +232,8 @@ fn main() {
             let pis = vec![inputs.clone(); opts.proofs];
 
             let agg_proof = srs.as_ref().map(|srs| {
-                let (agg, took) = timer!(aggregate_proofs::<Bls12>(&srs.0, &pis, &proofs).unwrap());
+                let (agg, took) =
+                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs).unwrap());
                 println!("Proof aggregation finished in {}ms", took);
                 agg
             });
@@ -255,8 +259,10 @@ fn main() {
 
             if let Some(ref agg_proof) = agg_proof {
                 let srs = srs.as_ref().unwrap();
-                let (valid, took) =
-                    timer!(verify_aggregate_proof(&srs.1, &pvk, rng, &inputs, agg_proof,).unwrap());
+                let (valid, took) = timer!(verify_aggregate_proof(
+                    &srs.1, &pvk, rng, &inputs, agg_proof, &includes,
+                )
+                .unwrap());
                 println!(
                     "Verification aggregated finished in {}ms (Valid: {}) (Proof Size: {} bytes, {})",
                     took,
