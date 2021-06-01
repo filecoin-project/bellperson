@@ -448,11 +448,13 @@ fn gipa_verify_tipp_mipp<E: Engine>(
     let ref_final_res = &mut final_res;
     let ref_challenges_inv = &challenges_inv;
 
-    par! {
-        let _e = { ref_final_res.merge(&res); () },
-        let final_r = polynomial_evaluation_product_form_from_transcript(
-            ref_challenges_inv,r_shift,&E::Fr::one())
-    };
+    ref_final_res.merge(&res);
+    let final_r = polynomial_evaluation_product_form_from_transcript(
+        ref_challenges_inv,
+        r_shift,
+        &E::Fr::one(),
+    );
+
     debug!(
         "TIPP verify: gipa prep and accumulate took {}ms",
         now.elapsed().as_millis()
