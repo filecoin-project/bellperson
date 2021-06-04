@@ -49,6 +49,12 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         }
     }
 
+    if public_inputs.len() != proof.tmipp.gipa.nproofs as usize {
+        return Err(SynthesisError::MalformedProofs(
+            "public inputs length does not match nproofs".to_string(),
+        ));
+    }
+
     // Random linear combination of proofs
     let r = Transcript::<E>::new("random-r")
         .write(&proof.com_ab.0)
