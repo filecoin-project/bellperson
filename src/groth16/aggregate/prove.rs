@@ -63,15 +63,13 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
     };
 
     // Derive a random scalar to perform a linear combination of proofs
-    let mut transcript = Transcript::new("snarkpack");
-    let r = transcript
-        .write_domain_separator("random-r")
+    let r = Transcript::<E>::new("random-r")
         .write(&com_ab.0)
         .write(&com_ab.1)
         .write(&com_c.0)
         .write(&com_c.1)
         .write(&transcript_include)
-        .read_challenge();
+        .into_challenge();
 
     // 1,r, r^2, r^3, r^4 ...
     let r_vec: Vec<E::Fr> = structured_scalar_power(proofs.len(), &*r);
@@ -95,13 +93,23 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         // compute C^r for the verifier
         let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&refc, &refr_vec)
     };
-    transcript.write(&ip_ab).write(&agg_c);
 
     // w^{r^{-1}}
     let wkey_r_inv = srs.wkey.scale(&r_inv)?;
 
     // we prove tipp and mipp using the same recursive loop
-    let proof = prove_tipp_mipp::<E>(&srs, &mut transcript, &a, &b_r, &c, &wkey_r_inv, &r_vec)?;
+    let proof = prove_tipp_mipp::<E>(
+        &srs,
+        &a,
+        &b_r,
+        &c,
+        &wkey_r_inv,
+        &r_vec,
+        &com_ab,
+        &com_c,
+        &ip_ab,
+        &agg_c,
+    )?;
     debug_assert!({
         let computed_com_ab = commit::pair::<E>(&srs.vkey, &wkey_r_inv, &a, &b_r).unwrap();
         com_ab == computed_com_ab
@@ -124,17 +132,21 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
 /// challenges of GIPA would be different, two KZG proofs would be needed.
 fn prove_tipp_mipp<E: Engine>(
     srs: &ProverSRS<E>,
-    transcript: &mut Transcript<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
     wkey: &WKey<E>, // scaled key w^r^-1
     r_vec: &[E::Fr],
+    com_ab: &commit::Output<E>,
+    com_c: &commit::Output<E>,
+    ip_ab: &E::Fqk,
+    agg_c: &E::G1,
 ) -> Result<TippMippProof<E>, SynthesisError> {
     let r_shift = r_vec[1].clone();
     // Run GIPA
-    let (proof, mut challenges, mut challenges_inv) =
-        gipa_tipp_mipp::<E>(transcript, a, b, c, &srs.vkey, &wkey, r_vec)?;
+    let (proof, mut challenges, mut challenges_inv) = gipa_tipp_mipp::<E>(
+        a, b, c, &srs.vkey, &wkey, r_vec, com_ab, com_c, ip_ab, agg_c,
+    )?;
 
     // Prove final commitment keys are wellformed
     // we reverse the transcript so the polynomial in kzg opening is constructed
@@ -145,14 +157,13 @@ fn prove_tipp_mipp<E: Engine>(
     let r_inverse = r_shift.inverse().unwrap();
 
     // KZG challenge point
-    let z = transcript
-        .write_domain_separator("random-z")
+    let z = Transcript::<E>::new("random-z")
         .write(&challenges[0])
         .write(&proof.final_vkey.0)
         .write(&proof.final_vkey.1)
         .write(&proof.final_wkey.0)
         .write(&proof.final_wkey.1)
-        .read_challenge();
+        .into_challenge();
 
     // Complete KZG proofs
     par! {
@@ -185,13 +196,16 @@ fn prove_tipp_mipp<E: Engine>(
 /// the challenges generated necessary to do the polynomial commitment proof
 /// later in TIPP.
 fn gipa_tipp_mipp<E: Engine>(
-    transcript: &mut Transcript<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
     vkey: &VKey<E>,
     wkey: &WKey<E>, // scaled key w^r^-1
     r: &[E::Fr],
+    com_ab: &commit::Output<E>,
+    com_c: &commit::Output<E>,
+    ip_ab: &E::Fqk,
+    agg_c: &E::G1,
 ) -> Result<(GipaProof<E>, Vec<E::Fr>, Vec<E::Fr>), SynthesisError> {
     // the values of vectors A and B rescaled at each step of the loop
     let (mut m_a, mut m_b) = (a.to_vec(), b.to_vec());
@@ -199,6 +213,7 @@ fn gipa_tipp_mipp<E: Engine>(
     let (mut m_c, mut m_r) = (c.to_vec(), r.to_vec());
     // the values of the commitment keys rescaled at each step of the loop
     let (mut vkey, mut wkey) = (vkey.clone(), wkey.clone());
+
     // storing the values for including in the proof
     let mut comms_ab = Vec::new();
     let mut comms_c = Vec::new();
@@ -207,8 +222,16 @@ fn gipa_tipp_mipp<E: Engine>(
     let mut challenges: Vec<E::Fr> = Vec::new();
     let mut challenges_inv: Vec<E::Fr> = Vec::new();
 
-    transcript.write_domain_separator("gipa");
-    let _i = transcript.read_challenge();
+    let mut c_inv: E::Fr = *Transcript::<E>::new("gipa")
+        .write(com_ab)
+        .write(com_c)
+        .write(ip_ab)
+        .write(agg_c)
+        .write(&r[1])
+        .into_challenge();
+    let mut c = c_inv.inverse().unwrap();
+
+    let mut first_loop = true;
 
     while m_a.len() > 1 {
         // recursive step
@@ -257,25 +280,31 @@ fn gipa_tipp_mipp<E: Engine>(
 
         // Fiat-Shamir challenge
         // combine both TIPP and MIPP transcript
-        let c_inv = transcript
-            .write(&zab_l)
-            .write(&zab_r)
-            .write(&zc_l)
-            .write(&zc_r)
-            .write(&tab_l.0)
-            .write(&tab_l.1)
-            .write(&tab_r.0)
-            .write(&tab_r.1)
-            .write(&tuc_l.0)
-            .write(&tuc_l.1)
-            .write(&tuc_r.0)
-            .write(&tuc_r.1)
-            .read_challenge();
+        if first_loop {
+            first_loop = false;
+        // already generated c_inv and c outside of the loop
+        } else {
+            c_inv = *Transcript::<E>::new("gipa")
+                .write(&c_inv)
+                .write(&zab_l)
+                .write(&zab_r)
+                .write(&zc_l)
+                .write(&zc_r)
+                .write(&tab_l.0)
+                .write(&tab_l.1)
+                .write(&tab_r.0)
+                .write(&tab_r.1)
+                .write(&tuc_l.0)
+                .write(&tuc_l.1)
+                .write(&tuc_r.0)
+                .write(&tuc_r.1)
+                .into_challenge();
 
-        // Optimization for multiexponentiation to rescale G2 elements with
-        // 128-bit challenge Swap 'c' and 'c_inv' since can't control bit size
-        // of c_inv
-        let c = c_inv.inverse().unwrap();
+            // Optimization for multiexponentiation to rescale G2 elements with
+            // 128-bit challenge Swap 'c' and 'c_inv' since can't control bit size
+            // of c_inv
+            c = c_inv.inverse().unwrap();
+        }
 
         // Set up values for next step of recursion
         // A[:n'] + A[n':] ^ x
@@ -306,7 +335,7 @@ fn gipa_tipp_mipp<E: Engine>(
         z_ab.push((zab_l, zab_r));
         z_c.push((zc_l, zc_r));
         challenges.push(c);
-        challenges_inv.push(*c_inv);
+        challenges_inv.push(c_inv);
     }
 
     assert!(m_a.len() == 1 && m_b.len() == 1);

@@ -50,17 +50,13 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
     }
 
     // Random linear combination of proofs
-    let mut transcript = Transcript::new("snarkpack");
-    let r = transcript
-        .write_domain_separator("random-r")
+    let r = Transcript::<E>::new("random-r")
         .write(&proof.com_ab.0)
         .write(&proof.com_ab.1)
         .write(&proof.com_c.0)
         .write(&proof.com_c.1)
         .write(&transcript_include)
-        .read_challenge();
-
-    transcript.write(&proof.ip_ab).write(&proof.agg_c);
+        .into_challenge();
 
     let pairing_checks = PairingChecks::new(rng);
     let pairing_checks_copy = &pairing_checks;
@@ -71,7 +67,6 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         s.spawn(move |_| {
             let now = Instant::now();
             verify_tipp_mipp::<E, R>(
-                &mut transcript,
                 ip_verifier_srs,
                 proof,
                 &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
@@ -187,7 +182,6 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
 /// the randomness used to produce a random linear combination of A and B and
 /// used in the MIPP part with C
 fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
-    transcript: &mut Transcript<E>,
     v_srs: &VerifierSRS<E>,
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
@@ -196,8 +190,7 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     info!("verify with srs shift");
     let now = Instant::now();
     // (T,U), Z for TIPP and MIPP  and all challenges
-    let (final_res, final_r, challenges, challenges_inv) =
-        gipa_verify_tipp_mipp(transcript, &proof, r_shift);
+    let (final_res, final_r, challenges, challenges_inv) = gipa_verify_tipp_mipp(&proof, r_shift);
     debug!(
         "TIPP verify: gipa verify tipp {}ms",
         now.elapsed().as_millis()
@@ -207,14 +200,13 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     let fvkey = proof.tmipp.gipa.final_vkey;
     let fwkey = proof.tmipp.gipa.final_wkey;
     // KZG challenge point
-    let c = transcript
-        .write_domain_separator("random-z")
-        .write(&challenges.first().unwrap())
+    let c = Transcript::<E>::new("random-z")
+        .write(&challenges[0])
         .write(&fvkey.0)
         .write(&fvkey.1)
         .write(&fwkey.0)
         .write(&fwkey.1)
-        .read_challenge();
+        .into_challenge();
 
     // we take reference so they are able to be copied in the par! macro
     let final_a = &proof.tmipp.gipa.final_a;
@@ -299,7 +291,6 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
 /// MIPP share the same challenges however, enabling to re-use common operations
 /// between them, such as the KZG proof for commitment keys.
 fn gipa_verify_tipp_mipp<E: Engine>(
-    transcript: &mut Transcript<E>,
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
 ) -> (GipaTUZ<E>, E::Fr, Vec<E::Fr>, Vec<E::Fr>) {
@@ -318,7 +309,16 @@ fn gipa_verify_tipp_mipp<E: Engine>(
     let mut challenges = Vec::new();
     let mut challenges_inv = Vec::new();
 
-    transcript.write_domain_separator("gipa");
+    let mut c_inv: E::Fr = *Transcript::<E>::new("gipa")
+        .write(&proof.com_ab)
+        .write(&proof.com_c)
+        .write(&proof.ip_ab)
+        .write(&proof.agg_c)
+        .write(&r_shift)
+        .into_challenge();
+    let mut c = c_inv.inverse().unwrap();
+
+    let mut first_loop = true;
 
     // We first generate all challenges as this is the only consecutive process
     // that can not be parallelized then we scale the commitments in a
@@ -332,25 +332,31 @@ fn gipa_verify_tipp_mipp<E: Engine>(
         let (zab_l, zab_r) = z_ab;
         let (tc_l, tc_r) = comm_c;
         let (zc_l, zc_r) = z_c;
-        // Fiat-Shamir challenge
-        let c_inv = transcript
-            .write(&zab_l)
-            .write(&zab_r)
-            .write(&zc_l)
-            .write(&zc_r)
-            .write(&tab_l.0)
-            .write(&tab_l.1)
-            .write(&tab_r.0)
-            .write(&tab_r.1)
-            .write(&tc_l.0)
-            .write(&tc_l.1)
-            .write(&tc_r.0)
-            .write(&tc_r.1)
-            .read_challenge();
 
-        let c = c_inv.inverse().unwrap();
+        // Fiat-Shamir challenge
+        if first_loop {
+            first_loop = false;
+        // already generated c_inv and c outside of the loop
+        } else {
+            c_inv = *Transcript::<E>::new("gipa")
+                .write(&c_inv)
+                .write(&zab_l)
+                .write(&zab_r)
+                .write(&zc_l)
+                .write(&zc_r)
+                .write(&tab_l.0)
+                .write(&tab_l.1)
+                .write(&tab_r.0)
+                .write(&tab_r.1)
+                .write(&tc_l.0)
+                .write(&tc_l.1)
+                .write(&tc_r.0)
+                .write(&tc_r.1)
+                .into_challenge();
+            c = c_inv.inverse().unwrap();
+        }
         challenges.push(c);
-        challenges_inv.push(*c_inv);
+        challenges_inv.push(c_inv);
     }
 
     debug!(
