@@ -15,7 +15,7 @@ pub struct Transcript<E: Engine> {
 
 /// A challenge derived from the transcript.
 #[derive(Debug, Clone)]
-pub struct Challenge<E: Engine>(E::Fr);
+pub struct Challenge<E: Engine>(pub E::Fr);
 
 impl<E: Engine> Copy for Challenge<E> {}
 

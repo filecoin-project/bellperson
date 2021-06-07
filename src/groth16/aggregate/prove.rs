@@ -62,12 +62,15 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         let com_c = commit::single_g1::<E>(&srs.vkey, refc)
     };
 
+    let hcom = Transcript::<E>::new("hcom")
+        .write(&com_ab)
+        .write(&com_c)
+        .into_challenge()
+        .0;
+
     // Derive a random scalar to perform a linear combination of proofs
     let r = Transcript::<E>::new("random-r")
-        .write(&com_ab.0)
-        .write(&com_ab.1)
-        .write(&com_c.0)
-        .write(&com_c.1)
+        .write(&hcom)
         .write(&transcript_include)
         .into_challenge();
 
@@ -105,10 +108,9 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         &c,
         &wkey_r_inv,
         &r_vec,
-        &com_ab,
-        &com_c,
         &ip_ab,
         &agg_c,
+        &hcom,
     )?;
     debug_assert!({
         let computed_com_ab = commit::pair::<E>(&srs.vkey, &wkey_r_inv, &a, &b_r).unwrap();
@@ -137,16 +139,14 @@ fn prove_tipp_mipp<E: Engine>(
     c: &[E::G1Affine],
     wkey: &WKey<E>, // scaled key w^r^-1
     r_vec: &[E::Fr],
-    com_ab: &commit::Output<E>,
-    com_c: &commit::Output<E>,
     ip_ab: &E::Fqk,
     agg_c: &E::G1,
+    hcom: &E::Fr,
 ) -> Result<TippMippProof<E>, SynthesisError> {
     let r_shift = r_vec[1].clone();
     // Run GIPA
-    let (proof, mut challenges, mut challenges_inv) = gipa_tipp_mipp::<E>(
-        a, b, c, &srs.vkey, &wkey, r_vec, com_ab, com_c, ip_ab, agg_c,
-    )?;
+    let (proof, mut challenges, mut challenges_inv) =
+        gipa_tipp_mipp::<E>(a, b, c, &srs.vkey, &wkey, r_vec, ip_ab, agg_c, hcom)?;
 
     // Prove final commitment keys are wellformed
     // we reverse the transcript so the polynomial in kzg opening is constructed
@@ -202,10 +202,9 @@ fn gipa_tipp_mipp<E: Engine>(
     vkey: &VKey<E>,
     wkey: &WKey<E>, // scaled key w^r^-1
     r: &[E::Fr],
-    com_ab: &commit::Output<E>,
-    com_c: &commit::Output<E>,
     ip_ab: &E::Fqk,
     agg_c: &E::G1,
+    hcom: &E::Fr,
 ) -> Result<(GipaProof<E>, Vec<E::Fr>, Vec<E::Fr>), SynthesisError> {
     // the values of vectors A and B rescaled at each step of the loop
     let (mut m_a, mut m_b) = (a.to_vec(), b.to_vec());
@@ -223,8 +222,7 @@ fn gipa_tipp_mipp<E: Engine>(
     let mut challenges_inv: Vec<E::Fr> = Vec::new();
 
     let mut c_inv: E::Fr = *Transcript::<E>::new("gipa")
-        .write(com_ab)
-        .write(com_c)
+        .write(hcom)
         .write(ip_ab)
         .write(agg_c)
         .write(&r[1])

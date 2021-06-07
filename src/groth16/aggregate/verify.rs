@@ -55,12 +55,15 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         ));
     }
 
+    let hcom = Transcript::<E>::new("hcom")
+        .write(&proof.com_ab)
+        .write(&proof.com_c)
+        .into_challenge()
+        .0;
+
     // Random linear combination of proofs
     let r = Transcript::<E>::new("random-r")
-        .write(&proof.com_ab.0)
-        .write(&proof.com_ab.1)
-        .write(&proof.com_c.0)
-        .write(&proof.com_c.1)
+        .write(&hcom)
         .write(&transcript_include)
         .into_challenge();
 
@@ -77,6 +80,7 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
                 proof,
                 &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
                 pairing_checks_copy,
+                &hcom.into(),
             );
             debug!("TIPP took {} ms", now.elapsed().as_millis(),);
         });
@@ -192,11 +196,13 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
     pairing_checks: &PairingChecks<E, R>,
+    hcom: &E::Fr,
 ) {
     info!("verify with srs shift");
     let now = Instant::now();
     // (T,U), Z for TIPP and MIPP  and all challenges
-    let (final_res, final_r, challenges, challenges_inv) = gipa_verify_tipp_mipp(&proof, r_shift);
+    let (final_res, final_r, challenges, challenges_inv) =
+        gipa_verify_tipp_mipp(&proof, r_shift, hcom);
     debug!(
         "TIPP verify: gipa verify tipp {}ms",
         now.elapsed().as_millis()
@@ -299,6 +305,7 @@ fn verify_tipp_mipp<E: Engine, R: rand::RngCore + Send>(
 fn gipa_verify_tipp_mipp<E: Engine>(
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
+    hcom: &E::Fr,
 ) -> (GipaTUZ<E>, E::Fr, Vec<E::Fr>, Vec<E::Fr>) {
     info!("gipa verify TIPP");
     let gipa = &proof.tmipp.gipa;
@@ -316,8 +323,7 @@ fn gipa_verify_tipp_mipp<E: Engine>(
     let mut challenges_inv = Vec::new();
 
     let mut c_inv: E::Fr = *Transcript::<E>::new("gipa")
-        .write(&proof.com_ab)
-        .write(&proof.com_c)
+        .write(hcom)
         .write(&proof.ip_ab)
         .write(&proof.agg_c)
         .write(&r_shift)
