@@ -73,20 +73,20 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
     let pairing_checks = PairingChecks::new(rng);
     let pairing_checks_copy = &pairing_checks;
 
-    rayon::scope(move |s| {
+    rayon::scope(move |_s| {
         // 1.Check TIPA proof ab
         // 2.Check TIPA proof c
-        s.spawn(move |_| {
-            let now = Instant::now();
-            verify_tipp_mipp::<E, R>(
-                ip_verifier_srs,
-                proof,
-                &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
-                pairing_checks_copy,
-                &hcom,
-            );
-            debug!("TIPP took {} ms", now.elapsed().as_millis(),);
-        });
+        //        s.spawn(move |_| {
+        let now = Instant::now();
+        verify_tipp_mipp::<E, R>(
+            ip_verifier_srs,
+            proof,
+            &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
+            pairing_checks_copy,
+            &hcom,
+        );
+        debug!("TIPP took {} ms", now.elapsed().as_millis(),);
+        //        });
 
         // Check aggregate pairing product equation
         // SUM of a geometric progression
@@ -106,14 +106,14 @@ pub fn verify_aggregate_proof<E: Engine + std::fmt::Debug, R: rand::RngCore + Se
         // non-randomized.
         //
         let (r_vec_sender, r_vec_receiver) = bounded(1);
-        s.spawn(move |_| {
-            let now = Instant::now();
-            r_vec_sender
-                .send(structured_scalar_power(public_inputs.len(), &*r))
-                .unwrap();
-            let elapsed = now.elapsed().as_millis();
-            debug!("generation of r vector: {}ms", elapsed);
-        });
+        //        s.spawn(move |_| {
+        let now = Instant::now();
+        r_vec_sender
+            .send(structured_scalar_power(public_inputs.len(), &*r))
+            .unwrap();
+        let elapsed = now.elapsed().as_millis();
+        debug!("generation of r vector: {}ms", elapsed);
+        //        });
 
         par! {
             // 3. Compute left part of the final pairing equation
