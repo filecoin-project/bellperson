@@ -149,7 +149,13 @@ impl<E: Engine, R: rand::RngCore + Send> PairingChecks<E, R> {
             self.non_random_check_done.store(true, SeqCst);
         };
 
-        self.merge_send.send(Ok(check)).unwrap();
+        let sent = self.merge_send.send(Ok(check));
+        // Check if the channel was intentionally closed
+        if let Err(_) = sent {
+            if self.valid.load(SeqCst) {
+                panic!("Channel was closed although it is still valid.")
+            }
+        }
     }
 
     pub fn verify(self) -> Result<bool, SynthesisError> {
