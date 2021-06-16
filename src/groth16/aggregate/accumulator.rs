@@ -15,6 +15,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering::SeqCst},
     Arc, Mutex,
 };
+use std::thread;
 
 /// Holds the logic for merging multiple pairing checks of the form
 ///
@@ -47,7 +48,9 @@ impl<E: Engine, R: rand::RngCore + Send> PairingChecks<E, R> {
         let valid = Arc::new(AtomicBool::new(true));
         let valid_copy = valid.clone();
 
-        rayon::spawn(move || {
+        // Spawn this thread outside of the Rayon thread pool, so that it can always receive
+        // messages, even if the thread pool is fully occupied.
+        thread::spawn(move || {
             let mut acc = PairingCheck::new();
             while let Ok(tuple) = merge_recv.recv() {
                 match tuple {
