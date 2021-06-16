@@ -149,8 +149,12 @@ impl<E: Engine, R: rand::RngCore + Send> PairingChecks<E, R> {
             self.non_random_check_done.store(true, SeqCst);
         };
 
+        // This send is "best effort". If the verification in `verify_tipp_mipp()` identifies
+        // an invalid aggregation, the `self.valid` is set to `false`. That terminates the thread
+        // that receives those messages, hence also the receiving channel is closed.
+        // This means that if the aggrigation is invalid, it is expected that the message cannot
+        // be sent.
         let sent = self.merge_send.send(Ok(check));
-        // Check if the channel was intentionally closed
         if let Err(_) = sent {
             if self.valid.load(SeqCst) {
                 panic!("Channel was closed although it is still valid.")
