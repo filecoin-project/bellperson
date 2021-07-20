@@ -9,15 +9,16 @@ booleans and number abstractions.
 ## Backend
 
 There are currently two backends available for the implementation of Bls12 381:
-- [`paired`](https://github.com/filecoin-project/paired) - pure Rust implementation
 - [`blstrs`](https://github.com/filecoin-project/blstrs) - optimized with hand tuned assembly, using [blst](https://github.com/supranational/blst)
+- [`paired`](https://github.com/filecoin-project/paired) - pure Rust implementation
 
-They can be  selected at compile time with the mutually exclusive features `pairing` and `blst`. Specifying one of them is enough for a working library, no additional features need to be set.
-The default for now is `pairing`, as the secure and audited choice.
+They can be selected at compile time with the mutually exclusive features `blst` and `pairing`. Specifying one of them is enough for a working library, no additional features need to be set.
+
+The default for now is `blst`, as the secure and audited choice.  Note that `pairing` is deprecated and may be removed in the future.
 
 ## GPU
 
-This fork contains GPU parallel acceleration to the FFT and Multiexponentation algorithms in the groth16 prover codebase under the compilation feature `gpu`, it can be used in combination with `pairing` or `blst`.
+This fork contains GPU parallel acceleration to the FFT and Multiexponentation algorithms in the groth16 prover codebase under the compilation feature `gpu`, it can be used in combination with `blst` or `pairing`.
 
 ### Requirements
 - NVIDIA or AMD GPU Graphics Driver
