@@ -1,5 +1,7 @@
-use ff::{Field, PrimeField};
-use groupy::{CurveAffine, CurveProjective};
+use std::ops::AddAssign;
+
+use ff::Field;
+use group::{prime::PrimeCurveAffine, Curve};
 use rayon::prelude::*;
 
 #[macro_use]
@@ -29,7 +31,7 @@ pub use self::verify::*;
 fn structured_scalar_power<F: Field>(num: usize, s: &F) -> Vec<F> {
     let mut powers = vec![F::one()];
     for i in 1..num {
-        powers.push(mul!(powers[i - 1], s));
+        powers.push(powers[i - 1] * s);
     }
     powers
 }
@@ -37,15 +39,15 @@ fn structured_scalar_power<F: Field>(num: usize, s: &F) -> Vec<F> {
 /// compress is similar to commit::{V,W}KEY::compress: it modifies the `vec`
 /// vector by setting the value at index $i:0 -> split$  $vec[i] = vec[i] +
 /// vec[i+split]^scaler$. The `vec` vector is half of its size after this call.
-fn compress<C: CurveAffine>(vec: &mut Vec<C>, split: usize, scaler: &C::Scalar) {
+fn compress<C: PrimeCurveAffine>(vec: &mut Vec<C>, split: usize, scaler: &C::Scalar) {
     let (left, right) = vec.split_at_mut(split);
     left.par_iter_mut()
         .zip(right.par_iter())
         .for_each(|(a_l, a_r)| {
-            let mut x = mul!(a_r.into_projective(), scaler.into_repr());
-            x.add_assign_mixed(&a_l);
-            *a_l = x.into_affine();
+            let mut x = a_r.to_curve() * scaler;
+            x.add_assign(a_l.to_curve());
+            *a_l = x.to_affine();
         });
     let len = left.len();
-    vec.resize(len, C::zero());
+    vec.resize(len, C::identity());
 }

@@ -1,17 +1,9 @@
 use std::fmt;
 use std::io::{Cursor, Read, Write};
 
-#[cfg(feature = "blst")]
-use blstrs::{
-    Bls12, Compress, Engine, Fp12 as Fq12, G1Affine, G1Projective, G2Affine, G2Projective,
-    PairingCurveAffine,
-};
-use groupy::{CurveAffine, CurveProjective, EncodedPoint};
-#[cfg(feature = "pairing")]
-use paired::{
-    bls12_381::{Bls12, Fq12, G1Affine, G2Affine, G1 as G1Projective, G2 as G2Projective},
-    Compress, Engine, PairingCurveAffine,
-};
+use blstrs::{Bls12, Compress, G1Affine, G1Projective, G2Affine, G2Projective, Gt};
+use group::{Group, GroupEncoding};
+use pairing::{MillerLoopResult, MultiMillerLoop};
 use rand_core::{RngCore, SeedableRng};
 
 #[derive(PartialEq, Clone, Debug)]
@@ -100,14 +92,13 @@ fn get_test_vectors() -> Vec<TestVector> {
 }
 
 fn compute_test_vector<R: RngCore>(r: &mut R) -> TestVector {
-    let g1: G1Affine = G1Projective::random(r).into();
-    let g2: G2Affine = G2Projective::random(r).into();
-    let gt = Bls12::final_exponentiation(&Bls12::miller_loop(&[(&g1.prepare(), &g2.prepare())]))
-        .unwrap();
+    let g1: G1Affine = G1Projective::random(&mut *r).into();
+    let g2: G2Affine = G2Projective::random(&mut *r).into();
+    let gt = Bls12::multi_miller_loop(&[(&g1, &g2.into())]).final_exponentiation();
     let mut eg1: Vec<u8> = Vec::new();
-    eg1.write_all(g1.into_compressed().as_ref()).unwrap();
+    eg1.write_all(g1.to_bytes().as_ref()).unwrap();
     let mut eg2: Vec<u8> = Vec::new();
-    eg2.write_all(g2.into_compressed().as_ref()).unwrap();
+    eg2.write_all(g2.to_bytes().as_ref()).unwrap();
     let mut egt: Vec<u8> = Vec::new();
     gt.write_compressed(&mut egt).unwrap();
     TestVector {
@@ -118,17 +109,16 @@ fn compute_test_vector<R: RngCore>(r: &mut R) -> TestVector {
 }
 
 fn verify_test_vector(t: TestVector) {
-    let mut g1c = <G1Affine as CurveAffine>::Compressed::empty();
+    let mut g1c = <G1Affine as GroupEncoding>::Repr::default();
     Cursor::new(t.g1).read_exact(g1c.as_mut()).unwrap();
-    let g1 = g1c.into_affine().unwrap();
+    let g1 = <G1Affine as GroupEncoding>::from_bytes(&g1c).unwrap();
 
-    let mut g2c = <G2Affine as CurveAffine>::Compressed::empty();
+    let mut g2c = <G2Affine as GroupEncoding>::Repr::default();
     Cursor::new(t.g2).read_exact(g2c.as_mut()).unwrap();
-    let g2 = g2c.into_affine().unwrap();
+    let g2 = <G2Affine as GroupEncoding>::from_bytes(&g2c).unwrap();
 
-    let gtexp = Bls12::final_exponentiation(&Bls12::miller_loop(&[(&g1.prepare(), &g2.prepare())]))
-        .unwrap();
-    let gt = <Fq12 as Compress>::read_compressed(&mut Cursor::new(t.gt)).unwrap();
+    let gtexp = Bls12::multi_miller_loop(&[(&g1, &g2.into())]).final_exponentiation();
+    let gt = <Gt as Compress>::read_compressed(&mut Cursor::new(t.gt)).unwrap();
     assert_eq!(gtexp, gt);
 }
 

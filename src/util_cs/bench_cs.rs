@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
-use crate::bls::Engine;
 use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
+use pairing::Engine;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]

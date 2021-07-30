@@ -3,7 +3,7 @@ version: 2.1
 parameters:
   nightly-version:
     type: string
-    default: "nightly-2020-11-20"
+    default: "nightly-2021-04-24"
 
 #orbs:
 #  codecov: codecov/codecov@1.1.4
@@ -22,7 +22,7 @@ restore-workspace: &restore-workspace
 restore-cache: &restore-cache
   restore_cache:
     keys:
-      - cargo-v1-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+      - cargo-v2-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
       - repo-source-{{ .Branch }}-{{ .Revision }}
 
 commands:
@@ -44,30 +44,6 @@ commands:
             sudo apt-get update -y
             sudo apt install -y ocl-icd-opencl-dev
 
-  test_target_pairing:
-    parameters:
-      target:
-        type: string
-    steps:
-      - *restore-workspace
-      - *restore-cache
-      - run:
-          name: Test pairing (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test --no-default-features --features pairing
-          no_output_timeout: 15m
-
-  test_target_pairing_gpu:
-    parameters:
-      target:
-        type: string
-    steps:
-      - *restore-workspace
-      - *restore-cache
-      - run:
-          name: Test pairing (GPU) (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test --release --no-default-features --features gpu,pairing
-          no_output_timeout: 30m
-
   test_target_blst:
     parameters:
       target:
@@ -77,7 +53,7 @@ commands:
       - *restore-cache
       - run:
           name: Test blst (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test --no-default-features --features blst
+          command: TARGET=<< parameters.target >> cargo test
           no_output_timeout: 15m
 
   test_target_blst_gpu:
@@ -89,7 +65,7 @@ commands:
       - *restore-cache
       - run:
           name: Test blst (GPU) (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test --release --no-default-features --features gpu,blst
+          command: TARGET=<< parameters.target >> cargo test --release --features gpu
           no_output_timeout: 30m
 
   test_target_blst_ignored:
@@ -126,7 +102,7 @@ jobs:
           command: cargo generate-lockfile
       - restore_cache:
           keys:
-            - cargo-v1-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+            - cargo-v2-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
       - run: cargo update
       - run: cargo fetch
       - run: rustup install $(cat rust-toolchain)
@@ -141,27 +117,10 @@ jobs:
           paths:
             - gpuci
       - save_cache:
-          key: cargo-v1-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+          key: cargo-v2-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
           paths:
             - "~/.cargo"
             - "~/.rustup"
-
-  test_pairing_x86_64-unknown-linux-gnu:
-    executor: default
-    steps:
-      - set-env-path
-      - install-gpu-deps
-      - test_target_pairing:
-          target: "x86_64-unknown-linux-gnu"
-
-  test_pairing_gpu_x86_64-unknown-linux-gnu:
-    executor: default
-    steps:
-      - set-env-path
-      - install-gpu-deps
-      - test_target_pairing_gpu:
-          target: "x86_64-unknown-linux-gnu"
-
 
   test_blst_x86_64-unknown-linux-gnu:
     executor: default
@@ -204,20 +163,11 @@ jobs:
       - *restore-cache
       - set-env-path
       - run:
-          name: Run cargo clippy (default features (pairing))
+          name: Run cargo clippy (default features)
+          command: cargo clippy --all-targets -- -D warnings
+      - run:
+          name: Run cargo clippy (gpu)
           command: cargo clippy --all-targets --features gpu -- -D warnings
-      - run:
-          name: Run cargo clippy (pairing)
-          command: cargo clippy --all-targets --no-default-features --features pairing -- -D warnings
-      - run:
-          name: Run cargo clippy (blst)
-          command: cargo clippy --all-targets --no-default-features --features blst -- -D warnings
-      - run:
-          name: Run cargo clippy (pairing,gpu)
-          command: cargo clippy --all-targets --no-default-features --features pairing,gpu -- -D warnings
-      - run:
-          name: Run cargo clippy (blst,gpu)
-          command: cargo clippy --all-targets --no-default-features --features blst,gpu -- -D warnings
 
   coverage_run:
     executor: default
@@ -281,13 +231,6 @@ workflows:
           requires:
             - cargo_fetch
             
-      - test_pairing_x86_64-unknown-linux-gnu:
-          requires:
-            - cargo_fetch
-      - test_pairing_gpu_x86_64-unknown-linux-gnu:
-          requires:
-            - cargo_fetch
-
       - test_blst_x86_64-unknown-linux-gnu:
           requires:
             - cargo_fetch

@@ -1,7 +1,7 @@
 use super::error::{GPUError, GPUResult};
 use crate::multicore::Worker;
-use ff::{PrimeField, ScalarEngine};
-use groupy::CurveAffine;
+use ff::PrimeField;
+use group::prime::PrimeCurveAffine;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -9,11 +9,11 @@ use std::sync::Arc;
 #[allow(clippy::upper_case_acronyms)]
 pub struct FFTKernel<E>(PhantomData<E>)
 where
-    E: ScalarEngine;
+    E: Engine;
 
 impl<E> FFTKernel<E>
 where
-    E: ScalarEngine,
+    E: Engine,
 {
     pub fn create(_: bool) -> GPUResult<FFTKernel<E>> {
         Err(GPUError::GPUDisabled)
@@ -26,11 +26,11 @@ where
 
 pub struct MultiexpKernel<E>(PhantomData<E>)
 where
-    E: ScalarEngine;
+    E: Engine;
 
 impl<E> MultiexpKernel<E>
 where
-    E: ScalarEngine,
+    E: Engine,
 {
     pub fn create(_: bool) -> GPUResult<MultiexpKernel<E>> {
         Err(GPUError::GPUDisabled)
@@ -40,18 +40,18 @@ where
         &mut self,
         _: &Worker,
         _: Arc<Vec<G>>,
-        _: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+        _: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
         _: usize,
         _: usize,
-    ) -> GPUResult<<G as CurveAffine>::Projective>
+    ) -> GPUResult<<G as PrimeCurveAffine>::Curve>
     where
-        G: CurveAffine,
+        G: PrimeCurveAffine,
     {
         Err(GPUError::GPUDisabled)
     }
 }
 
-use crate::bls::Engine;
+use pairing::Engine;
 
 macro_rules! locked_kernel {
     ($class:ident) => {

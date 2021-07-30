@@ -9,7 +9,7 @@ use super::boolean::Boolean;
 use super::multieq::MultiEq;
 use super::uint32::UInt32;
 use crate::{ConstraintSystem, SynthesisError};
-use ff::ScalarEngine;
+use pairing::Engine;
 
 #[allow(clippy::unreadable_literal)]
 const ROUND_CONSTANTS: [u32; 64] = [
@@ -33,7 +33,7 @@ pub fn sha256_block_no_padding<E, CS>(
     input: &[Boolean],
 ) -> Result<Vec<Boolean>, SynthesisError>
 where
-    E: ScalarEngine,
+    E: Engine + Send,
     CS: ConstraintSystem<E>,
 {
     assert_eq!(input.len(), 512);
@@ -48,7 +48,7 @@ where
 
 pub fn sha256<E, CS>(mut cs: CS, input: &[Boolean]) -> Result<Vec<Boolean>, SynthesisError>
 where
-    E: ScalarEngine,
+    E: Engine + Send,
     CS: ConstraintSystem<E>,
 {
     assert!(input.len() % 8 == 0);
@@ -85,7 +85,7 @@ fn sha256_compression_function<E, CS>(
     current_hash_value: &[UInt32],
 ) -> Result<Vec<UInt32>, SynthesisError>
 where
-    E: ScalarEngine,
+    E: Engine + Send,
     CS: ConstraintSystem<E>,
 {
     assert_eq!(input.len(), 512);
@@ -132,7 +132,7 @@ where
     impl Maybe {
         fn compute<E, CS, M>(self, cs: M, others: &[UInt32]) -> Result<UInt32, SynthesisError>
         where
-            E: ScalarEngine,
+            E: Engine + Send,
             CS: ConstraintSystem<E>,
             M: ConstraintSystem<E, Root = MultiEq<E, CS>>,
         {
@@ -273,9 +273,9 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bls::Bls12;
     use crate::gadgets::boolean::AllocatedBit;
     use crate::gadgets::test::TestConstraintSystem;
+    use blstrs::Bls12;
     use rand_core::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
 

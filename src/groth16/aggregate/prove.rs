@@ -1,6 +1,10 @@
+use std::ops::{AddAssign, MulAssign};
+
+use blstrs::Compress;
 use ff::{Field, PrimeField};
-use groupy::{CurveAffine, CurveProjective};
+use group::{prime::PrimeCurveAffine, Curve};
 use rayon::prelude::*;
+use serde::Serialize;
 
 use super::{
     commit,
@@ -11,9 +15,9 @@ use super::{
     transcript::Transcript,
     AggregateProof, GipaProof, KZGOpening, ProverSRS, TippMippProof,
 };
-use crate::bls::Engine;
 use crate::groth16::{multiscalar::*, Proof};
 use crate::SynthesisError;
+use pairing::{Engine, MultiMillerLoop};
 
 /// Aggregate `n` zkSnark proofs, where `n` must be a power of two.
 /// WARNING: transcript_include represents everything that should be included in
@@ -26,11 +30,20 @@ use crate::SynthesisError;
 /// number of proofs and public inputs (+100ms in our case). In the case of Filecoin, the only
 /// non-fixed part of the public inputs are the challenges derived from a seed. Even though this
 /// seed comes from a random beeacon, we are hashing this as a safety precaution.
-pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
+pub fn aggregate_proofs<E>(
     srs: &ProverSRS<E>,
     transcript_include: &[u8],
     proofs: &[Proof<E>],
-) -> Result<AggregateProof<E>, SynthesisError> {
+) -> Result<AggregateProof<E>, SynthesisError>
+where
+    E: MultiMillerLoop + std::fmt::Debug,
+    E::Fr: Serialize,
+    <E::Fr as PrimeField>::Repr: Send + Sync,
+    <E as Engine>::Gt: Compress + Serialize,
+    E::G1: Serialize,
+    E::G1Affine: Serialize,
+    E::G2Affine: Serialize,
+{
     if proofs.len() < 2 {
         return Err(SynthesisError::MalformedProofs(
             "aggregating less than 2 proofs is not allowed".to_string(),
@@ -78,14 +91,14 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
     // 1,r^-1, r^-2, r^-3
     let r_inv = r_vec
         .par_iter()
-        .map(|ri| ri.inverse().unwrap())
+        .map(|ri| ri.invert().unwrap())
         .collect::<Vec<_>>();
 
     // B^{r}
     let b_r = b
         .par_iter()
         .zip(r_vec.par_iter())
-        .map(|(bi, ri)| mul!(bi.into_projective(), ri.into_repr()).into_affine())
+        .map(|(bi, ri)| (bi.to_curve() * ri).to_affine())
         .collect::<Vec<_>>();
     let refb_r = &b_r;
     let refr_vec = &r_vec;
@@ -100,7 +113,7 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
     let wkey_r_inv = srs.wkey.scale(&r_inv)?;
 
     // we prove tipp and mipp using the same recursive loop
-    let proof = prove_tipp_mipp::<E>(
+    let tmipp = prove_tipp_mipp::<E>(
         &srs,
         &a,
         &b_r,
@@ -121,7 +134,7 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
         com_c,
         ip_ab,
         agg_c,
-        tmipp: proof,
+        tmipp,
     })
 }
 
@@ -132,17 +145,26 @@ pub fn aggregate_proofs<E: Engine + std::fmt::Debug>(
 /// only one KZG proof is needed for v. In the original paper version, since the
 /// challenges of GIPA would be different, two KZG proofs would be needed.
 #[allow(clippy::too_many_arguments)]
-fn prove_tipp_mipp<E: Engine>(
+fn prove_tipp_mipp<E>(
     srs: &ProverSRS<E>,
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
     wkey: &WKey<E>, // scaled key w^r^-1
     r_vec: &[E::Fr],
-    ip_ab: &E::Fqk,
+    ip_ab: &<E as Engine>::Gt,
     agg_c: &E::G1,
     hcom: &E::Fr,
-) -> Result<TippMippProof<E>, SynthesisError> {
+) -> Result<TippMippProof<E>, SynthesisError>
+where
+    E: MultiMillerLoop,
+    E::Fr: Serialize,
+    <E::Fr as PrimeField>::Repr: Send + Sync,
+    <E as Engine>::Gt: Compress + Serialize,
+    E::G1: Serialize,
+    E::G1Affine: Serialize,
+    E::G2Affine: Serialize,
+{
     let r_shift = r_vec[1];
     // Run GIPA
     let (proof, mut challenges, mut challenges_inv) =
@@ -154,7 +176,7 @@ fn prove_tipp_mipp<E: Engine>(
     // challenge point, input must be the last challenge.
     challenges.reverse();
     challenges_inv.reverse();
-    let r_inverse = r_shift.inverse().unwrap();
+    let r_inverse = r_shift.invert().unwrap();
 
     // KZG challenge point
     let z = Transcript::<E>::new("random-z")
@@ -200,17 +222,24 @@ fn prove_tipp_mipp<E: Engine>(
     clippy::type_complexity,
     clippy::too_many_arguments
 )]
-fn gipa_tipp_mipp<E: Engine>(
+fn gipa_tipp_mipp<E>(
     a: &[E::G1Affine],
     b: &[E::G2Affine],
     c: &[E::G1Affine],
     vkey: &VKey<E>,
     wkey: &WKey<E>, // scaled key w^r^-1
     r: &[E::Fr],
-    ip_ab: &E::Fqk,
+    ip_ab: &<E as Engine>::Gt,
     agg_c: &E::G1,
     hcom: &E::Fr,
-) -> Result<(GipaProof<E>, Vec<E::Fr>, Vec<E::Fr>), SynthesisError> {
+) -> Result<(GipaProof<E>, Vec<E::Fr>, Vec<E::Fr>), SynthesisError>
+where
+    E: MultiMillerLoop,
+    E::Fr: Serialize,
+    <E::Fr as PrimeField>::Repr: Sync,
+    <E as Engine>::Gt: Serialize,
+    E::G1: Serialize,
+{
     // the values of vectors A and B rescaled at each step of the loop
     let (mut m_a, mut m_b) = (a.to_vec(), b.to_vec());
     // the values of vectors C and r rescaled at each step of the loop
@@ -232,7 +261,7 @@ fn gipa_tipp_mipp<E: Engine>(
         .write(agg_c)
         .write(&r[1])
         .into_challenge();
-    let mut c = c_inv.inverse().unwrap();
+    let mut c = c_inv.invert().unwrap();
 
     let mut i = 0;
 
@@ -305,7 +334,7 @@ fn gipa_tipp_mipp<E: Engine>(
             // Optimization for multiexponentiation to rescale G2 elements with
             // 128-bit challenge Swap 'c' and 'c_inv' since can't control bit size
             // of c_inv
-            c = c_inv.inverse().unwrap();
+            c = c_inv.invert().unwrap();
         }
 
         // Set up values for next step of recursion
@@ -322,7 +351,7 @@ fn gipa_tipp_mipp<E: Engine>(
             .for_each(|(r_l, r_r)| {
                 // r[:n'] + r[n':]^x^-1
                 r_r.mul_assign(&c_inv);
-                r_l.add_assign(r_r);
+                r_l.add_assign(*r_r);
             });
         let len = r_left.len();
         m_r.resize(len, E::Fr::zero()); // shrink to new size
@@ -367,13 +396,17 @@ fn gipa_tipp_mipp<E: Engine>(
     ))
 }
 
-fn prove_commitment_v<G: CurveAffine>(
+fn prove_commitment_v<G>(
     srs_powers_alpha_table: &dyn MultiscalarPrecomp<G>,
     srs_powers_beta_table: &dyn MultiscalarPrecomp<G>,
     n: usize,
     transcript: &[G::Scalar],
     kzg_challenge: &G::Scalar,
-) -> Result<KZGOpening<G>, SynthesisError> {
+) -> Result<KZGOpening<G>, SynthesisError>
+where
+    G: PrimeCurveAffine,
+    <G::Scalar as PrimeField>::Repr: Send + Sync,
+{
     // f_v
     let vkey_poly = DensePolynomial::from_coeffs(polynomial_coefficients_from_transcript(
         transcript,
@@ -397,14 +430,18 @@ fn prove_commitment_v<G: CurveAffine>(
     )
 }
 
-fn prove_commitment_w<G: CurveAffine>(
+fn prove_commitment_w<G>(
     srs_powers_alpha_table: &dyn MultiscalarPrecomp<G>,
     srs_powers_beta_table: &dyn MultiscalarPrecomp<G>,
     n: usize,
     transcript: &[G::Scalar],
     r_shift: &G::Scalar,
     kzg_challenge: &G::Scalar,
-) -> Result<KZGOpening<G>, SynthesisError> {
+) -> Result<KZGOpening<G>, SynthesisError>
+where
+    G: PrimeCurveAffine,
+    <G::Scalar as PrimeField>::Repr: Send + Sync,
+{
     // this computes f(X) = \prod (1 + x (rX)^{2^j})
     let mut fcoeffs = polynomial_coefficients_from_transcript(transcript, r_shift);
     // this computes f_w(X) = X^n * f(X) - it simply shifts all coefficients to by n
@@ -416,7 +453,7 @@ fn prove_commitment_w<G: CurveAffine>(
         // this computes f(z)
         let fz = polynomial_evaluation_product_form_from_transcript(&transcript, kzg_challenge, &r_shift),
         // this computes the "shift" z^n
-        let zn = kzg_challenge.pow(&[n as u64])
+        let zn = kzg_challenge.pow_vartime(&[n as u64])
     };
     // this computes f_w(z) by multiplying by zn
     let mut fwz = fz;
@@ -434,16 +471,19 @@ fn prove_commitment_w<G: CurveAffine>(
 
 /// Returns the KZG opening proof for the given commitment key. Specifically, it
 /// returns $g^{f(alpha) - f(z) / (alpha - z)}$ for $a$ and $b$.
-fn create_kzg_opening<G: CurveAffine>(
+fn create_kzg_opening<G>(
     srs_powers_alpha_table: &dyn MultiscalarPrecomp<G>, // h^alpha^i
     srs_powers_beta_table: &dyn MultiscalarPrecomp<G>,  // h^beta^i
     srs_powers_len: usize,
     poly: DensePolynomial<G::Scalar>,
     eval_poly: G::Scalar,
     kzg_challenge: &G::Scalar,
-) -> Result<KZGOpening<G>, SynthesisError> {
-    let mut neg_kzg_challenge = *kzg_challenge;
-    neg_kzg_challenge.negate();
+) -> Result<KZGOpening<G>, SynthesisError>
+where
+    G: PrimeCurveAffine,
+    <G::Scalar as PrimeField>::Repr: Send + Sync,
+{
+    let neg_kzg_challenge = -*kzg_challenge;
 
     if poly.coeffs().len() != srs_powers_len {
         return Err(SynthesisError::MalformedSrs);
@@ -456,13 +496,12 @@ fn create_kzg_opening<G: CurveAffine>(
     let quotient_polynomial_coeffs = quotient_polynomial.into_coeffs();
 
     // multiexponentiation inner_product, inlined to optimize
-    let zero = G::Scalar::zero().into_repr();
     let quotient_polynomial_coeffs_len = quotient_polynomial_coeffs.len();
     let getter = |i: usize| -> <G::Scalar as PrimeField>::Repr {
         if i >= quotient_polynomial_coeffs_len {
-            return zero;
+            return G::Scalar::zero().to_repr();
         }
-        quotient_polynomial_coeffs[i].into_repr()
+        quotient_polynomial_coeffs[i].to_repr()
     };
 
     // we do one proof over h^a and one proof over h^b (or g^a and g^b depending
@@ -476,7 +515,7 @@ fn create_kzg_opening<G: CurveAffine>(
                 srs_powers_alpha_table,
                 std::mem::size_of::<<G::Scalar as PrimeField>::Repr>() * 8,
             )
-            .into_affine()
+            .to_affine()
         },
         || {
             par_multiscalar::<_, G>(
@@ -484,7 +523,7 @@ fn create_kzg_opening<G: CurveAffine>(
                 srs_powers_beta_table,
                 std::mem::size_of::<<G::Scalar as PrimeField>::Repr>() * 8,
             )
-            .into_affine()
+            .to_affine()
         },
     ))
 }
@@ -505,10 +544,10 @@ pub(super) fn polynomial_evaluation_product_form_from_transcript<F: Field>(
 
     let one = F::one();
 
-    let mut res = add!(one, &mul!(transcript[0], &power_zr));
+    let mut res = one + (transcript[0] * power_zr);
     for x in &transcript[1..] {
-        power_zr.square();
-        res.mul_assign(&add!(one, &mul!(*x, &power_zr)));
+        power_zr = power_zr.square();
+        res.mul_assign(one + (*x * power_zr));
     }
 
     res
@@ -534,10 +573,10 @@ fn polynomial_coefficients_from_transcript<F: Field>(transcript: &[F], r_shift: 
     for (i, x) in transcript.iter().enumerate() {
         let n = coefficients.len();
         if i > 0 {
-            power_2_r.square();
+            power_2_r = power_2_r.square();
         }
         for j in 0..n {
-            let coeff = mul!(coefficients[j], &mul!(*x, &power_2_r));
+            let coeff = coefficients[j] * (*x * power_2_r);
             coefficients.push(coeff);
         }
     }

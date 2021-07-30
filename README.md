@@ -8,17 +8,12 @@ booleans and number abstractions.
 
 ## Backend
 
-There are currently two backends available for the implementation of Bls12 381:
+There is currently one backend available for the implementation of Bls12 381:
 - [`blstrs`](https://github.com/filecoin-project/blstrs) - optimized with hand tuned assembly, using [blst](https://github.com/supranational/blst)
-- [`paired`](https://github.com/filecoin-project/paired) - pure Rust implementation
-
-They can be selected at compile time with the mutually exclusive features `blst` and `pairing`. Specifying one of them is enough for a working library, no additional features need to be set.
-
-The default for now is `blst`, as the secure and audited choice.  Note that `pairing` is deprecated and may be removed in the future.
 
 ## GPU
 
-This fork contains GPU parallel acceleration to the FFT and Multiexponentation algorithms in the groth16 prover codebase under the compilation feature `gpu`, it can be used in combination with `blst` or `pairing`.
+This fork contains GPU parallel acceleration to the FFT and Multiexponentation algorithms in the groth16 prover codebase under the compilation feature `gpu`.
 
 ### Requirements
 - NVIDIA or AMD GPU Graphics Driver
@@ -108,16 +103,14 @@ Depending on the size of the proof being passed to the gpu for work, certain car
 
 ### Running Tests
 
-To run using the `pairing` backend, you can use:
-
 ```bash
-RUSTFLAGS="-C target-cpu=native" cargo test --release --all --no-default-features --features pairing
+RUSTFLAGS="-C target-cpu=native" cargo test --release --all
 ```
 
-To run using both the `gpu` and `blst` backend, you can use:
+To run using `gpu`, you can use:
 
 ```bash
-RUSTFLAGS="-C target-cpu=native" cargo test --release --all --no-default-features --features gpu,blst
+RUSTFLAGS="-C target-cpu=native" cargo test --release --all --features gpu
 ```
 
 To run the multiexp_consistency test you can use:

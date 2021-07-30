@@ -1,16 +1,19 @@
 //! Helpers for packing vectors of bits into scalar field elements.
 
+use std::ops::AddAssign;
+
 use super::boolean::Boolean;
 use super::num::{AllocatedNum, Num};
 use super::Assignment;
 use crate::{ConstraintSystem, SynthesisError};
-use ff::{Field, PrimeField, ScalarEngine};
+use ff::{Field, PrimeField};
+use pairing::Engine;
 
 /// Takes a sequence of booleans and exposes them as compact
 /// public inputs
 pub fn pack_into_inputs<E, CS>(mut cs: CS, bits: &[Boolean]) -> Result<(), SynthesisError>
 where
-    E: ScalarEngine,
+    E: Engine,
     CS: ConstraintSystem<E>,
 {
     for (i, bits) in bits.chunks(E::Fr::CAPACITY as usize).enumerate() {
@@ -19,7 +22,7 @@ where
         for bit in bits {
             num = num.add_bool_with_coeff(CS::one(), bit, coeff);
 
-            coeff.double();
+            coeff = coeff.double();
         }
 
         let input = cs.alloc_input(|| format!("input {}", i), || Ok(*num.get_value().get()?))?;
@@ -50,7 +53,7 @@ pub fn bytes_to_bits_le(bytes: &[u8]) -> Vec<bool> {
         .collect()
 }
 
-pub fn compute_multipacking<E: ScalarEngine>(bits: &[bool]) -> Vec<E::Fr> {
+pub fn compute_multipacking<E: Engine>(bits: &[bool]) -> Vec<E::Fr> {
     let mut result = vec![];
 
     for bits in bits.chunks(E::Fr::CAPACITY as usize) {
@@ -62,7 +65,7 @@ pub fn compute_multipacking<E: ScalarEngine>(bits: &[bool]) -> Vec<E::Fr> {
                 cur.add_assign(&coeff);
             }
 
-            coeff.double();
+            coeff = coeff.double();
         }
 
         result.push(cur);
@@ -74,7 +77,7 @@ pub fn compute_multipacking<E: ScalarEngine>(bits: &[bool]) -> Vec<E::Fr> {
 /// Takes a sequence of booleans and exposes them as a single compact Num.
 pub fn pack_bits<E, CS>(mut cs: CS, bits: &[Boolean]) -> Result<AllocatedNum<E>, SynthesisError>
 where
-    E: ScalarEngine,
+    E: Engine,
     CS: ConstraintSystem<E>,
 {
     let mut num = Num::<E>::zero();
@@ -82,7 +85,7 @@ where
     for bit in bits.iter().take(E::Fr::CAPACITY as usize) {
         num = num.add_bool_with_coeff(CS::one(), &bit, coeff);
 
-        coeff.double();
+        coeff = coeff.double();
     }
 
     let alloc_num = AllocatedNum::alloc(cs.namespace(|| "input"), || {
@@ -102,8 +105,8 @@ where
 
 #[test]
 fn test_multipacking() {
-    use crate::bls::Bls12;
     use crate::ConstraintSystem;
+    use blstrs::Bls12;
     use rand_core::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
 

@@ -1,12 +1,13 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::ops::{AddAssign, MulAssign};
 
-use crate::bls::Engine;
 use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
 use blake2s_simd::State as Blake2s;
 use byteorder::{BigEndian, ByteOrder};
-use ff::{Field, PrimeField, PrimeFieldRepr};
+use ff::{Field, PrimeField};
+use pairing::Engine;
 
 #[derive(Debug)]
 enum NamedObject {
@@ -16,7 +17,7 @@ enum NamedObject {
 }
 
 /// Constraint system for testing purposes.
-pub struct TestConstraintSystem<E: Engine> {
+pub struct TestConstraintSystem<E: Engine + Send> {
     named_objects: HashMap<String, NamedObject>,
     current_namespace: Vec<String>,
     #[allow(clippy::type_complexity)]
@@ -59,7 +60,7 @@ impl Ord for OrderedVariable {
     }
 }
 
-fn proc_lc<E: Engine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
+fn proc_lc<E: Engine + Send>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
     let mut map = BTreeMap::new();
     for (&var, &coeff) in terms.iter() {
         map.entry(OrderedVariable(var))
@@ -70,7 +71,7 @@ fn proc_lc<E: Engine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable,
     // Remove terms that have a zero coefficient to normalize
     let mut to_remove = vec![];
     for (var, coeff) in map.iter() {
-        if coeff.is_zero() {
+        if coeff.is_zero().into() {
             to_remove.push(*var)
         }
     }
@@ -82,7 +83,7 @@ fn proc_lc<E: Engine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable,
     map
 }
 
-fn hash_lc<E: Engine>(terms: &LinearCombination<E>, h: &mut Blake2s) {
+fn hash_lc<E: Engine + Send>(terms: &LinearCombination<E>, h: &mut Blake2s) {
     let map = proc_lc::<E>(terms);
 
     let mut buf = [0u8; 9 + 32];
@@ -101,16 +102,20 @@ fn hash_lc<E: Engine>(terms: &LinearCombination<E>, h: &mut Blake2s) {
             }
         }
 
-        coeff
-            .into_repr()
-            .write_be(&mut buf[9..])
-            .expect("failed to write coeff");
+        // Write big-endian bytes.
+        let mut bytes = coeff.to_repr();
+        bytes.as_mut().reverse();
+        buf[9..].copy_from_slice(&bytes.as_ref());
 
         h.update(&buf[..]);
     }
 }
 
-fn _eval_lc2<E: Engine>(terms: &LinearCombination<E>, inputs: &[E::Fr], aux: &[E::Fr]) -> E::Fr {
+fn _eval_lc2<E: Engine + Send>(
+    terms: &LinearCombination<E>,
+    inputs: &[E::Fr],
+    aux: &[E::Fr],
+) -> E::Fr {
     let mut acc = E::Fr::zero();
 
     for (&var, coeff) in terms.iter() {
@@ -119,14 +124,14 @@ fn _eval_lc2<E: Engine>(terms: &LinearCombination<E>, inputs: &[E::Fr], aux: &[E
             Index::Aux(index) => aux[index],
         };
 
-        tmp.mul_assign(&coeff);
+        tmp.mul_assign(coeff);
         acc.add_assign(&tmp);
     }
 
     acc
 }
 
-fn eval_lc<E: Engine>(
+fn eval_lc<E: Engine + Send>(
     terms: &LinearCombination<E>,
     inputs: &[(E::Fr, String)],
     aux: &[(E::Fr, String)],
@@ -139,14 +144,14 @@ fn eval_lc<E: Engine>(
             Index::Aux(index) => aux[index].0,
         };
 
-        tmp.mul_assign(&coeff);
+        tmp.mul_assign(coeff);
         acc.add_assign(&tmp);
     }
 
     acc
 }
 
-impl<E: Engine> Default for TestConstraintSystem<E> {
+impl<E: Engine + Send> Default for TestConstraintSystem<E> {
     fn default() -> Self {
         let mut map = HashMap::new();
         map.insert(
@@ -164,7 +169,7 @@ impl<E: Engine> Default for TestConstraintSystem<E> {
     }
 }
 
-impl<E: Engine> TestConstraintSystem<E> {
+impl<E: Engine + Send> TestConstraintSystem<E> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -326,7 +331,7 @@ fn compute_path(ns: &[String], this: &str) -> String {
     format!("{}/{}", name, this)
 }
 
-impl<E: Engine> ConstraintSystem<E> for TestConstraintSystem<E> {
+impl<E: Engine + Send> ConstraintSystem<E> for TestConstraintSystem<E> {
     type Root = Self;
 
     fn alloc<F, A, AR>(&mut self, annotation: A, f: F) -> Result<Variable, SynthesisError>
@@ -419,29 +424,26 @@ mod tests {
 
     #[test]
     fn test_cs() {
-        use crate::bls::{Bls12, Fr};
-        use ff::PrimeField;
+        use blstrs::{Bls12, Scalar as Fr};
 
         let mut cs = TestConstraintSystem::<Bls12>::new();
         assert!(cs.is_satisfied());
         assert_eq!(cs.num_constraints(), 0);
         let a = cs
             .namespace(|| "a")
-            .alloc(|| "var", || Ok(Fr::from_str("10").unwrap()))
+            .alloc(|| "var", || Ok(Fr::from(10u64)))
             .unwrap();
         let b = cs
             .namespace(|| "b")
-            .alloc(|| "var", || Ok(Fr::from_str("4").unwrap()))
+            .alloc(|| "var", || Ok(Fr::from(4u64)))
             .unwrap();
-        let c = cs
-            .alloc(|| "product", || Ok(Fr::from_str("40").unwrap()))
-            .unwrap();
+        let c = cs.alloc(|| "product", || Ok(Fr::from(40u64))).unwrap();
 
         cs.enforce(|| "mult", |lc| lc + a, |lc| lc + b, |lc| lc + c);
         assert!(cs.is_satisfied());
         assert_eq!(cs.num_constraints(), 1);
 
-        cs.set("a/var", Fr::from_str("4").unwrap());
+        cs.set("a/var", Fr::from(4u64));
 
         let one = TestConstraintSystem::<Bls12>::one();
         cs.enforce(|| "eq", |lc| lc + a, |lc| lc + one, |lc| lc + b);
@@ -449,9 +451,9 @@ mod tests {
         assert!(!cs.is_satisfied());
         assert!(cs.which_is_unsatisfied() == Some("mult"));
 
-        assert!(cs.get("product") == Fr::from_str("40").unwrap());
+        assert!(cs.get("product") == Fr::from(40u64));
 
-        cs.set("product", Fr::from_str("16").unwrap());
+        cs.set("product", Fr::from(16u64));
         assert!(cs.is_satisfied());
 
         {

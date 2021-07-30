@@ -4,7 +4,7 @@ use ff::{Field, PrimeField};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::bls::Engine;
+use pairing::Engine;
 
 const PREFIX: &str = "snarkpack-v1";
 
@@ -37,7 +37,10 @@ impl<E: Engine> std::ops::Deref for Challenge<E> {
     }
 }
 
-impl<E: Engine> Serialize for Challenge<E> {
+impl<E: Engine> Serialize for Challenge<E>
+where
+    E::Fr: Serialize,
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -68,6 +71,12 @@ impl<E: Engine> Transcript<E> {
 
     /// Generate a challenge from the transcript.
     pub fn into_challenge(mut self) -> Challenge<E> {
+        let repr_bits = <<E as Engine>::Fr as PrimeField>::Repr::default()
+            .as_ref()
+            .len()
+            * 8;
+        let shave_bits = repr_bits - E::Fr::NUM_BITS as usize;
+
         let mut counter_nonce: usize = 0;
         let one = E::Fr::one();
         let r = loop {
@@ -75,11 +84,18 @@ impl<E: Engine> Transcript<E> {
             self.hasher.update(&counter_nonce.to_be_bytes()[..]);
             let curr_state = self.hasher.clone();
             let digest = curr_state.finalize();
-            if let Some(c) = E::Fr::from_random_bytes(&digest) {
+
+            let mut repr = <<E as Engine>::Fr as PrimeField>::Repr::default();
+            repr.as_mut().copy_from_slice(&digest);
+
+            // Mask away the digest bits which exceed the field size.
+            *repr.as_mut().last_mut().unwrap() &= 0xff >> shave_bits;
+
+            if let Some(c) = E::Fr::from_repr_vartime(repr) {
                 if c == one {
                     continue;
                 }
-                if c.inverse().is_some() {
+                if c.invert().is_some().into() {
                     break c;
                 }
             }
@@ -92,21 +108,19 @@ impl<E: Engine> Transcript<E> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bls::{Bls12, Engine, Fr, G1Affine, G2Affine, PairingCurveAffine};
-
+    use blstrs::{Bls12, G1Affine, G2Affine, Scalar as Fr};
     use ff::Field;
-    use groupy::CurveAffine;
+    use group::prime::PrimeCurveAffine;
+    use pairing::{MillerLoopResult, MultiMillerLoop};
 
     #[test]
     fn test_transcript() {
         let mut t = Transcript::<Bls12>::new("test");
-        let g1 = G1Affine::one();
-        let g2 = G2Affine::one();
-        let gt = <Bls12 as Engine>::final_exponentiation(&<Bls12 as Engine>::miller_loop(&[(
-            &g1.prepare(),
-            &g2.prepare(),
-        )]))
-        .expect("pairing failed");
+        let g1 = G1Affine::generator();
+        let g2 = G2Affine::generator();
+        let gt = <Bls12 as MultiMillerLoop>::multi_miller_loop(&[(&g1, &g2.into())])
+            .final_exponentiation();
+
         t = t.write(&g1).write(&g2).write(&gt).write(&Fr::one());
 
         let c1 = t.into_challenge();

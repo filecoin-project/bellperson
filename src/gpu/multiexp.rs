@@ -1,20 +1,17 @@
 use super::error::{GPUError, GPUResult};
-use super::locks;
-use super::sources;
-use super::utils;
-use crate::bls::Engine;
+use super::{locks, sources, utils, GpuEngine};
 use crate::multicore::Worker;
 use crate::multiexp::{multiexp as cpu_multiexp, FullDensity};
 
-use ff::{PrimeField, ScalarEngine};
-use groupy::{CurveAffine, CurveProjective};
+use ff::PrimeField;
+use group::{prime::PrimeCurveAffine, Group};
 use log::{error, info};
+use pairing::Engine;
 use rust_gpu_tools::*;
+
 use std::any::TypeId;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::ops::AddAssign;
+use std::sync::{Arc, RwLock};
 
 const MAX_WINDOW_SIZE: usize = 10;
 const LOCAL_WORK_SIZE: usize = 256;
@@ -37,7 +34,7 @@ pub fn get_cpu_utilization() -> f64 {
 // Multiexp kernel for a single GPU
 pub struct SingleMultiexpKernel<E>
 where
-    E: Engine,
+    E: Engine + GpuEngine,
 {
     program: opencl::Program,
 
@@ -101,7 +98,7 @@ fn exp_size<E: Engine>() -> usize {
 
 impl<E> SingleMultiexpKernel<E>
 where
-    E: Engine,
+    E: Engine + GpuEngine,
 {
     pub fn create(d: opencl::Device, priority: bool) -> GPUResult<SingleMultiexpKernel<E>> {
         let src = sources::kernel::<E>(d.vendor() == opencl::Vendor::Nvidia);
@@ -125,11 +122,11 @@ where
     pub fn multiexp<G>(
         &mut self,
         bases: &[G],
-        exps: &[<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr],
+        exps: &[<G::Scalar as PrimeField>::Repr],
         n: usize,
-    ) -> GPUResult<<G as CurveAffine>::Projective>
+    ) -> GPUResult<<G as PrimeCurveAffine>::Curve>
     where
-        G: CurveAffine,
+        G: PrimeCurveAffine,
     {
         if locks::PriorityLock::should_break(self.priority) {
             return Err(GPUError::GPUTaken);
@@ -149,15 +146,15 @@ where
         self.program.write_from_buffer(&base_buffer, 0, bases)?;
         let exp_buffer = self
             .program
-            .create_buffer::<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>(n)?;
+            .create_buffer::<<G::Scalar as PrimeField>::Repr>(n)?;
         self.program.write_from_buffer(&exp_buffer, 0, exps)?;
 
         let bucket_buffer = self
             .program
-            .create_buffer::<<G as CurveAffine>::Projective>(2 * self.core_count * bucket_len)?;
+            .create_buffer::<<G as PrimeCurveAffine>::Curve>(2 * self.core_count * bucket_len)?;
         let result_buffer = self
             .program
-            .create_buffer::<<G as CurveAffine>::Projective>(2 * self.core_count)?;
+            .create_buffer::<<G as PrimeCurveAffine>::Curve>(2 * self.core_count)?;
 
         // The global work size follows CUDA's definition and is the number of `LOCAL_WORK_SIZE`
         // sized thread groups.
@@ -186,18 +183,18 @@ where
             .arg(&(window_size as u32))
             .run()?;
 
-        let mut results = vec![<G as CurveAffine>::Projective::zero(); 2 * self.core_count];
+        let mut results = vec![<G as PrimeCurveAffine>::Curve::identity(); 2 * self.core_count];
         self.program
             .read_into_buffer(&result_buffer, 0, &mut results)?;
 
         // Using the algorithm below, we can calculate the final result by accumulating the results
         // of those `NUM_GROUPS` * `NUM_WINDOWS` threads.
-        let mut acc = <G as CurveAffine>::Projective::zero();
+        let mut acc = <G as PrimeCurveAffine>::Curve::identity();
         let mut bits = 0;
         for i in 0..num_windows {
             let w = std::cmp::min(window_size, exp_bits - bits);
             for _ in 0..w {
-                acc.double();
+                acc = acc.double();
             }
             for g in 0..num_groups {
                 acc.add_assign(&results[g * num_windows + i]);
@@ -212,7 +209,7 @@ where
 // A struct that containts several multiexp kernels for different devices
 pub struct MultiexpKernel<E>
 where
-    E: Engine,
+    E: Engine + GpuEngine,
 {
     kernels: Vec<SingleMultiexpKernel<E>>,
     _lock: locks::GPULock, // RFC 1857: struct fields are dropped in the same order as they are declared.
@@ -220,7 +217,7 @@ where
 
 impl<E> MultiexpKernel<E>
 where
-    E: Engine,
+    E: Engine + GpuEngine,
 {
     pub fn create(priority: bool) -> GPUResult<MultiexpKernel<E>> {
         let lock = locks::GPULock::lock();
@@ -268,13 +265,13 @@ where
         &mut self,
         pool: &Worker,
         bases: Arc<Vec<G>>,
-        exps: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+        exps: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
         skip: usize,
         n: usize,
-    ) -> GPUResult<<G as CurveAffine>::Projective>
+    ) -> GPUResult<<G as PrimeCurveAffine>::Curve>
     where
-        G: CurveAffine,
-        <G as groupy::CurveAffine>::Engine: crate::bls::Engine,
+        G: PrimeCurveAffine<Scalar = E::Fr>,
+        <G::Scalar as PrimeField>::Repr: Copy + Send + Sync,
     {
         let num_devices = self.kernels.len();
         // Bases are skipped by `self.1` elements, when converted from (Arc<Vec<G>>, usize) to Source
@@ -290,13 +287,11 @@ where
         let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
 
         let mut results = Vec::new();
-        let is_ok = AtomicBool::new(true);
+        let error = Arc::new(RwLock::new(Ok(())));
 
         let cpu_acc = pool.scoped(|s| {
             if n > 0 {
-                results = (0..self.kernels.len())
-                    .map(|_| Ok(G::Projective::zero()))
-                    .collect::<Vec<_>>();
+                results = vec![<G as PrimeCurveAffine>::Curve::identity(); self.kernels.len()];
 
                 for (((bases, exps), kern), result) in bases
                     .chunks(chunk_size)
@@ -304,30 +299,29 @@ where
                     .zip(self.kernels.iter_mut())
                     .zip(results.iter_mut())
                 {
-                    let is_ok = &is_ok;
+                    let error = error.clone();
                     s.execute(move || {
-                        let mut acc = <G as CurveAffine>::Projective::zero();
+                        let mut acc = <G as PrimeCurveAffine>::Curve::identity();
                         for (bases, exps) in bases.chunks(kern.n).zip(exps.chunks(kern.n)) {
-                            if !is_ok.load(Ordering::SeqCst) {
+                            if error.read().unwrap().is_err() {
                                 break;
                             }
                             match kern.multiexp(bases, exps, bases.len()) {
                                 Ok(result) => acc.add_assign(&result),
                                 Err(e) => {
-                                    *result = Err(e);
-                                    is_ok.store(false, Ordering::SeqCst);
+                                    *error.write().unwrap() = Err(e);
                                     break;
                                 }
                             }
                         }
-                        if is_ok.load(Ordering::SeqCst) {
-                            *result = Ok(acc);
+                        if error.read().unwrap().is_ok() {
+                            *result = acc;
                         }
                     });
                 }
             }
 
-            cpu_multiexp(
+            cpu_multiexp::<_, _, _, E, _>(
                 &pool,
                 (Arc::new(cpu_bases.to_vec()), 0),
                 FullDensity,
@@ -336,9 +330,13 @@ where
             )
         });
 
-        let mut acc = <G as CurveAffine>::Projective::zero();
+        Arc::try_unwrap(error)
+            .expect("only one ref left")
+            .into_inner()
+            .unwrap()?;
+        let mut acc = <G as PrimeCurveAffine>::Curve::identity();
         for r in results {
-            acc.add_assign(&r?);
+            acc.add_assign(&r);
         }
 
         acc.add_assign(&cpu_acc.wait().unwrap());

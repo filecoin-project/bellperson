@@ -1,12 +1,13 @@
-use crate::bls::Engine;
 use crate::gpu::{
     error::{GPUError, GPUResult},
-    locks, sources,
+    locks, sources, GpuEngine,
 };
 use ff::Field;
 use log::info;
+use pairing::Engine;
 use rust_gpu_tools::*;
 use std::cmp;
+use std::ops::MulAssign;
 
 const LOG2_MAX_ELEMENTS: usize = 32; // At most 2^32 elements is supported.
 const MAX_LOG2_RADIX: u32 = 8; // Radix256
@@ -15,7 +16,7 @@ const MAX_LOG2_LOCAL_WORK_SIZE: u32 = 7; // 128
 #[allow(clippy::upper_case_acronyms)]
 pub struct FFTKernel<E>
 where
-    E: Engine,
+    E: Engine + GpuEngine,
 {
     program: opencl::Program,
     pq_buffer: opencl::Buffer<E::Fr>,
@@ -26,7 +27,7 @@ where
 
 impl<E> FFTKernel<E>
 where
-    E: Engine,
+    E: Engine + GpuEngine,
 {
     pub fn create(priority: bool) -> GPUResult<FFTKernel<E>> {
         let lock = locks::GPULock::lock();
@@ -102,7 +103,7 @@ where
         // Precalculate:
         // [omega^(0/(2^(deg-1))), omega^(1/(2^(deg-1))), ..., omega^((2^(deg-1)-1)/(2^(deg-1)))]
         let mut pq = vec![E::Fr::zero(); 1 << max_deg >> 1];
-        let twiddle = omega.pow([(n >> max_deg) as u64]);
+        let twiddle = omega.pow_vartime([(n >> max_deg) as u64]);
         pq[0] = E::Fr::one();
         if max_deg > 1 {
             pq[1] = twiddle;
@@ -117,7 +118,7 @@ where
         let mut omegas = vec![E::Fr::zero(); 32];
         omegas[0] = *omega;
         for i in 1..LOG2_MAX_ELEMENTS {
-            omegas[i] = omegas[i - 1].pow([2u64]);
+            omegas[i] = omegas[i - 1].pow_vartime([2u64]);
         }
         self.program
             .write_from_buffer(&self.omegas_buffer, 0, &omegas)?;

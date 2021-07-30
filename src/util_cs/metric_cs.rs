@@ -1,8 +1,9 @@
-use crate::bls::Engine;
 use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
-use ff::{Field, PrimeField, ScalarEngine};
+use ff::{Field, PrimeField};
+use pairing::Engine;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
+use std::ops::AddAssign;
 
 #[derive(Clone, Copy)]
 struct OrderedVariable(Variable);
@@ -41,7 +42,7 @@ impl Ord for OrderedVariable {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-pub struct MetricCS<E: Engine> {
+pub struct MetricCS<E: Engine + Send> {
     named_objects: HashMap<String, NamedObject>,
     current_namespace: Vec<String>,
     #[allow(clippy::type_complexity)]
@@ -55,7 +56,7 @@ pub struct MetricCS<E: Engine> {
     aux: Vec<String>,
 }
 
-fn proc_lc<E: ScalarEngine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
+fn proc_lc<E: Engine + Send>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
     let mut map = BTreeMap::new();
     for (&var, &coeff) in terms.iter() {
         map.entry(OrderedVariable(var))
@@ -66,7 +67,7 @@ fn proc_lc<E: ScalarEngine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVar
     // Remove terms that have a zero coefficient to normalize
     let mut to_remove = vec![];
     for (var, coeff) in map.iter() {
-        if coeff.is_zero() {
+        if coeff.is_zero().into() {
             to_remove.push(*var)
         }
     }
@@ -78,7 +79,7 @@ fn proc_lc<E: ScalarEngine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVar
     map
 }
 
-impl<E: Engine> MetricCS<E> {
+impl<E: Engine + Send> MetricCS<E> {
     pub fn new() -> Self {
         MetricCS::default()
     }
@@ -115,14 +116,10 @@ impl<E: Engine> MetricCS<E> {
             s.push_str(&format!("INPUT {}\n", &input))
         }
 
-        let negone = {
-            let mut tmp = E::Fr::one();
-            tmp.negate();
-            tmp
-        };
+        let negone = -E::Fr::one();
 
         let powers_of_two = (0..E::Fr::NUM_BITS)
-            .map(|i| E::Fr::from_str("2").unwrap().pow(&[u64::from(i)]))
+            .map(|i| E::Fr::from(2u64).pow_vartime(&[u64::from(i)]))
             .collect::<Vec<_>>();
 
         let pp = |s: &mut String, lc: &LinearCombination<E>| {
@@ -144,7 +141,7 @@ impl<E: Engine> MetricCS<E> {
                         }
                     }
 
-                    s.push_str(&format!("{} . ", coeff))
+                    s.push_str(&format!("{:?} . ", coeff))
                 }
 
                 match var.0.get_unchecked() {
@@ -188,7 +185,7 @@ impl<E: Engine> MetricCS<E> {
     }
 }
 
-impl<E: Engine> Default for MetricCS<E> {
+impl<E: Engine + Send> Default for MetricCS<E> {
     fn default() -> Self {
         let mut map = HashMap::new();
         map.insert("ONE".into(), NamedObject::Var(MetricCS::<E>::one()));
@@ -202,7 +199,7 @@ impl<E: Engine> Default for MetricCS<E> {
     }
 }
 
-impl<E: Engine> ConstraintSystem<E> for MetricCS<E> {
+impl<E: Engine + Send> ConstraintSystem<E> for MetricCS<E> {
     type Root = Self;
 
     fn alloc<F, A, AR>(&mut self, annotation: A, _f: F) -> Result<Variable, SynthesisError>

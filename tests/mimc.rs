@@ -4,12 +4,15 @@ use rand::thread_rng;
 // For benchmarking
 use std::time::{Duration, Instant};
 
+use std::ops::{AddAssign, MulAssign};
+
 // Bring in some tools for using pairing-friendly curves
-use bellperson::bls::Engine;
-use ff::{Field, ScalarEngine};
+use ff::Field;
+use group::Group;
+use pairing::Engine;
 
 // We're going to use the BLS12-381 pairing-friendly elliptic curve.
-use bellperson::bls::Bls12;
+use blstrs::Bls12;
 
 // We'll use these interfaces to construct our circuit.
 use bellperson::{Circuit, ConstraintSystem, SynthesisError};
@@ -40,9 +43,9 @@ fn mimc<E: Engine>(mut xl: E::Fr, mut xr: E::Fr, constants: &[E::Fr]) -> E::Fr {
 
     for constant in constants {
         let mut tmp1 = xl;
-        tmp1.add_assign(&constant);
+        tmp1.add_assign(constant);
         let mut tmp2 = tmp1;
-        tmp2.square();
+        tmp2 = tmp2.square();
         tmp2.mul_assign(&tmp1);
         tmp2.add_assign(&xr);
         xr = xl;
@@ -89,7 +92,7 @@ impl<'a, E: Engine> Circuit<E> for MimcDemo<'a, E> {
             // tmp = (xL + Ci)^2
             let tmp_value = xl_value.map(|mut e| {
                 e.add_assign(&self.constants[i]);
-                e.square();
+                e = e.square();
                 e
             });
             let tmp = cs.alloc(
@@ -156,7 +159,7 @@ fn test_mimc() {
 
     // Generate the MiMC round constants
     let constants = (0..MIMC_ROUNDS)
-        .map(|_| <Bls12 as ScalarEngine>::Fr::random(rng))
+        .map(|_| <Bls12 as Engine>::Fr::random(&mut *rng))
         .collect::<Vec<_>>();
 
     println!("Creating parameters...");
@@ -169,7 +172,7 @@ fn test_mimc() {
             constants: &constants,
         };
 
-        generate_random_parameters(c, rng).unwrap()
+        generate_random_parameters(c, &mut *rng).unwrap()
     };
 
     // Prepare the verification key (for proof verification)
@@ -190,8 +193,8 @@ fn test_mimc() {
 
     for _ in 0..SAMPLES {
         // Generate a random preimage and compute the image
-        let xl = <Bls12 as ScalarEngine>::Fr::random(rng);
-        let xr = <Bls12 as ScalarEngine>::Fr::random(rng);
+        let xl = <Bls12 as Engine>::Fr::random(&mut *rng);
+        let xr = <Bls12 as Engine>::Fr::random(&mut *rng);
         let image = mimc::<Bls12>(xl, xr, &constants);
 
         proof_vec.truncate(0);
@@ -207,7 +210,7 @@ fn test_mimc() {
             };
 
             // Create a groth16 proof with our parameters.
-            let proof = create_random_proof(c, &params, rng).unwrap();
+            let proof = create_random_proof(c, &params, &mut *rng).unwrap();
 
             proof.write(&mut proof_vec).unwrap();
         }
@@ -229,8 +232,8 @@ fn test_mimc() {
     {
         // Create an instance of our circuit (with the
         // witness)
-        let xl = <Bls12 as ScalarEngine>::Fr::random(rng);
-        let xr = <Bls12 as ScalarEngine>::Fr::random(rng);
+        let xl = <Bls12 as Engine>::Fr::random(&mut *rng);
+        let xr = <Bls12 as Engine>::Fr::random(&mut *rng);
 
         let c = MimcDemo {
             xl: Some(xl),
@@ -239,7 +242,8 @@ fn test_mimc() {
         };
 
         // Create a groth16 proof with our parameters.
-        let proofs = create_random_proof_batch(vec![c; SAMPLES as usize], &params, rng).unwrap();
+        let proofs =
+            create_random_proof_batch(vec![c; SAMPLES as usize], &params, &mut *rng).unwrap();
         assert_eq!(proofs.len(), 50);
     }
 
@@ -283,13 +287,13 @@ fn test_mimc() {
             .collect::<Vec<Proof<_>>>();
 
         for mut bad_proof in bad_proofs.iter_mut() {
-            use groupy::CurveProjective;
+            use group::Curve;
 
             let p = &mut bad_proof;
 
             let mut a: <Bls12 as Engine>::G1 = p.a.into();
-            a.add_assign(&<Bls12 as Engine>::G1::one());
-            p.a = a.into_affine();
+            a.add_assign(&<Bls12 as Engine>::G1::generator());
+            p.a = a.to_affine();
         }
         let bad_proofs_ref = bad_proofs.iter().collect::<Vec<_>>();
         assert!(

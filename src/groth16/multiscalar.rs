@@ -1,22 +1,25 @@
 use std::mem::size_of;
+use std::ops::AddAssign;
 
 use ff::PrimeField;
-use groupy::{CurveAffine, CurveProjective};
+use group::{prime::PrimeCurveAffine, Curve, Group};
 use rayon::prelude::*;
+
+use crate::le_bytes_to_u64s;
 
 pub const WINDOW_SIZE: usize = 8;
 
 /// Abstraction over either a slice or a getter to produce a fixed number of scalars.
 pub enum ScalarList<
     'a,
-    G: CurveAffine,
+    G: PrimeCurveAffine,
     F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send,
 > {
     Slice(&'a [<G::Scalar as PrimeField>::Repr]),
     Getter(F, usize),
 }
 
-impl<'a, G: CurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send>
+impl<'a, G: PrimeCurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send>
     ScalarList<'a, G, F>
 {
     pub fn len(&self) -> usize {
@@ -28,10 +31,10 @@ impl<'a, G: CurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync 
 }
 
 pub type Getter<G> =
-    dyn Fn(usize) -> <<G as CurveAffine>::Scalar as PrimeField>::Repr + Sync + Send;
+    dyn Fn(usize) -> <<G as PrimeCurveAffine>::Scalar as PrimeField>::Repr + Sync + Send;
 
 /// Abstraction over owned and referenced multiscalar precomputations.
-pub trait MultiscalarPrecomp<G: CurveAffine>: Send + Sync {
+pub trait MultiscalarPrecomp<G: PrimeCurveAffine>: Send + Sync {
     fn window_size(&self) -> usize;
     fn window_mask(&self) -> u64;
     fn tables(&self) -> &[Vec<G>];
@@ -40,7 +43,7 @@ pub trait MultiscalarPrecomp<G: CurveAffine>: Send + Sync {
 
 /// Owned variant of the multiscalar precomputations.
 #[derive(Clone, Debug)]
-pub struct MultiscalarPrecompOwned<G: CurveAffine> {
+pub struct MultiscalarPrecompOwned<G: PrimeCurveAffine> {
     num_points: usize,
     window_size: usize,
     window_mask: u64,
@@ -48,7 +51,7 @@ pub struct MultiscalarPrecompOwned<G: CurveAffine> {
     tables: Vec<Vec<G>>,
 }
 
-impl<G: CurveAffine> PartialEq for MultiscalarPrecompOwned<G> {
+impl<G: PrimeCurveAffine> PartialEq for MultiscalarPrecompOwned<G> {
     fn eq(&self, other: &Self) -> bool {
         self.num_points == other.num_points
             && self.window_size == other.window_size
@@ -62,7 +65,7 @@ impl<G: CurveAffine> PartialEq for MultiscalarPrecompOwned<G> {
     }
 }
 
-impl<G: CurveAffine> MultiscalarPrecomp<G> for MultiscalarPrecompOwned<G> {
+impl<G: PrimeCurveAffine> MultiscalarPrecomp<G> for MultiscalarPrecompOwned<G> {
     fn window_size(&self) -> usize {
         self.window_size
     }
@@ -88,7 +91,7 @@ impl<G: CurveAffine> MultiscalarPrecomp<G> for MultiscalarPrecompOwned<G> {
 
 /// Referenced version of the multiscalar precomputations.
 #[derive(Debug)]
-pub struct MultiscalarPrecompRef<'a, G: CurveAffine> {
+pub struct MultiscalarPrecompRef<'a, G: PrimeCurveAffine> {
     num_points: usize,
     window_size: usize,
     window_mask: u64,
@@ -96,7 +99,7 @@ pub struct MultiscalarPrecompRef<'a, G: CurveAffine> {
     tables: &'a [Vec<G>],
 }
 
-impl<G: CurveAffine> MultiscalarPrecomp<G> for MultiscalarPrecompRef<'_, G> {
+impl<G: PrimeCurveAffine> MultiscalarPrecomp<G> for MultiscalarPrecompRef<'_, G> {
     fn window_size(&self) -> usize {
         self.window_size
     }
@@ -121,7 +124,7 @@ impl<G: CurveAffine> MultiscalarPrecomp<G> for MultiscalarPrecompRef<'_, G> {
 }
 
 /// Precompute the tables for fixed bases.
-pub fn precompute_fixed_window<G: CurveAffine>(
+pub fn precompute_fixed_window<G: PrimeCurveAffine>(
     points: &[G],
     window_size: usize,
 ) -> MultiscalarPrecompOwned<G> {
@@ -134,11 +137,11 @@ pub fn precompute_fixed_window<G: CurveAffine>(
             let mut table = Vec::with_capacity(table_entries);
             table.push(*point);
 
-            let mut cur_precomp_point = point.into_projective();
+            let mut cur_precomp_point = point.to_curve();
 
             for _ in 1..table_entries {
-                cur_precomp_point.add_assign_mixed(point);
-                table.push(cur_precomp_point.into_affine());
+                cur_precomp_point.add_assign(point);
+                table.push(cur_precomp_point.to_affine());
             }
 
             table
@@ -156,11 +159,11 @@ pub fn precompute_fixed_window<G: CurveAffine>(
 
 /// Multipoint scalar multiplication
 /// Only supports window sizes that evenly divide a limb and nbits!!
-pub fn multiscalar<G: CurveAffine>(
+pub fn multiscalar<G: PrimeCurveAffine>(
     k: &[<G::Scalar as ff::PrimeField>::Repr],
     precomp_table: &dyn MultiscalarPrecomp<G>,
     nbits: usize,
-) -> G::Projective {
+) -> G::Curve {
     const BITS_PER_LIMB: usize = size_of::<u64>() * 8;
     // TODO: support more bit sizes
     if nbits % precomp_table.window_size() != 0 || BITS_PER_LIMB % precomp_table.window_size() != 0
@@ -168,7 +171,7 @@ pub fn multiscalar<G: CurveAffine>(
         panic!("Unsupported multiscalar window size!");
     }
 
-    let mut result = G::Projective::zero();
+    let mut result = G::Curve::identity();
 
     // nbits must be evenly divided by window_size!
     let num_windows = (nbits + precomp_table.window_size() - 1) / precomp_table.window_size();
@@ -180,21 +183,22 @@ pub fn multiscalar<G: CurveAffine>(
         let window_in_limb = i % (BITS_PER_LIMB / precomp_table.window_size());
 
         for _ in 0..precomp_table.window_size() {
-            result.double();
+            result = result.double();
         }
         let mut prev_idx = 0;
         let mut prev_table: &Vec<G> = &precomp_table.tables()[0];
         let mut table: &Vec<G> = &precomp_table.tables()[0];
 
         for (m, point) in k.iter().enumerate() {
-            idx = point.as_ref()[limb] >> (window_in_limb * precomp_table.window_size())
+            let point = le_bytes_to_u64s(point.as_ref());
+            idx = point[limb] >> (window_in_limb * precomp_table.window_size())
                 & precomp_table.window_mask();
             if idx > 0 {
                 table = &precomp_table.tables()[m];
                 prefetch(&table[idx as usize - 1]);
             }
             if prev_idx > 0 && m > 0 {
-                result.add_assign_mixed(&prev_table[prev_idx as usize - 1]);
+                result.add_assign(&prev_table[prev_idx as usize - 1]);
             }
             prev_idx = idx;
             prev_table = table;
@@ -202,7 +206,7 @@ pub fn multiscalar<G: CurveAffine>(
 
         // Perform the final addition
         if prev_idx > 0 {
-            result.add_assign_mixed(&prev_table[prev_idx as usize - 1]);
+            result.add_assign(&prev_table[prev_idx as usize - 1]);
         }
     }
 
@@ -210,13 +214,14 @@ pub fn multiscalar<G: CurveAffine>(
 }
 
 /// Perform a threaded multiscalar multiplication and accumulation.
-pub fn par_multiscalar<F, G: CurveAffine>(
+pub fn par_multiscalar<F, G: PrimeCurveAffine>(
     points: &ScalarList<'_, G, F>,
     precomp_table: &dyn MultiscalarPrecomp<G>,
     nbits: usize,
-) -> G::Projective
+) -> G::Curve
 where
     F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send,
+    <G::Scalar as PrimeField>::Repr: Sync,
 {
     let num_points = points.len();
 
@@ -240,7 +245,9 @@ where
         .into_par_iter()
         .map(|id| {
             // Temporary storage for scalars
-            let mut scalar_storage = vec![<G::Scalar as PrimeField>::Repr::default(); chunk_size];
+            let mut scalar_storage: Vec<<G::Scalar as PrimeField>::Repr> = (0..chunk_size)
+                .map(|_| <G::Scalar as PrimeField>::Repr::default())
+                .collect();
 
             let start_idx = id * chunk_size;
             debug_assert!(start_idx < num_points);
@@ -263,7 +270,7 @@ where
 
             multiscalar(&scalars, &subset, nbits)
         }) // Accumulate results
-        .reduce(G::Projective::zero, |mut acc, part| {
+        .reduce(G::Curve::identity, |mut acc, part| {
             acc.add_assign(&part);
             acc
         })
@@ -291,16 +298,21 @@ fn prefetch<T>(p: *const T) {}
 mod tests {
     use super::*;
 
-    use crate::bls::{Fr, FrRepr, G1Affine, G1Projective};
+    use std::ops::Mul;
 
+    use blstrs::{G1Affine, G1Projective, Scalar as Fr};
     use ff::Field;
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
-    fn multiscalar_naive(points: &[G1Affine], scalars: &[FrRepr]) -> G1Projective {
-        let mut acc = G1Projective::zero();
+    fn multiscalar_naive(
+        points: &[G1Affine],
+        scalars: &[<Fr as PrimeField>::Repr],
+    ) -> G1Projective {
+        let mut acc = G1Projective::identity();
         for (scalar, point) in scalars.iter().zip(points.iter()) {
-            acc.add_assign(&point.mul(*scalar));
+            let scalar = <Fr as PrimeField>::from_repr(*scalar).unwrap();
+            acc.add_assign(&point.mul(scalar));
         }
         acc
     }
@@ -315,11 +327,11 @@ mod tests {
         for _ in 0..50 {
             for (num_inputs, window_size) in &[(8, 4), (12, 1), (10, 1), (20, 2)] {
                 let points: Vec<G1Affine> = (0..*num_inputs)
-                    .map(|_| G1Projective::random(&mut rng).into_affine())
+                    .map(|_| G1Projective::random(&mut rng).to_affine())
                     .collect();
 
-                let scalars: Vec<FrRepr> = (0..*num_inputs)
-                    .map(|_| Fr::random(&mut rng).into_repr())
+                let scalars: Vec<<Fr as PrimeField>::Repr> = (0..*num_inputs)
+                    .map(|_| Fr::random(&mut rng).to_repr())
                     .collect();
 
                 let table = precompute_fixed_window::<G1Affine>(&points, *window_size);
@@ -346,11 +358,11 @@ mod tests {
         for _ in 0..50 {
             for (num_inputs, window_size) in &[(8, 4), (12, 1), (10, 1), (20, 2)] {
                 let points: Vec<G1Affine> = (0..*num_inputs)
-                    .map(|_| G1Projective::random(&mut rng).into_affine())
+                    .map(|_| G1Projective::random(&mut rng).to_affine())
                     .collect();
 
-                let scalars: Vec<FrRepr> = (0..*num_inputs)
-                    .map(|_| Fr::random(&mut rng).into_repr())
+                let scalars: Vec<<Fr as PrimeField>::Repr> = (0..*num_inputs)
+                    .map(|_| Fr::random(&mut rng).to_repr())
                     .collect();
 
                 let table = precompute_fixed_window::<G1Affine>(&points, *window_size);

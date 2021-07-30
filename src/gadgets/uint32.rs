@@ -1,7 +1,8 @@
 //! Circuit representation of a [`u32`], with helpers for the [`sha256`]
 //! gadgets.
 
-use ff::{Field, PrimeField, ScalarEngine};
+use ff::{Field, PrimeField};
+use pairing::Engine;
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError};
 
@@ -43,7 +44,7 @@ impl UInt32 {
     /// Allocate a `UInt32` in the constraint system
     pub fn alloc<E, CS>(mut cs: CS, value: Option<u32>) -> Result<Self, SynthesisError>
     where
-        E: ScalarEngine,
+        E: Engine,
         CS: ConstraintSystem<E>,
     {
         let values = match value {
@@ -208,7 +209,7 @@ impl UInt32 {
         circuit_fn: U,
     ) -> Result<Self, SynthesisError>
     where
-        E: ScalarEngine,
+        E: Engine,
         CS: ConstraintSystem<E>,
         F: Fn(u32, u32, u32) -> u32,
         U: Fn(&mut CS, usize, &Boolean, &Boolean, &Boolean) -> Result<Boolean, SynthesisError>,
@@ -237,7 +238,7 @@ impl UInt32 {
     /// during SHA256.
     pub fn sha256_maj<E, CS>(cs: CS, a: &Self, b: &Self, c: &Self) -> Result<Self, SynthesisError>
     where
-        E: ScalarEngine,
+        E: Engine,
         CS: ConstraintSystem<E>,
     {
         Self::triop(
@@ -254,7 +255,7 @@ impl UInt32 {
     /// during SHA256.
     pub fn sha256_ch<E, CS>(cs: CS, a: &Self, b: &Self, c: &Self) -> Result<Self, SynthesisError>
     where
-        E: ScalarEngine,
+        E: Engine,
         CS: ConstraintSystem<E>,
     {
         Self::triop(
@@ -270,7 +271,7 @@ impl UInt32 {
     /// XOR this `UInt32` with another `UInt32`
     pub fn xor<E, CS>(&self, mut cs: CS, other: &Self) -> Result<Self, SynthesisError>
     where
-        E: ScalarEngine,
+        E: Engine,
         CS: ConstraintSystem<E>,
     {
         let new_value = match (self.value, other.value) {
@@ -296,7 +297,7 @@ impl UInt32 {
     #[allow(clippy::unnecessary_unwrap)]
     pub fn addmany<E, CS, M>(mut cs: M, operands: &[Self]) -> Result<Self, SynthesisError>
     where
-        E: ScalarEngine,
+        E: Engine + Send,
         CS: ConstraintSystem<E>,
         M: ConstraintSystem<E, Root = MultiEq<E, CS>>,
     {
@@ -343,7 +344,7 @@ impl UInt32 {
 
                 all_constants &= bit.is_constant();
 
-                coeff.double();
+                coeff = coeff.double();
             }
         }
 
@@ -381,7 +382,7 @@ impl UInt32 {
 
             max_value >>= 1;
             i += 1;
-            coeff.double();
+            coeff = coeff.double();
         }
 
         // Enforce equality between the sum and result
@@ -400,11 +401,11 @@ impl UInt32 {
 #[cfg(test)]
 mod test {
     use super::UInt32;
-    use crate::bls::Bls12;
     use crate::gadgets::boolean::Boolean;
     use crate::gadgets::multieq::MultiEq;
     use crate::gadgets::test::*;
     use crate::ConstraintSystem;
+    use blstrs::Bls12;
     use ff::Field;
     use rand_core::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
@@ -615,7 +616,7 @@ mod test {
             }
 
             // Flip a bit and see if the addition constraint still works
-            if cs.get("addition/result bit 0/boolean").is_zero() {
+            if cs.get("addition/result bit 0/boolean").is_zero().into() {
                 cs.set("addition/result bit 0/boolean", Field::one());
             } else {
                 cs.set("addition/result bit 0/boolean", Field::zero());

@@ -5,19 +5,22 @@ version = "0.0.1"
 edition = "2018"
 
 [dependencies]
-bellperson = { path = "../..",  default-features = false }
-fff = "0.3"
-groupy = "0.4"
+bellperson = { path = "../.." }
+ff = "0.11.0"
+group = "0.11.0"
 structopt = { version = "0.3", default-features = false }
 pretty_env_logger = "0.4.0"
-rand = "0.7.3"
+rand = "0.8"
 sha2 = "0.9"
 bincode = "1.3.1"
+pairing = "0.21"
+blstrs = { git = "https://github.com/filecoin-project/blstrs", branch = "halo" }
 
 
 [features]
-default = ["groth16", "blst"]
-gpu = ["bellperson/gpu"]
+default = ["groth16"]
+gpu = ["bellperson/gpu", "blstrs/gpu"]
 groth16 = ["bellperson/groth16"]
-blst = ["bellperson/blst"]
-pairing = ["bellperson/pairing"]
+
+[patch.crates-io]
+pairing = { git = "https://github.com/dignifiedquire/pairing", branch = "patch-1" }

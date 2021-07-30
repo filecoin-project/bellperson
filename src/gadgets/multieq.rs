@@ -1,8 +1,9 @@
-use ff::{Field, PrimeField, ScalarEngine};
+use ff::{Field, PrimeField};
+use pairing::Engine;
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
-pub struct MultiEq<E: ScalarEngine, CS: ConstraintSystem<E>> {
+pub struct MultiEq<E: Engine + Send, CS: ConstraintSystem<E>> {
     cs: CS,
     ops: usize,
     bits_used: usize,
@@ -10,7 +11,7 @@ pub struct MultiEq<E: ScalarEngine, CS: ConstraintSystem<E>> {
     rhs: LinearCombination<E>,
 }
 
-impl<E: ScalarEngine, CS: ConstraintSystem<E>> MultiEq<E, CS> {
+impl<E: Engine + Send, CS: ConstraintSystem<E>> MultiEq<E, CS> {
     pub fn new(cs: CS) -> Self {
         MultiEq {
             cs,
@@ -50,14 +51,14 @@ impl<E: ScalarEngine, CS: ConstraintSystem<E>> MultiEq<E, CS> {
 
         assert!((E::Fr::CAPACITY as usize) > (self.bits_used + num_bits));
 
-        let coeff = E::Fr::from_str("2").unwrap().pow(&[self.bits_used as u64]);
+        let coeff = E::Fr::from(2u64).pow_vartime(&[self.bits_used as u64]);
         self.lhs = self.lhs.clone() + (coeff, lhs);
         self.rhs = self.rhs.clone() + (coeff, rhs);
         self.bits_used += num_bits;
     }
 }
 
-impl<E: ScalarEngine, CS: ConstraintSystem<E>> Drop for MultiEq<E, CS> {
+impl<E: Engine + Send, CS: ConstraintSystem<E>> Drop for MultiEq<E, CS> {
     fn drop(&mut self) {
         if self.bits_used > 0 {
             self.accumulate();
@@ -65,7 +66,7 @@ impl<E: ScalarEngine, CS: ConstraintSystem<E>> Drop for MultiEq<E, CS> {
     }
 }
 
-impl<E: ScalarEngine, CS: ConstraintSystem<E>> ConstraintSystem<E> for MultiEq<E, CS> {
+impl<E: Engine + Send, CS: ConstraintSystem<E>> ConstraintSystem<E> for MultiEq<E, CS> {
     type Root = Self;
 
     fn one() -> Variable {

@@ -22,13 +22,14 @@
 //!         sha256::sha256,
 //!     },
 //!     groth16, Circuit, ConstraintSystem, SynthesisError,
-//!     bls::{Bls12, Engine}
 //! };
+//! use blstrs::Bls12;
+//! use pairing::Engine;
 //! use rand::rngs::OsRng;
 //! use sha2::{Digest, Sha256};
 //!
 //! /// Our own SHA-256d gadget. Input and output are in little-endian bit order.
-//! fn sha256d<E: Engine, CS: ConstraintSystem<E>>(
+//! fn sha256d<E: Engine + Send, CS: ConstraintSystem<E>>(
 //!     mut cs: CS,
 //!     data: &[Boolean],
 //! ) -> Result<Vec<Boolean>, SynthesisError> {
@@ -58,7 +59,7 @@
 //!     preimage: Option<[u8; 80]>,
 //! }
 //!
-//! impl<E: Engine> Circuit<E> for MyCircuit {
+//! impl<E: Engine + Send> Circuit<E> for MyCircuit {
 //!     fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
 //!         // Compute the values for the bits of the preimage. If we are verifying a proof,
 //!         // we still need to create the same constraints, so we return an equivalent-size
@@ -136,14 +137,10 @@
 // Requires nightly for aarch64
 #![cfg_attr(target_arch = "aarch64", feature(stdsimd))]
 
-#[cfg(all(feature = "pairing", feature = "blst"))]
-compile_error!("pairing and blst features are mutually exclusive. Running with --no-default-features might help.");
-
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
 
-pub mod bls;
 pub mod domain;
 pub mod gadgets;
 pub mod gpu;
@@ -153,12 +150,14 @@ pub mod multicore;
 pub mod multiexp;
 
 pub mod util_cs;
-use ff::{Field, ScalarEngine};
+use ff::Field;
 
+use pairing::Engine;
 use rustc_hash::FxHashMap as HashMap;
+use std::convert::TryInto;
 use std::io;
 use std::marker::PhantomData;
-use std::ops::{Add, Sub};
+use std::ops::{Add, AddAssign, MulAssign, Sub};
 
 const BELLMAN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -166,7 +165,7 @@ const BELLMAN_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// rank-1 quadratic constraint systems. The `Circuit` trait represents a
 /// circuit that can be synthesized. The `synthesize` method is called during
 /// CRS generation and during proving.
-pub trait Circuit<E: ScalarEngine> {
+pub trait Circuit<E: Engine> {
     /// Synthesize the circuit into a rank-1 quadratic constraint system.
     fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError>;
 }
@@ -200,14 +199,14 @@ pub enum Index {
 /// This represents a linear combination of some variables, with coefficients
 /// in the scalar field of a pairing-friendly elliptic curve group.
 #[derive(Clone)]
-pub struct LinearCombination<E: ScalarEngine>(HashMap<Variable, E::Fr>);
-impl<E: ScalarEngine> Default for LinearCombination<E> {
+pub struct LinearCombination<E: Engine>(HashMap<Variable, E::Fr>);
+impl<E: Engine> Default for LinearCombination<E> {
     fn default() -> Self {
         Self::zero()
     }
 }
 
-impl<E: ScalarEngine> LinearCombination<E> {
+impl<E: Engine> LinearCombination<E> {
     pub fn zero() -> LinearCombination<E> {
         LinearCombination(HashMap::default())
     }
@@ -226,7 +225,7 @@ impl<E: ScalarEngine> LinearCombination<E> {
     }
 }
 
-impl<E: ScalarEngine> Add<(E::Fr, Variable)> for LinearCombination<E> {
+impl<E: Engine> Add<(E::Fr, Variable)> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn add(mut self, (coeff, var): (E::Fr, Variable)) -> LinearCombination<E> {
@@ -239,18 +238,16 @@ impl<E: ScalarEngine> Add<(E::Fr, Variable)> for LinearCombination<E> {
     }
 }
 
-impl<E: ScalarEngine> Sub<(E::Fr, Variable)> for LinearCombination<E> {
+impl<E: Engine> Sub<(E::Fr, Variable)> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
-    fn sub(self, (mut coeff, var): (E::Fr, Variable)) -> LinearCombination<E> {
-        coeff.negate();
-
-        self + (coeff, var)
+    fn sub(self, (coeff, var): (E::Fr, Variable)) -> LinearCombination<E> {
+        self + (-coeff, var)
     }
 }
 
-impl<E: ScalarEngine> Add<Variable> for LinearCombination<E> {
+impl<E: Engine> Add<Variable> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn add(self, other: Variable) -> LinearCombination<E> {
@@ -258,7 +255,7 @@ impl<E: ScalarEngine> Add<Variable> for LinearCombination<E> {
     }
 }
 
-impl<E: ScalarEngine> Sub<Variable> for LinearCombination<E> {
+impl<E: Engine> Sub<Variable> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn sub(self, other: Variable) -> LinearCombination<E> {
@@ -266,7 +263,7 @@ impl<E: ScalarEngine> Sub<Variable> for LinearCombination<E> {
     }
 }
 
-impl<'a, E: ScalarEngine> Add<&'a LinearCombination<E>> for LinearCombination<E> {
+impl<'a, E: Engine> Add<&'a LinearCombination<E>> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn add(mut self, other: &'a LinearCombination<E>) -> LinearCombination<E> {
@@ -281,7 +278,7 @@ impl<'a, E: ScalarEngine> Add<&'a LinearCombination<E>> for LinearCombination<E>
     }
 }
 
-impl<'a, E: ScalarEngine> Sub<&'a LinearCombination<E>> for LinearCombination<E> {
+impl<'a, E: Engine> Sub<&'a LinearCombination<E>> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn sub(mut self, other: &'a LinearCombination<E>) -> LinearCombination<E> {
@@ -293,7 +290,7 @@ impl<'a, E: ScalarEngine> Sub<&'a LinearCombination<E>> for LinearCombination<E>
     }
 }
 
-impl<'a, E: ScalarEngine> Add<(E::Fr, &'a LinearCombination<E>)> for LinearCombination<E> {
+impl<'a, E: Engine> Add<(E::Fr, &'a LinearCombination<E>)> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn add(mut self, (coeff, other): (E::Fr, &'a LinearCombination<E>)) -> LinearCombination<E> {
@@ -307,7 +304,7 @@ impl<'a, E: ScalarEngine> Add<(E::Fr, &'a LinearCombination<E>)> for LinearCombi
     }
 }
 
-impl<'a, E: ScalarEngine> Sub<(E::Fr, &'a LinearCombination<E>)> for LinearCombination<E> {
+impl<'a, E: Engine> Sub<(E::Fr, &'a LinearCombination<E>)> for LinearCombination<E> {
     type Output = LinearCombination<E>;
 
     fn sub(mut self, (coeff, other): (E::Fr, &'a LinearCombination<E>)) -> LinearCombination<E> {
@@ -367,7 +364,7 @@ pub enum SynthesisError {
 
 /// Represents a constraint system which can have new variables
 /// allocated and constrains between them formed.
-pub trait ConstraintSystem<E: ScalarEngine>: Sized + Send {
+pub trait ConstraintSystem<E: Engine>: Sized + Send {
     /// Represents the type of the "root" of this constraint system
     /// so that nested namespaces can minimize indirection.
     type Root: ConstraintSystem<E>;
@@ -459,20 +456,20 @@ pub trait ConstraintSystem<E: ScalarEngine>: Sized + Send {
 
 /// This is a "namespaced" constraint system which borrows a constraint system (pushing
 /// a namespace context) and, when dropped, pops out of the namespace context.
-pub struct Namespace<'a, E: ScalarEngine, CS: ConstraintSystem<E>>(&'a mut CS, SendMarker<E>);
+pub struct Namespace<'a, E: Engine, CS: ConstraintSystem<E>>(&'a mut CS, SendMarker<E>);
 
-struct SendMarker<E: ScalarEngine>(PhantomData<E>);
+struct SendMarker<E: Engine>(PhantomData<E>);
 
-impl<E: ScalarEngine> Default for SendMarker<E> {
+impl<E: Engine> Default for SendMarker<E> {
     fn default() -> Self {
         Self(PhantomData)
     }
 }
 
-// Safety: ScalarEngine is static and this is only a marker
-unsafe impl<E: ScalarEngine> Send for SendMarker<E> {}
+// Safety: Engine is static and this is only a marker
+unsafe impl<E: Engine> Send for SendMarker<E> {}
 
-impl<'cs, E: ScalarEngine, CS: ConstraintSystem<E>> ConstraintSystem<E> for Namespace<'cs, E, CS> {
+impl<'cs, E: Engine, CS: ConstraintSystem<E>> ConstraintSystem<E> for Namespace<'cs, E, CS> {
     type Root = CS::Root;
 
     fn one() -> Variable {
@@ -529,7 +526,7 @@ impl<'cs, E: ScalarEngine, CS: ConstraintSystem<E>> ConstraintSystem<E> for Name
     }
 }
 
-impl<'a, E: ScalarEngine, CS: ConstraintSystem<E>> Drop for Namespace<'a, E, CS> {
+impl<'a, E: Engine, CS: ConstraintSystem<E>> Drop for Namespace<'a, E, CS> {
     fn drop(&mut self) {
         self.get_root().pop_namespace()
     }
@@ -537,7 +534,7 @@ impl<'a, E: ScalarEngine, CS: ConstraintSystem<E>> Drop for Namespace<'a, E, CS>
 
 /// Convenience implementation of ConstraintSystem<E> for mutable references to
 /// constraint systems.
-impl<'cs, E: ScalarEngine, CS: ConstraintSystem<E>> ConstraintSystem<E> for &'cs mut CS {
+impl<'cs, E: Engine, CS: ConstraintSystem<E>> ConstraintSystem<E> for &'cs mut CS {
     type Root = CS::Root;
 
     fn one() -> Variable {
@@ -590,23 +587,35 @@ impl<'cs, E: ScalarEngine, CS: ConstraintSystem<E>> ConstraintSystem<E> for &'cs
     }
 }
 
+pub(crate) fn le_bytes_to_u64s(le_bytes: &[u8]) -> Vec<u64> {
+    assert_eq!(
+        le_bytes.len() % 8,
+        0,
+        "length must be divisible by u64 byte length (8-bytes)"
+    );
+    le_bytes
+        .chunks(8)
+        .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+        .collect()
+}
+
 #[cfg(all(test, feature = "groth16"))]
 mod tests {
     use super::*;
 
     #[test]
     fn test_add_simplify() {
-        use crate::bls::Bls12;
+        use blstrs::Bls12;
 
         let n = 5;
 
         let mut lc = LinearCombination::<Bls12>::zero();
 
-        let mut expected_sums = vec![<Bls12 as ScalarEngine>::Fr::zero(); n];
+        let mut expected_sums = vec![<Bls12 as Engine>::Fr::zero(); n];
         let mut total_additions = 0;
         for (i, expected_sum) in expected_sums.iter_mut().enumerate() {
             for _ in 0..i + 1 {
-                let coeff = <Bls12 as ScalarEngine>::Fr::one();
+                let coeff = <Bls12 as Engine>::Fr::one();
                 lc = lc + (coeff, Variable::new_unchecked(Index::Aux(i)));
                 expected_sum.add_assign(&coeff);
                 total_additions += 1;

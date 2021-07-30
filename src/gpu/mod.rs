@@ -37,3 +37,10 @@ mod nogpu;
 
 #[cfg(not(feature = "gpu"))]
 pub use self::nogpu::*;
+
+#[cfg(feature = "gpu")]
+pub use ec_gpu::GpuEngine;
+#[cfg(not(feature = "gpu"))]
+pub trait GpuEngine {}
+#[cfg(not(feature = "gpu"))]
+impl<E: pairing::Engine> GpuEngine for E {}

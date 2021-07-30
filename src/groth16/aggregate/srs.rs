@@ -1,17 +1,21 @@
 use super::msm;
-use crate::bls::Engine;
 use crate::groth16::aggregate::commit::*;
 use crate::groth16::multiscalar::{precompute_fixed_window, MultiscalarPrecompOwned, WINDOW_SIZE};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use digest::Digest;
-use ff::{Field, PrimeField};
-use groupy::{CurveAffine, CurveProjective, EncodedPoint};
+use ff::{Field, PrimeField, PrimeFieldBits};
+use group::{
+    prime::{PrimeCurve, PrimeCurveAffine},
+    Curve, Group, GroupEncoding,
+};
 use memmap::Mmap;
+use pairing::Engine;
 use rayon::prelude::*;
 use sha2::Sha256;
 use std::convert::TryFrom;
 use std::io::{self, Error, ErrorKind, Read, Write};
 use std::mem::size_of;
+use std::ops::MulAssign;
 
 /// Maximum size of the generic SRS constructed from Filecoin and Zcash power of
 /// taus.
@@ -111,7 +115,12 @@ impl<E: Engine> ProverSRS<E> {
     }
 }
 
-impl<E: Engine> GenericSRS<E> {
+impl<E> GenericSRS<E>
+where
+    E: Engine,
+    <E::G1Affine as GroupEncoding>::Repr: Sync,
+    <E::G2Affine as GroupEncoding>::Repr: Sync,
+{
     /// specializes returns the prover and verifier SRS for a specific number of
     /// proofs to aggregate. The number of proofs MUST BE a power of two, it
     /// panics otherwise. The number of proofs must be inferior to half of the
@@ -159,12 +168,12 @@ impl<E: Engine> GenericSRS<E> {
         };
         let vk = VerifierSRS::<E> {
             n,
-            g: self.g_alpha_powers[0].into_projective(),
-            h: self.h_alpha_powers[0].into_projective(),
-            g_alpha: self.g_alpha_powers[1].into_projective(),
-            g_beta: self.g_beta_powers[1].into_projective(),
-            h_alpha: self.h_alpha_powers[1].into_projective(),
-            h_beta: self.h_beta_powers[1].into_projective(),
+            g: self.g_alpha_powers[0].to_curve(),
+            h: self.h_alpha_powers[0].to_curve(),
+            g_alpha: self.g_alpha_powers[1].to_curve(),
+            g_beta: self.g_beta_powers[1].to_curve(),
+            h_alpha: self.h_alpha_powers[1].to_curve(),
+            h_beta: self.h_beta_powers[1].to_curve(),
         };
         (pk, vk)
     }
@@ -211,12 +220,12 @@ impl<E: Engine> GenericSRS<E> {
 
         // The 'max_len' argument allows us to read up to that max
         // (e.g.. 2 << 14), rather then entire vec_len (i.e. 2 << 19)
-        fn mmap_read_vec<G: CurveAffine>(
+        fn mmap_read_vec<G: PrimeCurveAffine>(
             mmap: &Mmap,
             offset: &mut usize,
             max_len: usize,
         ) -> io::Result<Vec<G>> {
-            let point_len = size_of::<G::Compressed>();
+            let point_len = size_of::<G::Repr>();
             let vec_len = read_length(mmap, offset)?;
             if vec_len > MAX_SRS_SIZE {
                 return Err(io::Error::new(
@@ -236,11 +245,9 @@ impl<E: Engine> GenericSRS<E> {
 
                     // Safety: this operation is safe because it's a read on
                     // a buffer that's already allocated and being iterated on.
-                    let g1_repr: G::Compressed =
-                        unsafe { *(ptr as *const [u8] as *const G::Compressed) };
-                    g1_repr
-                        .into_affine()
-                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+                    let g1_repr = unsafe { &*(ptr as *const [u8] as *const G::Repr) };
+                    let opt: Option<G> = G::from_bytes(&g1_repr).into();
+                    opt.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "not on curve"))
                 })
                 .collect::<io::Result<Vec<_>>>()?;
             *offset += vec_len * point_len;
@@ -261,11 +268,16 @@ impl<E: Engine> GenericSRS<E> {
     }
 }
 
-pub fn setup_fake_srs<E: Engine, R: rand::RngCore>(rng: &mut R, size: usize) -> GenericSRS<E> {
-    let alpha = E::Fr::random(rng);
-    let beta = E::Fr::random(rng);
-    let g = E::G1::one();
-    let h = E::G2::one();
+pub fn setup_fake_srs<E, R>(rng: &mut R, size: usize) -> GenericSRS<E>
+where
+    E: Engine,
+    E::Fr: PrimeFieldBits,
+    R: rand_core::RngCore,
+{
+    let alpha = E::Fr::random(&mut *rng);
+    let beta = E::Fr::random(&mut *rng);
+    let g = E::G1::generator();
+    let h = E::G2::generator();
 
     let alpha = &alpha;
     let h = &h;
@@ -278,10 +290,10 @@ pub fn setup_fake_srs<E: Engine, R: rand::RngCore>(rng: &mut R, size: usize) -> 
         let h_beta_powers = structured_generators_scalar_power(2 * size, h, beta)
     };
 
-    debug_assert!(h_alpha_powers[0] == E::G2::one().into_affine());
-    debug_assert!(h_beta_powers[0] == E::G2::one().into_affine());
-    debug_assert!(g_alpha_powers[0] == E::G1::one().into_affine());
-    debug_assert!(g_beta_powers[0] == E::G1::one().into_affine());
+    debug_assert!(h_alpha_powers[0] == E::G2::generator().to_affine());
+    debug_assert!(h_beta_powers[0] == E::G2::generator().to_affine());
+    debug_assert!(g_alpha_powers[0] == E::G1::generator().to_affine());
+    debug_assert!(g_beta_powers[0] == E::G1::generator().to_affine());
 
     GenericSRS {
         g_alpha_powers,
@@ -291,11 +303,16 @@ pub fn setup_fake_srs<E: Engine, R: rand::RngCore>(rng: &mut R, size: usize) -> 
     }
 }
 
-pub(crate) fn structured_generators_scalar_power<G: CurveProjective>(
+pub(crate) fn structured_generators_scalar_power<G>(
     num: usize,
     g: &G,
     s: &G::Scalar,
-) -> Vec<G::Affine> {
+) -> Vec<G::AffineRepr>
+where
+    G: PrimeCurve,
+    G::Scalar: PrimeFieldBits,
+    G::AffineRepr: Send,
+{
     assert!(num > 0);
     let mut powers_of_scalar = Vec::with_capacity(num);
     let mut pow_s = G::Scalar::one();
@@ -313,10 +330,10 @@ pub(crate) fn structured_generators_scalar_power<G: CurveProjective>(
         &g_table,
         &powers_of_scalar[..],
     );
-    powers_of_g.into_iter().map(|v| v.into_affine()).collect()
+    powers_of_g.into_iter().map(|v| v.to_affine()).collect()
 }
 
-fn write_vec<G: CurveAffine, W: Write>(w: &mut W, v: &[G]) -> io::Result<()> {
+fn write_vec<G: PrimeCurveAffine, W: Write>(w: &mut W, v: &[G]) -> io::Result<()> {
     w.write_u32::<BigEndian>(u32::try_from(v.len()).map_err(|_| {
         Error::new(
             ErrorKind::InvalidInput,
@@ -329,12 +346,17 @@ fn write_vec<G: CurveAffine, W: Write>(w: &mut W, v: &[G]) -> io::Result<()> {
     Ok(())
 }
 
-fn write_point<G: CurveAffine, W: Write>(w: &mut W, p: &G) -> io::Result<()> {
-    w.write_all(p.into_compressed().as_ref())?;
+fn write_point<G: PrimeCurveAffine, W: Write>(w: &mut W, p: &G) -> io::Result<()> {
+    w.write_all(p.to_bytes().as_ref())?;
     Ok(())
 }
 
-fn read_vec<G: CurveAffine, R: Read>(r: &mut R) -> io::Result<Vec<G>> {
+fn read_vec<G, R>(r: &mut R) -> io::Result<Vec<G>>
+where
+    G: PrimeCurveAffine,
+    G::Repr: Sync,
+    R: Read,
+{
     let vector_len = r.read_u32::<BigEndian>()? as usize;
     if vector_len > MAX_SRS_SIZE {
         return Err(Error::new(
@@ -342,14 +364,19 @@ fn read_vec<G: CurveAffine, R: Read>(r: &mut R) -> io::Result<Vec<G>> {
             format!("invalid SRS vector length {}", vector_len),
         ));
     }
-    let mut data = vec![G::Compressed::empty(); vector_len];
-    for encoded in &mut data {
-        r.read_exact(encoded.as_mut())?;
-    }
+
+    let data: Vec<G::Repr> = (0..vector_len)
+        .map(|_| {
+            let mut el = G::Repr::default();
+            r.read_exact(el.as_mut())?;
+            Ok(el)
+        })
+        .collect::<Result<_, io::Error>>()?;
+
     data.par_iter()
         .map(|enc| {
-            enc.into_affine()
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+            let opt: Option<G> = G::from_bytes(enc).into();
+            opt.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "not on curve"))
         })
         .collect::<io::Result<Vec<_>>>()
 }
@@ -357,7 +384,7 @@ fn read_vec<G: CurveAffine, R: Read>(r: &mut R) -> io::Result<Vec<G>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bls::Bls12;
+    use blstrs::Bls12;
     use rand_core::SeedableRng;
     use std::io::Cursor;
 

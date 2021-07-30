@@ -1,11 +1,14 @@
+use std::convert::TryInto;
 use std::io;
 use std::iter;
+use std::ops::AddAssign;
 use std::sync::Arc;
 
 use bit_vec::{self, BitVec};
-use ff::{Field, PrimeField, PrimeFieldRepr, ScalarEngine};
-use groupy::{CurveAffine, CurveProjective};
+use ff::{Field, PrimeField};
+use group::{prime::PrimeCurveAffine, Group};
 use log::{info, warn};
+use pairing::Engine;
 use rayon::prelude::*;
 
 use super::multicore::{Waiter, Worker};
@@ -13,7 +16,7 @@ use super::SynthesisError;
 use crate::gpu;
 
 /// An object that builds a source of bases.
-pub trait SourceBuilder<G: CurveAffine>: Send + Sync + 'static + Clone {
+pub trait SourceBuilder<G: PrimeCurveAffine>: Send + Sync + 'static + Clone {
     type Source: Source<G>;
 
     #[allow(clippy::wrong_self_convention)]
@@ -22,18 +25,18 @@ pub trait SourceBuilder<G: CurveAffine>: Send + Sync + 'static + Clone {
 }
 
 /// A source of bases, like an iterator.
-pub trait Source<G: CurveAffine> {
+pub trait Source<G: PrimeCurveAffine> {
     /// Parses the element from the source. Fails if the point is at infinity.
     fn add_assign_mixed(
         &mut self,
-        to: &mut <G as CurveAffine>::Projective,
+        to: &mut <G as PrimeCurveAffine>::Curve,
     ) -> Result<(), SynthesisError>;
 
     /// Skips `amt` elements from the source, avoiding deserialization.
     fn skip(&mut self, amt: usize) -> Result<(), SynthesisError>;
 }
 
-impl<G: CurveAffine> SourceBuilder<G> for (Arc<Vec<G>>, usize) {
+impl<G: PrimeCurveAffine> SourceBuilder<G> for (Arc<Vec<G>>, usize) {
     type Source = (Arc<Vec<G>>, usize);
 
     fn new(self) -> (Arc<Vec<G>>, usize) {
@@ -45,10 +48,10 @@ impl<G: CurveAffine> SourceBuilder<G> for (Arc<Vec<G>>, usize) {
     }
 }
 
-impl<G: CurveAffine> Source<G> for (Arc<Vec<G>>, usize) {
+impl<G: PrimeCurveAffine> Source<G> for (Arc<Vec<G>>, usize) {
     fn add_assign_mixed(
         &mut self,
-        to: &mut <G as CurveAffine>::Projective,
+        to: &mut <G as PrimeCurveAffine>::Curve,
     ) -> Result<(), SynthesisError> {
         if self.0.len() <= self.1 {
             return Err(io::Error::new(
@@ -58,11 +61,11 @@ impl<G: CurveAffine> Source<G> for (Arc<Vec<G>>, usize) {
             .into());
         }
 
-        if self.0[self.1].is_zero() {
+        if self.0[self.1].is_identity().into() {
             return Err(SynthesisError::UnexpectedIdentity);
         }
 
-        to.add_assign_mixed(&self.0[self.1]);
+        to.add_assign(&self.0[self.1]);
 
         self.1 += 1;
 
@@ -194,35 +197,68 @@ impl DensityTracker {
     }
 }
 
+// Right shift the repr of a field element by `n` bits.
+fn shr(le_bytes: &mut [u8], mut n: u32) {
+    if n >= 8 * le_bytes.len() as u32 {
+        le_bytes.iter_mut().for_each(|byte| *byte = 0);
+        return;
+    }
+
+    // Shift each full byte towards the least significant end.
+    while n >= 8 {
+        let mut replacement = 0;
+        for byte in le_bytes.iter_mut().rev() {
+            std::mem::swap(&mut replacement, byte);
+        }
+        n -= 8;
+    }
+
+    // Starting at the most significant byte, shift the byte's `n` least significant bits into the
+    // `n` most signficant bits of the next byte.
+    if n > 0 {
+        let mut shift_in = 0;
+        for byte in le_bytes.iter_mut().rev() {
+            // Copy the byte's `n` least significant bits.
+            let shift_out = *byte << (8 - n);
+            // Shift the byte by `n` bits; zeroing its `n` most significant bits.
+            *byte >>= n;
+            // Replace the `n` most significant bits with the bits shifted out of the previous byte.
+            *byte |= shift_in;
+            shift_in = shift_out;
+        }
+    }
+}
+
 fn multiexp_inner<Q, D, G, S>(
     bases: S,
     density_map: D,
-    exponents: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+    exponents: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
     c: u32,
-) -> Result<<G as CurveAffine>::Projective, SynthesisError>
+) -> Result<<G as PrimeCurveAffine>::Curve, SynthesisError>
 where
     for<'a> &'a Q: QueryDensity,
     D: Send + Sync + 'static + Clone + AsRef<Q>,
-    G: CurveAffine,
+    G: PrimeCurveAffine,
+    <<G as PrimeCurveAffine>::Scalar as PrimeField>::Repr: Copy + Send + Sync,
     S: SourceBuilder<G>,
 {
     // Perform this region of the multiexp
     let this = move |bases: S,
                      density_map: D,
-                     exponents: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
+                     exponents: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
                      skip: u32|
           -> Result<_, SynthesisError> {
         // Accumulate the result
-        let mut acc = G::Projective::zero();
+        let mut acc = G::Curve::identity();
 
         // Build a source for the bases
         let mut bases = bases.new();
 
         // Create space for the buckets
-        let mut buckets = vec![<G as CurveAffine>::Projective::zero(); (1 << c) - 1];
+        let mut buckets = vec![<G as PrimeCurveAffine>::Curve::identity(); (1 << c) - 1];
 
-        let zero = <G::Engine as ScalarEngine>::Fr::zero().into_repr();
-        let one = <G::Engine as ScalarEngine>::Fr::one().into_repr();
+        let zero = G::Scalar::zero().to_repr();
+        let one = G::Scalar::one().to_repr();
 
         // only the first round uses this
         let handle_trivial = skip == 0;
@@ -230,9 +266,9 @@ where
         // Sort the bases into buckets
         for (&exp, density) in exponents.iter().zip(density_map.as_ref().iter()) {
             if density {
-                if exp == zero {
+                if exp.as_ref() == zero.as_ref() {
                     bases.skip(1)?;
-                } else if exp == one {
+                } else if exp.as_ref() == one.as_ref() {
                     if handle_trivial {
                         bases.add_assign_mixed(&mut acc)?;
                     } else {
@@ -240,8 +276,8 @@ where
                     }
                 } else {
                     let mut exp = exp;
-                    exp.shr(skip);
-                    let exp = exp.as_ref()[0] % (1 << c);
+                    shr(exp.as_mut(), skip);
+                    let exp = u64::from_le_bytes(exp.as_ref()[..8].try_into().unwrap()) % (1 << c);
 
                     if exp != 0 {
                         bases.add_assign_mixed(&mut buckets[(exp - 1) as usize])?;
@@ -256,7 +292,7 @@ where
         // e.g. 3a + 2b + 1c = a +
         //                    (a) + b +
         //                    ((a) + b) + c
-        let mut running_sum = G::Projective::zero();
+        let mut running_sum = G::Curve::identity();
         for exp in buckets.into_iter().rev() {
             running_sum.add_assign(&exp);
             acc.add_assign(&running_sum);
@@ -265,44 +301,50 @@ where
         Ok(acc)
     };
 
-    let parts = (0..<G::Engine as ScalarEngine>::Fr::NUM_BITS)
+    let parts = (0..<G::Scalar as PrimeField>::NUM_BITS)
         .into_par_iter()
         .step_by(c as usize)
         .map(|skip| this(bases.clone(), density_map.clone(), exponents.clone(), skip))
         .collect::<Vec<Result<_, _>>>();
 
-    parts
-        .into_iter()
-        .rev()
-        .try_fold(<G as CurveAffine>::Projective::zero(), |mut acc, part| {
+    parts.into_iter().rev().try_fold(
+        <G as PrimeCurveAffine>::Curve::identity(),
+        |mut acc, part| {
             for _ in 0..c {
-                acc.double();
+                acc = acc.double();
             }
 
             acc.add_assign(&part?);
             Ok(acc)
-        })
+        },
+    )
 }
 
 /// Perform multi-exponentiation. The caller is responsible for ensuring the
 /// query size is the same as the number of exponents.
-pub fn multiexp<Q, D, G, S>(
+pub fn multiexp<Q, D, G, E, S>(
     pool: &Worker,
     bases: S,
     density_map: D,
-    exponents: Arc<Vec<<<G::Engine as ScalarEngine>::Fr as PrimeField>::Repr>>,
-    kern: &mut Option<gpu::LockedMultiexpKernel<G::Engine>>,
-) -> Waiter<Result<<G as CurveAffine>::Projective, SynthesisError>>
+    exponents: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
+    kern: &mut Option<gpu::LockedMultiexpKernel<E>>,
+) -> Waiter<Result<<G as PrimeCurveAffine>::Curve, SynthesisError>>
 where
     for<'a> &'a Q: QueryDensity,
     D: Send + Sync + 'static + Clone + AsRef<Q>,
-    G: CurveAffine,
-    G::Engine: crate::bls::Engine,
+    G: PrimeCurveAffine,
+    E: gpu::GpuEngine,
+    E: Engine<Fr = G::Scalar>,
+    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Send + Sync,
     S: SourceBuilder<G>,
 {
     if let Some(ref mut kern) = kern {
-        if let Ok(p) = kern.with(|k: &mut gpu::MultiexpKernel<G::Engine>| {
-            let mut exps = vec![exponents[0]; exponents.len()];
+        if let Ok(p) = kern.with(|k: &mut gpu::MultiexpKernel<E>| {
+            // let mut exps = vec![exponents[0]; exponents.len()];
+            let mut exps: Vec<<<E as Engine>::Fr as PrimeField>::Repr> = {
+                let exp = E::Fr::from_repr(exponents[0]).unwrap();
+                (0..exponents.len()).map(|_| exp.to_repr()).collect()
+            };
             let mut n = 0;
             for (&e, d) in exponents.iter().zip(density_map.as_ref().iter()) {
                 if d {
@@ -344,16 +386,15 @@ where
     result
 }
 
-#[cfg(any(feature = "pairing", feature = "blst"))]
 #[test]
 fn test_with_bls12() {
-    fn naive_multiexp<G: CurveAffine>(
+    fn naive_multiexp<G: PrimeCurveAffine>(
         bases: Arc<Vec<G>>,
-        exponents: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
-    ) -> G::Projective {
+        exponents: &[G::Scalar],
+    ) -> G::Curve {
         assert_eq!(bases.len(), exponents.len());
 
-        let mut acc = G::Projective::zero();
+        let mut acc = G::Curve::identity();
 
         for (base, exp) in bases.iter().zip(exponents.iter()) {
             acc.add_assign(&base.mul(*exp));
@@ -362,30 +403,30 @@ fn test_with_bls12() {
         acc
     }
 
-    use crate::bls::{Bls12, Engine};
+    use blstrs::Bls12;
+    use group::Curve;
 
     const SAMPLES: usize = 1 << 14;
 
     let rng = &mut rand::thread_rng();
-    let v = Arc::new(
-        (0..SAMPLES)
-            .map(|_| <Bls12 as ScalarEngine>::Fr::random(rng).into_repr())
-            .collect::<Vec<_>>(),
-    );
+    let v: Vec<<Bls12 as Engine>::Fr> = (0..SAMPLES)
+        .map(|_| <Bls12 as Engine>::Fr::random(&mut *rng))
+        .collect();
     let g = Arc::new(
         (0..SAMPLES)
-            .map(|_| <Bls12 as Engine>::G1::random(rng).into_affine())
+            .map(|_| <Bls12 as Engine>::G1::random(&mut *rng).to_affine())
             .collect::<Vec<_>>(),
     );
 
     let now = std::time::Instant::now();
-    let naive = naive_multiexp(g.clone(), v.clone());
+    let naive = naive_multiexp(g.clone(), &v);
     println!("Naive: {}", now.elapsed().as_millis());
 
     let now = std::time::Instant::now();
     let pool = Worker::new();
 
-    let fast = multiexp(&pool, (g, 0), FullDensity, v, &mut None)
+    let v = Arc::new(v.into_iter().map(|fr| fr.to_repr()).collect());
+    let fast = multiexp::<_, _, _, Bls12, _>(&pool, (g, 0), FullDensity, v, &mut None)
         .wait()
         .unwrap();
 
@@ -396,7 +437,7 @@ fn test_with_bls12() {
 
 pub fn create_multiexp_kernel<E>(_log_d: usize, priority: bool) -> Option<gpu::MultiexpKernel<E>>
 where
-    E: crate::bls::Engine,
+    E: Engine + gpu::GpuEngine,
 {
     match gpu::MultiexpKernel::<E>::create(priority) {
         Ok(k) => {
@@ -413,7 +454,8 @@ where
 #[cfg(feature = "gpu")]
 #[test]
 pub fn gpu_multiexp_consistency() {
-    use crate::bls::Bls12;
+    use blstrs::Bls12;
+    use group::Curve;
     use std::time::Instant;
 
     let _ = env_logger::try_init();
@@ -424,10 +466,10 @@ pub fn gpu_multiexp_consistency() {
     let mut kern = Some(gpu::LockedMultiexpKernel::<Bls12>::new(MAX_LOG_D, false));
     let pool = Worker::new();
 
-    let rng = &mut rand::thread_rng();
+    let mut rng = rand::thread_rng();
 
     let mut bases = (0..(1 << 10))
-        .map(|_| <Bls12 as crate::bls::Engine>::G1::random(rng).into_affine())
+        .map(|_| <Bls12 as Engine>::G1::random(&mut rng).to_affine())
         .collect::<Vec<_>>();
 
     for log_d in START_LOG_D..=MAX_LOG_D {
@@ -438,7 +480,7 @@ pub fn gpu_multiexp_consistency() {
 
         let v = Arc::new(
             (0..samples)
-                .map(|_| <Bls12 as ScalarEngine>::Fr::random(rng).into_repr())
+                .map(|_| <Bls12 as Engine>::Fr::random(&mut rng).to_repr())
                 .collect::<Vec<_>>(),
         );
 
@@ -450,9 +492,10 @@ pub fn gpu_multiexp_consistency() {
         println!("GPU took {}ms.", gpu_dur);
 
         now = Instant::now();
-        let cpu = multiexp(&pool, (g.clone(), 0), FullDensity, v.clone(), &mut None)
-            .wait()
-            .unwrap();
+        let cpu =
+            multiexp::<_, _, _, Bls12, _>(&pool, (g.clone(), 0), FullDensity, v.clone(), &mut None)
+                .wait()
+                .unwrap();
         let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
         println!("CPU took {}ms.", cpu_dur);
 
@@ -499,7 +542,7 @@ mod tests {
                     }
 
                     if !partial_trackers[index].bv.is_empty() {
-                        let idx = rng.gen_range(0, partial_trackers[index].bv.len());
+                        let idx = rng.gen_range(0..partial_trackers[index].bv.len());
                         let offset: usize = partial_trackers
                             .iter()
                             .take(index)
@@ -536,15 +579,15 @@ mod tests {
         let unset = |rng: &mut XorShiftRng| {
             let mut dt = DensityTracker::new();
             dt.add_element();
-            let n = rng.gen_range(1, max_bits);
-            let target_density = rng.gen_range(0, max_density);
+            let n = rng.gen_range(1..max_bits);
+            let target_density = rng.gen_range(0..max_density);
             for _ in 1..n {
                 dt.add_element();
             }
 
             for _ in 0..target_density {
                 if n > 1 {
-                    let to_inc = rng.gen_range(1, n);
+                    let to_inc = rng.gen_range(1..n);
                     dt.inc(to_inc);
                 }
             }

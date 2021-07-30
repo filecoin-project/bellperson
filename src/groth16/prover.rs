@@ -1,15 +1,16 @@
+use std::ops::{AddAssign, Mul, MulAssign};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::bls::Engine;
 use ff::{Field, PrimeField};
-use groupy::{CurveAffine, CurveProjective};
+use group::{prime::PrimeCurveAffine, Curve};
+use pairing::{Engine, MultiMillerLoop};
 use rand_core::RngCore;
 use rayon::prelude::*;
 
 use super::{ParameterSource, Proof};
 use crate::domain::{EvaluationDomain, Scalar};
-use crate::gpu::{LockedFFTKernel, LockedMultiexpKernel};
+use crate::gpu::{self, LockedFFTKernel, LockedMultiexpKernel};
 use crate::multicore::Worker;
 use crate::multiexp::{multiexp, DensityTracker, FullDensity};
 use crate::{
@@ -252,12 +253,17 @@ pub fn create_random_proof_batch_priority<E, C, R, P: ParameterSource<E>>(
     priority: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
-    E: Engine,
+    E: gpu::GpuEngine + MultiMillerLoop,
+    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
     R: RngCore,
 {
-    let r_s = (0..circuits.len()).map(|_| E::Fr::random(rng)).collect();
-    let s_s = (0..circuits.len()).map(|_| E::Fr::random(rng)).collect();
+    let r_s = (0..circuits.len())
+        .map(|_| E::Fr::random(&mut *rng))
+        .collect();
+    let s_s = (0..circuits.len())
+        .map(|_| E::Fr::random(&mut *rng))
+        .collect();
 
     create_proof_batch_priority::<E, C, P>(circuits, params, r_s, s_s, priority)
 }
@@ -270,7 +276,8 @@ pub fn create_proof_batch_priority<E, C, P: ParameterSource<E>>(
     priority: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
-    E: Engine,
+    E: gpu::GpuEngine + MultiMillerLoop,
+    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
@@ -335,7 +342,7 @@ where
             a.truncate(a_len);
 
             Ok(Arc::new(
-                a.into_iter().map(|s| s.0.into_repr()).collect::<Vec<_>>(),
+                a.into_iter().map(|s| s.0.to_repr()).collect::<Vec<_>>(),
             ))
         })
         .collect::<Result<Vec<_>, SynthesisError>>()?;
@@ -462,16 +469,16 @@ where
                 (((h, l), (a_inputs, a_aux, b_g1_inputs, b_g1_aux, b_g2_inputs, b_g2_aux)), r),
                 s,
             )| {
-                if vk.delta_g1.is_zero() || vk.delta_g2.is_zero() {
+                if (vk.delta_g1.is_identity() | vk.delta_g2.is_identity()).into() {
                     // If this element is zero, someone is trying to perform a
                     // subversion-CRS attack.
                     return Err(SynthesisError::UnexpectedIdentity);
                 }
 
                 let mut g_a = vk.delta_g1.mul(r);
-                g_a.add_assign_mixed(&vk.alpha_g1);
+                g_a.add_assign(&vk.alpha_g1);
                 let mut g_b = vk.delta_g2.mul(s);
-                g_b.add_assign_mixed(&vk.beta_g2);
+                g_b.add_assign(&vk.beta_g2);
                 let mut g_c;
                 {
                     let mut rs = r;
@@ -499,9 +506,9 @@ where
                 g_c.add_assign(&l.wait()?);
 
                 Ok(Proof {
-                    a: g_a.into_affine(),
-                    b: g_b.into_affine(),
-                    c: g_c.into_affine(),
+                    a: g_a.to_affine(),
+                    b: g_b.to_affine(),
+                    c: g_c.to_affine(),
                 })
             },
         )
@@ -533,6 +540,7 @@ fn create_proof_batch_priority_inner<E, C>(
 >
 where
     E: Engine,
+    <<E as Engine>::Fr as PrimeField>::Repr: Sync + Send,
     C: Circuit<E> + Send,
 {
     let mut provers = circuits
@@ -563,7 +571,7 @@ where
             Arc::new(
                 input_assignment
                     .into_iter()
-                    .map(|s| s.into_repr())
+                    .map(|s| s.to_repr())
                     .collect::<Vec<_>>(),
             )
         })
@@ -576,7 +584,7 @@ where
             Arc::new(
                 aux_assignment
                     .into_iter()
-                    .map(|s| s.into_repr())
+                    .map(|s| s.to_repr())
                     .collect::<Vec<_>>(),
             )
         })
@@ -589,7 +597,7 @@ where
 mod tests {
     use super::*;
 
-    use crate::bls::{Bls12, Fr};
+    use blstrs::{Bls12, Scalar as Fr};
     use rand::Rng;
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;

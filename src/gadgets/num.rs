@@ -1,6 +1,9 @@
 //! Gadgets representing numbers in the scalar field of the underlying curve.
 
-use ff::{BitIterator, Field, PrimeField, PrimeFieldRepr, ScalarEngine};
+use std::ops::{AddAssign, MulAssign};
+
+use ff::{Field, PrimeFieldBits};
+use pairing::Engine;
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
@@ -8,12 +11,12 @@ use super::Assignment;
 
 use super::boolean::{self, AllocatedBit, Boolean};
 
-pub struct AllocatedNum<E: ScalarEngine> {
+pub struct AllocatedNum<E: Engine> {
     value: Option<E::Fr>,
     variable: Variable,
 }
 
-impl<E: ScalarEngine> Clone for AllocatedNum<E> {
+impl<E: Engine> Clone for AllocatedNum<E> {
     fn clone(&self) -> Self {
         AllocatedNum {
             value: self.value,
@@ -22,7 +25,7 @@ impl<E: ScalarEngine> Clone for AllocatedNum<E> {
     }
 }
 
-impl<E: ScalarEngine> AllocatedNum<E> {
+impl<E: Engine> AllocatedNum<E> {
     pub fn alloc<CS, F>(mut cs: CS, value: F) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<E>,
@@ -70,13 +73,14 @@ impl<E: ScalarEngine> AllocatedNum<E> {
     pub fn to_bits_le_strict<CS>(&self, mut cs: CS) -> Result<Vec<Boolean>, SynthesisError>
     where
         CS: ConstraintSystem<E>,
+        E::Fr: PrimeFieldBits,
     {
         pub fn kary_and<E, CS>(
             mut cs: CS,
             v: &[AllocatedBit],
         ) -> Result<AllocatedBit, SynthesisError>
         where
-            E: ScalarEngine,
+            E: Engine,
             CS: ConstraintSystem<E>,
         {
             assert!(!v.is_empty());
@@ -102,9 +106,11 @@ impl<E: ScalarEngine> AllocatedNum<E> {
 
         // We want to ensure that the bit representation of a is
         // less than or equal to r - 1.
-        let mut a = self.value.map(|e| BitIterator::new(e.into_repr()));
-        let mut b = E::Fr::char();
-        b.sub_noborrow(&1.into());
+        let a = self.value.map(|e| e.to_le_bits());
+        let b = (-E::Fr::one()).to_le_bits();
+
+        // Get the bits of `a` in big-endian order.
+        let mut a = a.as_ref().map(|e| e.into_iter().rev());
 
         let mut result = vec![];
 
@@ -114,15 +120,15 @@ impl<E: ScalarEngine> AllocatedNum<E> {
 
         let mut found_one = false;
         let mut i = 0;
-        for b in BitIterator::new(b) {
-            let a_bit = a.as_mut().map(|e| e.next().unwrap());
+        for b in b.into_iter().rev() {
+            let a_bit: Option<bool> = a.as_mut().map(|e| *e.next().unwrap());
 
             // Skip over unset bits at the beginning
             found_one |= b;
             if !found_one {
                 // a_bit should also be false
-                if let Some(e) = a_bit {
-                    assert!(!e);
+                if let Some(a_bit) = a_bit {
+                    assert!(!a_bit);
                 }
                 continue;
             }
@@ -178,7 +184,7 @@ impl<E: ScalarEngine> AllocatedNum<E> {
         for bit in result.iter().rev() {
             lc = lc + (coeff, bit.get_variable());
 
-            coeff.double();
+            coeff = coeff.double();
         }
 
         lc = lc - self.variable;
@@ -195,6 +201,7 @@ impl<E: ScalarEngine> AllocatedNum<E> {
     pub fn to_bits_le<CS>(&self, mut cs: CS) -> Result<Vec<Boolean>, SynthesisError>
     where
         CS: ConstraintSystem<E>,
+        E::Fr: PrimeFieldBits,
     {
         let bits = boolean::field_into_allocated_bits_le(&mut cs, self.value)?;
 
@@ -204,7 +211,7 @@ impl<E: ScalarEngine> AllocatedNum<E> {
         for bit in bits.iter() {
             lc = lc + (coeff, bit.get_variable());
 
-            coeff.double();
+            coeff = coeff.double();
         }
 
         lc = lc - self.variable;
@@ -256,7 +263,7 @@ impl<E: ScalarEngine> AllocatedNum<E> {
             || "squared num",
             || {
                 let mut tmp = *self.value.get()?;
-                tmp.square();
+                tmp = tmp.square();
 
                 value = Some(tmp);
 
@@ -287,10 +294,10 @@ impl<E: ScalarEngine> AllocatedNum<E> {
             || {
                 let tmp = *self.value.get()?;
 
-                if tmp.is_zero() {
+                if tmp.is_zero().into() {
                     Err(SynthesisError::DivisionByZero)
                 } else {
-                    Ok(tmp.inverse().unwrap())
+                    Ok(tmp.invert().unwrap())
                 }
             },
         )?;
@@ -363,12 +370,12 @@ impl<E: ScalarEngine> AllocatedNum<E> {
 }
 
 #[derive(Clone)]
-pub struct Num<E: ScalarEngine> {
+pub struct Num<E: Engine> {
     value: Option<E::Fr>,
     lc: LinearCombination<E>,
 }
 
-impl<E: ScalarEngine> From<AllocatedNum<E>> for Num<E> {
+impl<E: Engine> From<AllocatedNum<E>> for Num<E> {
     fn from(num: AllocatedNum<E>) -> Num<E> {
         Num {
             value: num.value,
@@ -377,7 +384,7 @@ impl<E: ScalarEngine> From<AllocatedNum<E>> for Num<E> {
     }
 }
 
-impl<E: ScalarEngine> Num<E> {
+impl<E: Engine> Num<E> {
     pub fn zero() -> Self {
         Num {
             value: Some(E::Fr::zero()),
@@ -442,9 +449,11 @@ impl<E: ScalarEngine> Num<E> {
 
 #[cfg(test)]
 mod test {
-    use crate::bls::{Bls12, Fr};
+    use std::ops::{AddAssign, MulAssign, SubAssign};
+
     use crate::ConstraintSystem;
-    use ff::{BitIterator, Field, PrimeField};
+    use blstrs::{Bls12, Scalar as Fr};
+    use ff::{Field, PrimeField, PrimeFieldBits};
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
@@ -464,13 +473,13 @@ mod test {
     fn test_num_squaring() {
         let mut cs = TestConstraintSystem::<Bls12>::new();
 
-        let n = AllocatedNum::alloc(&mut cs, || Ok(Fr::from_str("3").unwrap())).unwrap();
+        let n = AllocatedNum::alloc(&mut cs, || Ok(Fr::from(3u64))).unwrap();
         let n2 = n.square(&mut cs).unwrap();
 
         assert!(cs.is_satisfied());
-        assert!(cs.get("squared num") == Fr::from_str("9").unwrap());
-        assert!(n2.value.unwrap() == Fr::from_str("9").unwrap());
-        cs.set("squared num", Fr::from_str("10").unwrap());
+        assert!(cs.get("squared num") == Fr::from(9u64));
+        assert!(n2.value.unwrap() == Fr::from(9u64));
+        cs.set("squared num", Fr::from(10u64));
         assert!(!cs.is_satisfied());
     }
 
@@ -478,16 +487,14 @@ mod test {
     fn test_num_multiplication() {
         let mut cs = TestConstraintSystem::<Bls12>::new();
 
-        let n =
-            AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::from_str("12").unwrap())).unwrap();
-        let n2 =
-            AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::from_str("10").unwrap())).unwrap();
+        let n = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::from(12u64))).unwrap();
+        let n2 = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::from(10u64))).unwrap();
         let n3 = n.mul(&mut cs, &n2).unwrap();
 
         assert!(cs.is_satisfied());
-        assert!(cs.get("product num") == Fr::from_str("120").unwrap());
-        assert!(n3.value.unwrap() == Fr::from_str("120").unwrap());
-        cs.set("product num", Fr::from_str("121").unwrap());
+        assert!(cs.get("product num") == Fr::from(120u64));
+        assert!(n3.value.unwrap() == Fr::from(120u64));
+        cs.set("product num", Fr::from(121u64));
         assert!(!cs.is_satisfied());
     }
 
@@ -531,11 +538,11 @@ mod test {
         {
             let mut cs = TestConstraintSystem::<Bls12>::new();
 
-            let n = AllocatedNum::alloc(&mut cs, || Ok(Fr::from_str("3").unwrap())).unwrap();
+            let n = AllocatedNum::alloc(&mut cs, || Ok(Fr::from(3u64))).unwrap();
             n.assert_nonzero(&mut cs).unwrap();
 
             assert!(cs.is_satisfied());
-            cs.set("ephemeral inverse", Fr::from_str("3").unwrap());
+            cs.set("ephemeral inverse", Fr::from(3u64));
             assert!(cs.which_is_unsatisfied() == Some("nonzero assertion constraint"));
         }
         {
@@ -548,8 +555,7 @@ mod test {
 
     #[test]
     fn test_into_bits_strict() {
-        let mut negone = Fr::one();
-        negone.negate();
+        let negone = -Fr::one();
 
         let mut cs = TestConstraintSystem::<Bls12>::new();
 
@@ -589,15 +595,15 @@ mod test {
 
             assert!(cs.is_satisfied());
 
-            for (b, a) in BitIterator::new(r.into_repr())
-                .skip(1)
-                .zip(bits.iter().rev())
-            {
-                if let Boolean::Is(ref a) = *a {
-                    assert_eq!(b, a.get_value().unwrap());
-                } else {
-                    unreachable!()
-                }
+            for (i, b) in r.to_le_bits().iter().enumerate() {
+                // `r.to_le_bits()` contains every bit in a representation (including bits which
+                // exceed the field size), whereas the length of `bits` does not exceed the field
+                // size.
+                match bits.get(i) {
+                    Some(Boolean::Is(a)) => assert_eq!(b, a.get_value().unwrap()),
+                    Some(_) => unreachable!(),
+                    None => assert_eq!(b, false),
+                };
             }
 
             cs.set("num", Fr::random(&mut rng));
