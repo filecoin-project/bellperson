@@ -66,6 +66,7 @@ impl Worker {
         THREAD_POOL.scoped(|scope| f(scope, chunk_size))
     }
 
+    /// Executes the passed in function, and returns the result once it is finished.
     pub fn scoped<'a, F, R>(&self, f: F) -> R
     where
         F: FnOnce(&yastl::Scope<'a>) -> R,
