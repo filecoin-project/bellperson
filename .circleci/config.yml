@@ -40,6 +40,7 @@ commands:
       - run:
           name: Install libraries for GPU tests
           command: |
+            sudo apt update
             sudo apt-get update -y
             sudo apt install -y ocl-icd-opencl-dev
 
