@@ -333,6 +333,32 @@ mod test {
     }
 
     #[test]
+    fn test_full_hash() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let mut cs = TestConstraintSystem::<Bls12>::new();
+        let input_bits: Vec<_> = (0..512)
+            .map(|i| {
+                Boolean::from(
+                    AllocatedBit::alloc(
+                        cs.namespace(|| format!("input bit {}", i)),
+                        Some(rng.next_u32() % 2 != 0),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
+
+        sha256(cs.namespace(|| "sha256"), &input_bits).unwrap();
+
+        assert!(cs.is_satisfied());
+        assert_eq!(cs.num_constraints() - 512, 44874);
+    }
+
+    #[test]
     fn test_against_vectors() {
         use sha2::{Digest, Sha256};
 
