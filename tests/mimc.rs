@@ -92,8 +92,7 @@ impl<'a, E: Engine> Circuit<E> for MimcDemo<'a, E> {
             // tmp = (xL + Ci)^2
             let tmp_value = xl_value.map(|mut e| {
                 e.add_assign(&self.constants[i]);
-                e = e.square();
-                e
+                e.square()
             });
             let tmp = cs.alloc(
                 || "tmp",

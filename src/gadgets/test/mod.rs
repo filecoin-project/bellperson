@@ -112,7 +112,6 @@ fn hash_lc<E: Engine>(terms: &LinearCombination<E>, h: &mut Blake2sState) {
         let mut bytes = coeff.to_repr();
         bytes.as_mut().reverse();
         buf[9..].copy_from_slice(&bytes.as_ref());
-        // coeff.to_repr().write_be(&mut buf[9..]).unwrap();
 
         h.update(&buf);
     }

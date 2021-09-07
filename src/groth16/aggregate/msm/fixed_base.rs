@@ -68,7 +68,6 @@ where
     T::Scalar: PrimeFieldBits,
 {
     let modulus_size = <T::Scalar as PrimeField>::NUM_BITS as usize;
-    // TODO: verify this is correct
     let scalar_val: Vec<bool> = scalar.to_le_bits().into_iter().collect();
 
     let mut res = multiples_of_g[0][0].to_curve();

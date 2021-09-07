@@ -340,11 +340,8 @@ where
 {
     if let Some(ref mut kern) = kern {
         if let Ok(p) = kern.with(|k: &mut gpu::MultiexpKernel<E>| {
-            // let mut exps = vec![exponents[0]; exponents.len()];
-            let mut exps: Vec<<<E as Engine>::Fr as PrimeField>::Repr> = {
-                let exp = E::Fr::from_repr(exponents[0]).unwrap();
-                (0..exponents.len()).map(|_| exp.to_repr()).collect()
-            };
+            let mut exps: Vec<<<E as Engine>::Fr as PrimeField>::Repr> =
+                { (0..exponents.len()).map(|_| exponents[0]).collect() };
             let mut n = 0;
             for (&e, d) in exponents.iter().zip(density_map.as_ref().iter()) {
                 if d {
