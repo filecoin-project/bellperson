@@ -53,7 +53,7 @@ commands:
       - *restore-cache
       - run:
           name: Test blst (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test
+          command: TARGET=<< parameters.target >> cargo test --all
           no_output_timeout: 15m
 
   test_target_blst_gpu:
@@ -65,7 +65,7 @@ commands:
       - *restore-cache
       - run:
           name: Test blst (GPU) (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test --release --features gpu
+          command: TARGET=<< parameters.target >> cargo test --all --release --features gpu
           no_output_timeout: 30m
 
   test_target_blst_ignored:
@@ -164,10 +164,10 @@ jobs:
       - set-env-path
       - run:
           name: Run cargo clippy (default features)
-          command: cargo clippy --all-targets -- -D warnings
+          command: cargo clippy --all --all-targets -- -D warnings
       - run:
           name: Run cargo clippy (gpu)
-          command: cargo clippy --all-targets --features gpu -- -D warnings
+          command: cargo clippy --all --all-targets --features gpu -- -D warnings
 
   coverage_run:
     executor: default

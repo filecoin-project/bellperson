@@ -16,7 +16,7 @@ use bellperson::groth16::{
 };
 use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 use blstrs::{Bls12, Scalar as Fr};
-use ff::{Field, PrimeField};
+use ff::Field;
 use group::{Curve, Group};
 use pairing::{Engine, MultiMillerLoop};
 use rand::RngCore;
@@ -42,22 +42,19 @@ pub struct DummyDemo {
 impl<E: Engine> Circuit<E> for DummyDemo {
     fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         assert!(self.public >= 1);
-        let mut x_val = E::Fr::from_str("2");
-        let mut x = cs.alloc_input(|| "", || x_val.ok_or(SynthesisError::AssignmentMissing))?;
+        let mut x_val = E::Fr::from(2);
+        let mut x = cs.alloc_input(|| "", || Ok(x_val))?;
         let mut pubs = 1;
 
         for _ in 0..self.private + self.public - 1 {
             // Allocate: x * x = x2
-            let x2_val = x_val.map(|mut e| {
-                e = e.square();
-                e
-            });
+            let x2_val = x_val.square();
 
             let x2 = if pubs < self.public {
                 pubs += 1;
-                cs.alloc_input(|| "", || x2_val.ok_or(SynthesisError::AssignmentMissing))?
+                cs.alloc_input(|| "", || Ok(x2_val))?
             } else {
-                cs.alloc(|| "", || x2_val.ok_or(SynthesisError::AssignmentMissing))?
+                cs.alloc(|| "", || Ok(x2_val))?
             };
 
             // Enforce: x * x = x2
@@ -69,7 +66,7 @@ impl<E: Engine> Circuit<E> for DummyDemo {
 
         cs.enforce(
             || "",
-            |lc| lc + (x_val.unwrap(), CS::one()),
+            |lc| lc + (x_val, CS::one()),
             |lc| lc + CS::one(),
             |lc| lc + x,
         );
