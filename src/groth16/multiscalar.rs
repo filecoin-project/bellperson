@@ -1,11 +1,9 @@
-use std::mem::size_of;
+use std::convert::TryInto;
 use std::ops::AddAssign;
 
 use ff::PrimeField;
 use group::{prime::PrimeCurveAffine, Curve, Group};
 use rayon::prelude::*;
-
-use crate::le_bytes_to_u64s;
 
 pub const WINDOW_SIZE: usize = 8;
 
@@ -164,7 +162,12 @@ pub fn multiscalar<G: PrimeCurveAffine>(
     precomp_table: &dyn MultiscalarPrecomp<G>,
     nbits: usize,
 ) -> G::Curve {
-    const BITS_PER_LIMB: usize = size_of::<u64>() * 8;
+    // k is interpreted as having 64bit limbs
+    debug_assert_eq!(
+        std::mem::size_of::<<G::Scalar as ff::PrimeField>::Repr>() % 8,
+        0
+    );
+    const BITS_PER_LIMB: usize = std::mem::size_of::<u64>() * 8;
     // TODO: support more bit sizes
     if nbits % precomp_table.window_size() != 0 || BITS_PER_LIMB % precomp_table.window_size() != 0
     {
@@ -190,8 +193,9 @@ pub fn multiscalar<G: PrimeCurveAffine>(
         let mut table: &Vec<G> = &precomp_table.tables()[0];
 
         for (m, point) in k.iter().enumerate() {
-            let point = le_bytes_to_u64s(point.as_ref());
-            idx = point[limb] >> (window_in_limb * precomp_table.window_size())
+            let point_limb =
+                u64::from_le_bytes(point.as_ref()[limb * 8..(limb + 1) * 8].try_into().unwrap());
+            idx = point_limb >> (window_in_limb * precomp_table.window_size())
                 & precomp_table.window_mask();
             if idx > 0 {
                 table = &precomp_table.tables()[m];
@@ -340,7 +344,7 @@ mod tests {
                 let fast_result = multiscalar::<G1Affine>(
                     &scalars,
                     &table,
-                    size_of::<<Fr as PrimeField>::Repr>() * 8,
+                    std::mem::size_of::<<Fr as PrimeField>::Repr>() * 8,
                 );
 
                 assert_eq!(naive_result, fast_result);
@@ -371,7 +375,7 @@ mod tests {
                 let fast_result = par_multiscalar::<&Getter<G1Affine>, G1Affine>(
                     &ScalarList::Slice(&scalars),
                     &table,
-                    size_of::<<Fr as PrimeField>::Repr>() * 8,
+                    std::mem::size_of::<<Fr as PrimeField>::Repr>() * 8,
                 );
 
                 assert_eq!(naive_result, fast_result);
