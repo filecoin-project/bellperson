@@ -3,7 +3,7 @@ macro_rules! try_par {
         $(
             let mut $name = None;
         )+
-            crate::multicore::RAYON_THREAD_POOL.scope(|s| {
+            crate::multicore::RAYON_THREAD_POOL.in_place_scope(|s| {
                 $(
                     let $name = &mut $name;
                     s.spawn(move |_| {
@@ -21,7 +21,7 @@ macro_rules! par {
         $(
             let mut $name = None;
         )+
-            crate::multicore::RAYON_THREAD_POOL.scope(|s| {
+            crate::multicore::RAYON_THREAD_POOL.in_place_scope(|s| {
                 $(
                     let $name = &mut $name;
                     s.spawn(move |_| {
@@ -38,7 +38,7 @@ macro_rules! par {
             let mut $name1 = None;
             let mut $name2 = None;
         )+
-            crate::multicore::RAYON_THREAD_POOL.scope(|s| {
+            crate::multicore::RAYON_THREAD_POOL.in_place_scope(|s| {
                 $(
                     let $name1 = &mut $name1;
                     let $name2 = &mut $name2;

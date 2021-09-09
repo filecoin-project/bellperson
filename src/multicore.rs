@@ -19,7 +19,10 @@ lazy_static! {
         .and_then(|num| num.parse().ok())
         .unwrap_or_else(num_cpus::get);
     pub static ref THREAD_POOL: Pool = Pool::new(*NUM_CPUS);
-    pub static ref VERIFIER_POOL: Pool = Pool::new(NUM_CPUS.max(MAX_VERIFIER_THREADS));
+    pub static ref VERIFIER_POOL: rayon::ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(MAX_VERIFIER_THREADS)
+        .build()
+        .expect("failed to build rayon threadpool");
     pub static ref RAYON_THREAD_POOL: rayon::ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(*NUM_CPUS)
         .build()
