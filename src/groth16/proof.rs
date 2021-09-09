@@ -1,13 +1,13 @@
+use std::fmt;
 use std::io::{self, Read, Write};
+use std::marker::PhantomData;
 
 use groupy::{CurveAffine, EncodedPoint};
-
-use crate::bls::Engine;
-
+use rayon::prelude::*;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
-use std::marker::PhantomData;
+
+use crate::bls::Engine;
 
 #[derive(Clone, Debug)]
 pub struct Proof<E: Engine> {
@@ -80,142 +80,138 @@ impl<E: Engine> Proof<E> {
     }
 
     pub fn read_many(proof_bytes: &[u8], num_proofs: usize) -> io::Result<Vec<Self>> {
-        use crate::multicore::RAYON_THREAD_POOL;
-        use rayon::prelude::*;
-
         debug_assert_eq!(proof_bytes.len(), num_proofs * Self::size());
 
         // Decompress and group check in parallel
-        RAYON_THREAD_POOL.install(|| {
-            #[derive(Clone, Copy)]
-            enum ProofPart<E: Engine> {
-                A(E::G1Affine),
-                B(E::G2Affine),
-                C(E::G1Affine),
-            }
+        #[derive(Clone, Copy)]
+        enum ProofPart<E: Engine> {
+            A(E::G1Affine),
+            B(E::G2Affine),
+            C(E::G1Affine),
+        }
 
-            let parts = (0..num_proofs * 3)
-                .into_par_iter()
-                .map(|i| -> io::Result<_> {
-                    // Work on all G2 points first since they are more expensive. Avoid
-                    // having a long pole due to g2 starting late.
-                    let c = i / num_proofs;
-                    let p = i % num_proofs;
-                    let offset = Self::size() * p;
-                    match c {
-                        0 => {
-                            let mut g2_repr = <E::G2Affine as CurveAffine>::Compressed::empty();
-                            let start = offset + <E::G1Affine as CurveAffine>::Compressed::size();
-                            let end = start + <E::G2Affine as CurveAffine>::Compressed::size();
-                            g2_repr.as_mut().copy_from_slice(&proof_bytes[start..end]);
-
-                            let b = g2_repr
-                                .into_affine()
-                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                                .and_then(|e| {
-                                    if e.is_zero() {
-                                        Err(io::Error::new(
-                                            io::ErrorKind::InvalidData,
-                                            "point at infinity",
-                                        ))
-                                    } else {
-                                        Ok(e)
-                                    }
-                                })?;
-
-                            Ok(ProofPart::<E>::B(b))
-                        }
-                        1 => {
-                            let mut g1_repr = <E::G1Affine as CurveAffine>::Compressed::empty();
-                            let start = offset;
-                            let end = start + <E::G1Affine as CurveAffine>::Compressed::size();
-                            g1_repr.as_mut().copy_from_slice(&proof_bytes[start..end]);
-
-                            let a = g1_repr
-                                .into_affine()
-                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                                .and_then(|e| {
-                                    if e.is_zero() {
-                                        Err(io::Error::new(
-                                            io::ErrorKind::InvalidData,
-                                            "point at infinity",
-                                        ))
-                                    } else {
-                                        Ok(e)
-                                    }
-                                })?;
-                            Ok(ProofPart::<E>::A(a))
-                        }
-                        2 => {
-                            let mut g1_repr = <E::G1Affine as CurveAffine>::Compressed::empty();
-                            let start = offset
-                                + <E::G1Affine as CurveAffine>::Compressed::size()
-                                + <E::G2Affine as CurveAffine>::Compressed::size();
-                            let end = start + <E::G1Affine as CurveAffine>::Compressed::size();
-
-                            g1_repr.as_mut().copy_from_slice(&proof_bytes[start..end]);
-                            let c = g1_repr
-                                .into_affine()
-                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                                .and_then(|e| {
-                                    if e.is_zero() {
-                                        Err(io::Error::new(
-                                            io::ErrorKind::InvalidData,
-                                            "point at infinity",
-                                        ))
-                                    } else {
-                                        Ok(e)
-                                    }
-                                })?;
-
-                            Ok(ProofPart::<E>::C(c))
-                        }
-                        _ => unreachable!("invalid math {}", c),
-                    }
-                })
-                .collect::<io::Result<Vec<_>>>()?;
-
-            let mut proofs = vec![
-                Proof::<E> {
-                    a: <E::G1Affine as CurveAffine>::zero(),
-                    b: <E::G2Affine as CurveAffine>::zero(),
-                    c: <E::G1Affine as CurveAffine>::zero(),
-                };
-                num_proofs
-            ];
-
-            for (i, part) in parts.into_iter().enumerate() {
+        let parts = (0..num_proofs * 3)
+            .into_par_iter()
+            .with_min_len(num_proofs / 2) // only use up to 6 threads
+            .map(|i| -> io::Result<_> {
+                // Work on all G2 points first since they are more expensive. Avoid
+                // having a long pole due to g2 starting late.
                 let c = i / num_proofs;
                 let p = i % num_proofs;
-                let proof = &mut proofs[p];
+                let offset = Self::size() * p;
                 match c {
                     0 => {
-                        if let ProofPart::B(b) = part {
-                            proof.b = b;
-                        } else {
-                            unreachable!("invalid construction");
-                        };
+                        let mut g2_repr = <E::G2Affine as CurveAffine>::Compressed::empty();
+                        let start = offset + <E::G1Affine as CurveAffine>::Compressed::size();
+                        let end = start + <E::G2Affine as CurveAffine>::Compressed::size();
+                        g2_repr.as_mut().copy_from_slice(&proof_bytes[start..end]);
+
+                        let b = g2_repr
+                            .into_affine()
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+                            .and_then(|e| {
+                                if e.is_zero() {
+                                    Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        "point at infinity",
+                                    ))
+                                } else {
+                                    Ok(e)
+                                }
+                            })?;
+
+                        Ok(ProofPart::<E>::B(b))
                     }
                     1 => {
-                        if let ProofPart::A(a) = part {
-                            proof.a = a;
-                        } else {
-                            unreachable!("invalid construction");
-                        };
+                        let mut g1_repr = <E::G1Affine as CurveAffine>::Compressed::empty();
+                        let start = offset;
+                        let end = start + <E::G1Affine as CurveAffine>::Compressed::size();
+                        g1_repr.as_mut().copy_from_slice(&proof_bytes[start..end]);
+
+                        let a = g1_repr
+                            .into_affine()
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+                            .and_then(|e| {
+                                if e.is_zero() {
+                                    Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        "point at infinity",
+                                    ))
+                                } else {
+                                    Ok(e)
+                                }
+                            })?;
+                        Ok(ProofPart::<E>::A(a))
                     }
                     2 => {
-                        if let ProofPart::C(c) = part {
-                            proof.c = c;
-                        } else {
-                            unreachable!("invalid construction");
-                        };
+                        let mut g1_repr = <E::G1Affine as CurveAffine>::Compressed::empty();
+                        let start = offset
+                            + <E::G1Affine as CurveAffine>::Compressed::size()
+                            + <E::G2Affine as CurveAffine>::Compressed::size();
+                        let end = start + <E::G1Affine as CurveAffine>::Compressed::size();
+
+                        g1_repr.as_mut().copy_from_slice(&proof_bytes[start..end]);
+                        let c = g1_repr
+                            .into_affine()
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+                            .and_then(|e| {
+                                if e.is_zero() {
+                                    Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        "point at infinity",
+                                    ))
+                                } else {
+                                    Ok(e)
+                                }
+                            })?;
+
+                        Ok(ProofPart::<E>::C(c))
                     }
                     _ => unreachable!("invalid math {}", c),
                 }
-            }
+            })
+            .collect::<io::Result<Vec<_>>>()?;
 
-            Ok(proofs)
-        })
+        let mut proofs = vec![
+            Proof::<E> {
+                a: <E::G1Affine as CurveAffine>::zero(),
+                b: <E::G2Affine as CurveAffine>::zero(),
+                c: <E::G1Affine as CurveAffine>::zero(),
+            };
+            num_proofs
+        ];
+
+        for (i, part) in parts.into_iter().enumerate() {
+            let c = i / num_proofs;
+            let p = i % num_proofs;
+            let proof = &mut proofs[p];
+            match c {
+                0 => {
+                    if let ProofPart::B(b) = part {
+                        proof.b = b;
+                    } else {
+                        unreachable!("invalid construction");
+                    };
+                }
+                1 => {
+                    if let ProofPart::A(a) = part {
+                        proof.a = a;
+                    } else {
+                        unreachable!("invalid construction");
+                    };
+                }
+                2 => {
+                    if let ProofPart::C(c) = part {
+                        proof.c = c;
+                    } else {
+                        unreachable!("invalid construction");
+                    };
+                }
+                _ => unreachable!("invalid math {}", c),
+            }
+        }
+
+        Ok(proofs)
     }
 }
 

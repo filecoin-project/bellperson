@@ -1,9 +1,5 @@
 //! An interface for dealing with the kinds of parallel computations involved in
-//! `bellperson`. It's currently just a thin wrapper around [`CpuPool`] and
-//! [`rayon`] but may be extended in the future to allow for various
-//! parallelism strategies.
-//!
-//! [`CpuPool`]: futures_cpupool::CpuPool
+//! `bellperson`.
 
 use std::env;
 
@@ -11,22 +7,36 @@ use crossbeam_channel::{bounded, Receiver};
 use lazy_static::lazy_static;
 use yastl::Pool;
 
-const MAX_VERIFIER_THREADS: usize = 6;
-
 lazy_static! {
-    static ref NUM_CPUS: usize = env::var("BELLMAN_NUM_CPUS")
-        .ok()
-        .and_then(|num| num.parse().ok())
-        .unwrap_or_else(num_cpus::get);
+    static ref NUM_CPUS: usize = read_num_cpus();
     pub static ref THREAD_POOL: Pool = Pool::new(*NUM_CPUS);
-    pub static ref VERIFIER_POOL: rayon::ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(MAX_VERIFIER_THREADS)
-        .build()
-        .expect("failed to build rayon threadpool");
-    pub static ref RAYON_THREAD_POOL: rayon::ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(*NUM_CPUS)
-        .build()
-        .expect("failed to build rayon threadpool");
+}
+
+fn read_num_cpus() -> usize {
+    match env::var("BELLMAN_NUM_CPUS")
+        .ok()
+        .and_then(|num| num.parse::<usize>().ok())
+    {
+        Some(num) => {
+            log::warn!("BELLMAN_NUM_CPUS is deprecated, please switch to RAYON_NUM_THREADS");
+            // proxy to RAYON_NUM_THREAS for now
+            env::set_var("RAYON_NUM_THREADS", num.to_string());
+
+            num
+        }
+        None => {
+            match env::var("RAYON_NUM_THREADS")
+                .ok()
+                .and_then(|num| num.parse().ok())
+            {
+                Some(num) => {
+                    // rayon defaults to the same value as num_cpus::get
+                    num
+                }
+                None => num_cpus::get(),
+            }
+        }
+    }
 }
 
 #[derive(Clone, Default)]

@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use super::{ParameterSource, Proof};
 use crate::domain::{EvaluationDomain, Scalar};
 use crate::gpu::{LockedFFTKernel, LockedMultiexpKernel};
-use crate::multicore::{Worker, RAYON_THREAD_POOL};
+use crate::multicore::Worker;
 use crate::multiexp::{multiexp, DensityTracker, FullDensity};
 use crate::{
     Circuit, ConstraintSystem, Index, LinearCombination, SynthesisError, Variable, BELLMAN_VERSION,
@@ -275,14 +275,9 @@ where
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
-    // Preparing things for the proofs is done a lot in parallel with the help of Rayon. Make
-    // sure that those things run on the correct thread pool.
     let (start, mut provers, input_assignments, aux_assignments) =
-        RAYON_THREAD_POOL.install(|| create_proof_batch_priority_inner(circuits))?;
+        create_proof_batch_priority_inner(circuits)?;
 
-    // The rest of the proving also has parallelism, but not on the outer loops, but within e.g. the
-    // multiexp calculations. This is what the `Worker` is used for. It is important that calling
-    // `wait()` on the worker happens *outside* the thread pool, else deadlocks can happen.
     let worker = Worker::new();
     let input_len = input_assignments[0].len();
     let vk = params.get_vk(input_len)?.clone();

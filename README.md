@@ -66,6 +66,15 @@ The gpu extension contains some env vars that may be set externally to this libr
     env::set_var("BELLMAN_CPU_UTILIZATION", "0.5");
     ```
 
+- `RAYON_NUM_THREADS`
+   
+   Restricts the number of threads used in the library to roughly twice that number (best effort). In the past this was done using `BELLMAN_NUM_CPUS` which is now deprecated. The default is set to the number of logical cores reported on the machine.
+   
+   ```rust
+    // Example
+    env::set_var("RAYON_NUM_THREADS", "6");
+   ```
+
 #### Supported / Tested Cards
 
 Depending on the size of the proof being passed to the gpu for work, certain cards will not be able to allocate enough memory to either the FFT or Multiexp kernel. Below are a list of devices that work for small sets. In the future we will add the cuttoff point at which a given card will not be able to allocate enough memory to utilize the GPU.

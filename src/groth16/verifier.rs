@@ -4,7 +4,6 @@ use groupy::{CurveAffine, CurveProjective};
 use rayon::prelude::*;
 
 use super::{multiscalar, PreparedVerifyingKey, Proof, VerifyingKey};
-use crate::multicore::VERIFIER_POOL;
 use crate::SynthesisError;
 
 /// Generate a prepared verifying key, required to verify a proofs.
@@ -58,7 +57,7 @@ pub fn verify_proof<'a, E: Engine>(
     let mut ml_acc = E::Fqk::zero();
 
     // Start the two independent miller loops
-    VERIFIER_POOL.in_place_scope(|s| {
+    rayon::in_place_scope(|s| {
         // - Thread 1: Calculate ML alpha * beta
         let ml_a_b = &mut ml_a_b;
         s.spawn(move |_| {
@@ -71,15 +70,13 @@ pub fn verify_proof<'a, E: Engine>(
 
         // - Accumulate inputs (on the current thread)
         let subset = pvk.multiscalar.at_point(1);
-        let public_inputs_repr: Vec<_> =
-            public_inputs.iter().map(PrimeField::into_repr).collect();
+        let public_inputs_repr: Vec<_> = public_inputs.iter().map(PrimeField::into_repr).collect();
 
-        let mut acc =
-            multiscalar::par_multiscalar::<&multiscalar::Getter<E::G1Affine>, E::G1Affine>(
-                &multiscalar::ScalarList::Slice(&public_inputs_repr),
-                &subset,
-                std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
-            );
+        let mut acc = multiscalar::par_multiscalar::<&multiscalar::Getter<E::G1Affine>, E::G1Affine>(
+            &multiscalar::ScalarList::Slice(&public_inputs_repr),
+            &subset,
+            std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
+        );
 
         acc.add_assign_mixed(&pvk.ic[0]);
 
@@ -164,7 +161,7 @@ where
     let accum_y = &accum_y;
     let rand_z_repr = &rand_z_repr;
 
-    VERIFIER_POOL.in_place_scope(|s| {
+    rayon::in_place_scope(|s| {
         // - Thread 1: Calculate MillerLoop(\sum Accum_Gamma)
         let ml_g = &mut ml_g;
         s.spawn(move |_| {
@@ -247,7 +244,7 @@ where
             }
         });
 
-        // Thread 4: Calculate Y^-Accum_Y
+        // Thread 4(current): Calculate Y^-Accum_Y
         // -Accum_Y
         let mut accum_y_neg = *accum_y;
         accum_y_neg.negate();
