@@ -306,9 +306,9 @@ fn test_groth16_bench() {
     let inclusion = vec![1, 2, 3];
     for i in nb_proofs {
         let mut records = Vec::new();
+        let (pk, vk) = generic.specialize(i);
         for _ in 0..n_average {
             println!("Proofs {}", i);
-            let (pk, vk) = generic.specialize(i);
             // Aggregate proofs using inner product proofs
             let start = Instant::now();
             println!("\t-Aggregation...");

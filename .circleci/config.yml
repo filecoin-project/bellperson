@@ -101,8 +101,11 @@ commands:
       - *restore-cache
       - run:
           name: Test blst ignored (GPU) (<< parameters.target >>)
-          command: TARGET=<< parameters.target >> cargo test --release --no-default-features --features gpu,blst -- --ignored
+          command: TARGET=<< parameters.target >> cargo test --release --no-default-features --features blst -- --ignored
           no_output_timeout: 30m
+      - run:
+          name: Show results
+          command: cat aggregation.csv
 
 jobs:
 
