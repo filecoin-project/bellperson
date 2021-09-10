@@ -92,7 +92,7 @@ commands:
           command: TARGET=<< parameters.target >> cargo test --release --no-default-features --features gpu,blst
           no_output_timeout: 30m
 
-  test_target_blst_gpu_ignored:
+  test_target_blst_ignored:
     parameters:
       target:
         type: string
@@ -179,12 +179,12 @@ jobs:
       - test_target_blst_gpu:
           target: "x86_64-unknown-linux-gnu"
 
-  test_blst_gpu_ignored_x86_64-unknown-linux-gnu:
+  test_blst_ignored_x86_64-unknown-linux-gnu:
     executor: default
     steps:
       - set-env-path
       - install-gpu-deps
-      - test_target_blst_gpu_ignored:
+      - test_target_blst_ignored:
           target: "x86_64-unknown-linux-gnu"
 
   rustfmt:
@@ -294,7 +294,7 @@ workflows:
       - test_blst_gpu_x86_64-unknown-linux-gnu:
           requires:
             - cargo_fetch
-      - test_blst_gpu_ignored_x86_64-unknown-linux-gnu:
+      - test_blst_ignored_x86_64-unknown-linux-gnu:
           requires:
             - cargo_fetch
 
