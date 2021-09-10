@@ -1,8 +1,7 @@
 use super::{create_proof_batch_priority, create_random_proof_batch_priority};
 use super::{ParameterSource, Proof};
 use crate::{gpu, Circuit, SynthesisError};
-use ff::PrimeField;
-use pairing::{Engine, MultiMillerLoop};
+use pairing::MultiMillerLoop;
 use rand_core::RngCore;
 
 pub fn create_proof<E, C, P: ParameterSource<E>>(
@@ -13,7 +12,6 @@ pub fn create_proof<E, C, P: ParameterSource<E>>(
 ) -> Result<Proof<E>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
 {
     let proofs =
@@ -28,7 +26,6 @@ pub fn create_random_proof<E, C, R, P: ParameterSource<E>>(
 ) -> Result<Proof<E>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
     R: RngCore,
 {
@@ -45,7 +42,6 @@ pub fn create_proof_batch<E, C, P: ParameterSource<E>>(
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
 {
     create_proof_batch_priority::<E, C, P>(circuits, params, r, s, false)
@@ -58,7 +54,6 @@ pub fn create_random_proof_batch<E, C, R, P: ParameterSource<E>>(
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
     R: RngCore,
 {
@@ -73,7 +68,6 @@ pub fn create_proof_in_priority<E, C, P: ParameterSource<E>>(
 ) -> Result<Proof<E>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
 {
     let proofs =
@@ -88,7 +82,6 @@ pub fn create_random_proof_in_priority<E, C, R, P: ParameterSource<E>>(
 ) -> Result<Proof<E>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
     R: RngCore,
 {
@@ -105,7 +98,6 @@ pub fn create_proof_batch_in_priority<E, C, P: ParameterSource<E>>(
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
 {
     create_proof_batch_priority::<E, C, P>(circuits, params, r, s, true)
@@ -118,7 +110,6 @@ pub fn create_random_proof_batch_in_priority<E, C, R, P: ParameterSource<E>>(
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
     R: RngCore,
 {

@@ -51,7 +51,6 @@ pub fn verify_aggregate_proof<E, R>(
 where
     E: MultiMillerLoop + std::fmt::Debug,
     E::Fr: Serialize,
-    <E::Fr as PrimeField>::Repr: Clone + Send + Sync,
     <E as Engine>::Gt: Compress + Serialize,
     E::G1: Serialize,
     E::G1Affine: Serialize,
@@ -212,7 +211,6 @@ fn verify_tipp_mipp<E, R>(
 ) where
     E: MultiMillerLoop,
     E::Fr: Serialize,
-    <E::Fr as PrimeField>::Repr: Clone + Send + Sync,
     <E as Engine>::Gt: Compress + Serialize,
     E::G1: Serialize,
     E::G1Affine: Serialize,
@@ -332,7 +330,6 @@ fn gipa_verify_tipp_mipp<E>(
 where
     E: MultiMillerLoop,
     E::Fr: Serialize,
-    <E::Fr as PrimeField>::Repr: Clone + Send + Sync,
     <E as Engine>::Gt: Compress + Serialize,
     E::G1: Serialize,
 {

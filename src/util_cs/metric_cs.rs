@@ -42,7 +42,7 @@ impl Ord for OrderedVariable {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-pub struct MetricCS<E: Engine + Send> {
+pub struct MetricCS<E: Engine> {
     named_objects: HashMap<String, NamedObject>,
     current_namespace: Vec<String>,
     #[allow(clippy::type_complexity)]
@@ -56,7 +56,7 @@ pub struct MetricCS<E: Engine + Send> {
     aux: Vec<String>,
 }
 
-fn proc_lc<E: Engine + Send>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
+fn proc_lc<E: Engine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
     let mut map = BTreeMap::new();
     for (&var, &coeff) in terms.iter() {
         map.entry(OrderedVariable(var))
@@ -79,7 +79,7 @@ fn proc_lc<E: Engine + Send>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVa
     map
 }
 
-impl<E: Engine + Send> MetricCS<E> {
+impl<E: Engine> MetricCS<E> {
     pub fn new() -> Self {
         MetricCS::default()
     }
@@ -185,7 +185,7 @@ impl<E: Engine + Send> MetricCS<E> {
     }
 }
 
-impl<E: Engine + Send> Default for MetricCS<E> {
+impl<E: Engine> Default for MetricCS<E> {
     fn default() -> Self {
         let mut map = HashMap::new();
         map.insert("ONE".into(), NamedObject::Var(MetricCS::<E>::one()));
@@ -199,7 +199,7 @@ impl<E: Engine + Send> Default for MetricCS<E> {
     }
 }
 
-impl<E: Engine + Send> ConstraintSystem<E> for MetricCS<E> {
+impl<E: Engine> ConstraintSystem<E> for MetricCS<E> {
     type Root = Self;
 
     fn alloc<F, A, AR>(&mut self, annotation: A, _f: F) -> Result<Variable, SynthesisError>

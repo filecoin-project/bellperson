@@ -82,7 +82,7 @@ const SIGMA: [[usize; 16]; 10] = [
 */
 
 #[allow(clippy::too_many_arguments)]
-fn mixing_g<E: Engine + Send, CS: ConstraintSystem<E>, M>(
+fn mixing_g<E: Engine, CS: ConstraintSystem<E>, M>(
     mut cs: M,
     v: &mut [UInt32],
     a: usize,
@@ -167,7 +167,7 @@ where
        END FUNCTION.
 */
 
-fn blake2s_compression<E: Engine + Send, CS: ConstraintSystem<E>>(
+fn blake2s_compression<E: Engine, CS: ConstraintSystem<E>>(
     mut cs: CS,
     h: &mut [UInt32],
     m: &[UInt32],
@@ -340,7 +340,7 @@ fn blake2s_compression<E: Engine + Send, CS: ConstraintSystem<E>>(
         END FUNCTION.
 */
 
-pub fn blake2s<E: Engine + Send, CS: ConstraintSystem<E>>(
+pub fn blake2s<E: Engine, CS: ConstraintSystem<E>>(
     mut cs: CS,
     input: &[Boolean],
     personalization: &[u8],

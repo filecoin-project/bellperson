@@ -331,7 +331,7 @@ fn compute_path(ns: &[String], this: String) -> String {
     name
 }
 
-impl<E: Engine + Send> ConstraintSystem<E> for TestConstraintSystem<E> {
+impl<E: Engine> ConstraintSystem<E> for TestConstraintSystem<E> {
     type Root = Self;
 
     fn new() -> TestConstraintSystem<E> {

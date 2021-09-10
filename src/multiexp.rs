@@ -239,7 +239,6 @@ where
     for<'a> &'a Q: QueryDensity,
     D: Send + Sync + 'static + Clone + AsRef<Q>,
     G: PrimeCurveAffine,
-    <<G as PrimeCurveAffine>::Scalar as PrimeField>::Repr: Copy + Send + Sync,
     S: SourceBuilder<G>,
 {
     // Perform this region of the multiexp
@@ -335,7 +334,6 @@ where
     G: PrimeCurveAffine,
     E: gpu::GpuEngine,
     E: Engine<Fr = G::Scalar>,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Send + Sync,
     S: SourceBuilder<G>,
 {
     if let Some(ref mut kern) = kern {

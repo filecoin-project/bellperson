@@ -3,7 +3,7 @@ use pairing::Engine;
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
-pub struct MultiEq<E: Engine + Send, CS: ConstraintSystem<E>> {
+pub struct MultiEq<E: Engine, CS: ConstraintSystem<E>> {
     cs: CS,
     ops: usize,
     bits_used: usize,
@@ -11,7 +11,7 @@ pub struct MultiEq<E: Engine + Send, CS: ConstraintSystem<E>> {
     rhs: LinearCombination<E>,
 }
 
-impl<E: Engine + Send, CS: ConstraintSystem<E>> MultiEq<E, CS> {
+impl<E: Engine, CS: ConstraintSystem<E>> MultiEq<E, CS> {
     pub fn new(cs: CS) -> Self {
         MultiEq {
             cs,
@@ -58,7 +58,7 @@ impl<E: Engine + Send, CS: ConstraintSystem<E>> MultiEq<E, CS> {
     }
 }
 
-impl<E: Engine + Send, CS: ConstraintSystem<E>> Drop for MultiEq<E, CS> {
+impl<E: Engine, CS: ConstraintSystem<E>> Drop for MultiEq<E, CS> {
     fn drop(&mut self) {
         if self.bits_used > 0 {
             self.accumulate();
@@ -66,7 +66,7 @@ impl<E: Engine + Send, CS: ConstraintSystem<E>> Drop for MultiEq<E, CS> {
     }
 }
 
-impl<E: Engine + Send, CS: ConstraintSystem<E>> ConstraintSystem<E> for MultiEq<E, CS> {
+impl<E: Engine, CS: ConstraintSystem<E>> ConstraintSystem<E> for MultiEq<E, CS> {
     type Root = Self;
 
     fn one() -> Variable {

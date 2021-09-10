@@ -17,7 +17,7 @@ enum NamedObject {
 }
 
 /// Constraint system for testing purposes.
-pub struct TestConstraintSystem<E: Engine + Send> {
+pub struct TestConstraintSystem<E: Engine> {
     named_objects: HashMap<String, NamedObject>,
     current_namespace: Vec<String>,
     #[allow(clippy::type_complexity)]
@@ -60,7 +60,7 @@ impl Ord for OrderedVariable {
     }
 }
 
-fn proc_lc<E: Engine + Send>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
+fn proc_lc<E: Engine>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVariable, E::Fr> {
     let mut map = BTreeMap::new();
     for (&var, &coeff) in terms.iter() {
         map.entry(OrderedVariable(var))
@@ -83,7 +83,7 @@ fn proc_lc<E: Engine + Send>(terms: &LinearCombination<E>) -> BTreeMap<OrderedVa
     map
 }
 
-fn hash_lc<E: Engine + Send>(terms: &LinearCombination<E>, h: &mut Blake2s) {
+fn hash_lc<E: Engine>(terms: &LinearCombination<E>, h: &mut Blake2s) {
     let map = proc_lc::<E>(terms);
 
     let mut buf = [0u8; 9 + 32];
@@ -111,11 +111,7 @@ fn hash_lc<E: Engine + Send>(terms: &LinearCombination<E>, h: &mut Blake2s) {
     }
 }
 
-fn _eval_lc2<E: Engine + Send>(
-    terms: &LinearCombination<E>,
-    inputs: &[E::Fr],
-    aux: &[E::Fr],
-) -> E::Fr {
+fn _eval_lc2<E: Engine>(terms: &LinearCombination<E>, inputs: &[E::Fr], aux: &[E::Fr]) -> E::Fr {
     let mut acc = E::Fr::zero();
 
     for (&var, coeff) in terms.iter() {
@@ -131,7 +127,7 @@ fn _eval_lc2<E: Engine + Send>(
     acc
 }
 
-fn eval_lc<E: Engine + Send>(
+fn eval_lc<E: Engine>(
     terms: &LinearCombination<E>,
     inputs: &[(E::Fr, String)],
     aux: &[(E::Fr, String)],
@@ -151,7 +147,7 @@ fn eval_lc<E: Engine + Send>(
     acc
 }
 
-impl<E: Engine + Send> Default for TestConstraintSystem<E> {
+impl<E: Engine> Default for TestConstraintSystem<E> {
     fn default() -> Self {
         let mut map = HashMap::new();
         map.insert(
@@ -169,7 +165,7 @@ impl<E: Engine + Send> Default for TestConstraintSystem<E> {
     }
 }
 
-impl<E: Engine + Send> TestConstraintSystem<E> {
+impl<E: Engine> TestConstraintSystem<E> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -331,7 +327,7 @@ fn compute_path(ns: &[String], this: &str) -> String {
     format!("{}/{}", name, this)
 }
 
-impl<E: Engine + Send> ConstraintSystem<E> for TestConstraintSystem<E> {
+impl<E: Engine> ConstraintSystem<E> for TestConstraintSystem<E> {
     type Root = Self;
 
     fn alloc<F, A, AR>(&mut self, annotation: A, f: F) -> Result<Variable, SynthesisError>

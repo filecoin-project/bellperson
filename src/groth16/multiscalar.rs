@@ -8,16 +8,12 @@ use rayon::prelude::*;
 pub const WINDOW_SIZE: usize = 8;
 
 /// Abstraction over either a slice or a getter to produce a fixed number of scalars.
-pub enum ScalarList<
-    'a,
-    G: PrimeCurveAffine,
-    F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send,
-> {
+pub enum ScalarList<'a, G: PrimeCurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr> {
     Slice(&'a [<G::Scalar as PrimeField>::Repr]),
     Getter(F, usize),
 }
 
-impl<'a, G: PrimeCurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send>
+impl<'a, G: PrimeCurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr>
     ScalarList<'a, G, F>
 {
     pub fn len(&self) -> usize {
@@ -224,8 +220,7 @@ pub fn par_multiscalar<F, G: PrimeCurveAffine>(
     nbits: usize,
 ) -> G::Curve
 where
-    F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync + Send,
-    <G::Scalar as PrimeField>::Repr: Sync,
+    F: Fn(usize) -> <G::Scalar as PrimeField>::Repr + Sync,
 {
     let num_points = points.len();
 

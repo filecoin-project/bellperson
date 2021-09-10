@@ -254,7 +254,6 @@ pub fn create_random_proof_batch_priority<E, C, R, P: ParameterSource<E>>(
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
     R: RngCore,
 {
@@ -277,7 +276,6 @@ pub fn create_proof_batch_priority<E, C, P: ParameterSource<E>>(
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
-    <<E as Engine>::Fr as PrimeField>::Repr: Copy + Sync + Send,
     C: Circuit<E> + Send,
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
@@ -540,7 +538,6 @@ fn create_proof_batch_priority_inner<E, C>(
 >
 where
     E: Engine,
-    <<E as Engine>::Fr as PrimeField>::Repr: Sync + Send,
     C: Circuit<E> + Send,
 {
     let mut provers = circuits

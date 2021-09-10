@@ -29,7 +29,7 @@
 //! use sha2::{Digest, Sha256};
 //!
 //! /// Our own SHA-256d gadget. Input and output are in little-endian bit order.
-//! fn sha256d<E: Engine + Send, CS: ConstraintSystem<E>>(
+//! fn sha256d<E: Engine, CS: ConstraintSystem<E>>(
 //!     mut cs: CS,
 //!     data: &[Boolean],
 //! ) -> Result<Vec<Boolean>, SynthesisError> {
@@ -59,7 +59,7 @@
 //!     preimage: Option<[u8; 80]>,
 //! }
 //!
-//! impl<E: Engine + Send> Circuit<E> for MyCircuit {
+//! impl<E: Engine> Circuit<E> for MyCircuit {
 //!     fn synthesize<CS: ConstraintSystem<E>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
 //!         // Compute the values for the bits of the preimage. If we are verifying a proof,
 //!         // we still need to create the same constraints, so we return an equivalent-size
@@ -364,7 +364,7 @@ pub enum SynthesisError {
 
 /// Represents a constraint system which can have new variables
 /// allocated and constrains between them formed.
-pub trait ConstraintSystem<E: Engine>: Sized + Send {
+pub trait ConstraintSystem<E: Engine>: Sized {
     /// Represents the type of the "root" of this constraint system
     /// so that nested namespaces can minimize indirection.
     type Root: ConstraintSystem<E>;
@@ -456,18 +456,7 @@ pub trait ConstraintSystem<E: Engine>: Sized + Send {
 
 /// This is a "namespaced" constraint system which borrows a constraint system (pushing
 /// a namespace context) and, when dropped, pops out of the namespace context.
-pub struct Namespace<'a, E: Engine, CS: ConstraintSystem<E>>(&'a mut CS, SendMarker<E>);
-
-struct SendMarker<E: Engine>(PhantomData<E>);
-
-impl<E: Engine> Default for SendMarker<E> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
-
-// Safety: Engine is static and this is only a marker
-unsafe impl<E: Engine> Send for SendMarker<E> {}
+pub struct Namespace<'a, E: Engine, CS: ConstraintSystem<E>>(&'a mut CS, PhantomData<E>);
 
 impl<'cs, E: Engine, CS: ConstraintSystem<E>> ConstraintSystem<E> for Namespace<'cs, E, CS> {
     type Root = CS::Root;

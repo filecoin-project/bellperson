@@ -297,7 +297,7 @@ impl UInt32 {
     #[allow(clippy::unnecessary_unwrap)]
     pub fn addmany<E, CS, M>(mut cs: M, operands: &[Self]) -> Result<Self, SynthesisError>
     where
-        E: Engine + Send,
+        E: Engine,
         CS: ConstraintSystem<E>,
         M: ConstraintSystem<E, Root = MultiEq<E, CS>>,
     {

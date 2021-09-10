@@ -41,9 +41,6 @@ impl<E: Engine> Default for BenchCS<E> {
     }
 }
 
-// Safety: Engine is static and this is only a marker
-unsafe impl<E: Engine> Send for BenchCS<E> {}
-
 impl<E: Engine> ConstraintSystem<E> for BenchCS<E> {
     type Root = Self;
 
