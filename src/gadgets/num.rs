@@ -353,6 +353,66 @@ impl<E: ScalarEngine> AllocatedNum<E> {
         Ok((c, d))
     }
 
+    /// Takes two allocated numbers (a, b) and returns
+    /// a if condition is false and b if condition is true.
+    pub fn select<CS>(
+        mut cs: CS,
+        a: &Self,
+        b: &Self,
+        condition: &Boolean,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<E>,
+    {
+        let c = Self::alloc(cs.namespace(|| "conditional selection result"), || {
+            if *condition.get_value().get()? {
+                Ok(*b.value.get()?)
+            } else {
+                Ok(*a.value.get()?)
+            }
+        })?;
+
+        cs.enforce(
+            || "conditional selection",
+            |lc| lc - a.variable + b.variable,
+            |_| condition.lc(CS::one(), E::Fr::one()),
+            |lc| lc - a.variable + c.variable,
+        );
+
+        Ok(c)
+    }
+
+    /// Takes a slice of values and index as slice of Booleans
+    /// and performs values[index] lookup.
+    /// The values slice size has to be power of two.
+    /// values.len() == 2**index.len()
+    pub fn lookup<CS>(
+        mut cs: CS,
+        values: &[Self],
+        index: &[Boolean],
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<E>,
+    {
+        assert_eq!(values.len(), 1 << index.len());
+
+        let mut v = values.to_vec();
+
+        for (l, cond) in index.iter().enumerate() {
+            let mut cs = cs.namespace(|| format!("lookup layer {}", l));
+
+            v = v
+                .chunks(2)
+                .enumerate()
+                .map(|(i, p)| {
+                    AllocatedNum::select(cs.namespace(|| i.to_string()), &p[0], &p[1], cond)
+                })
+                .collect::<Result<Vec<_>, SynthesisError>>()?;
+        }
+
+        Ok(v[0].clone())
+    }
+
     pub fn get_value(&self) -> Option<E::Fr> {
         self.value
     }
@@ -449,7 +509,9 @@ mod test {
     use rand_xorshift::XorShiftRng;
 
     use super::{AllocatedNum, Boolean, Num};
+    use crate::gadgets::boolean::u64_into_boolean_vec_le;
     use crate::gadgets::test::*;
+    use itertools::Itertools;
 
     #[test]
     fn test_allocated_num() {
@@ -523,6 +585,68 @@ mod test {
 
             assert_eq!(a.value.unwrap(), d.value.unwrap());
             assert_eq!(b.value.unwrap(), c.value.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_num_select() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        {
+            let mut cs = TestConstraintSystem::<Bls12>::new();
+
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::random(&mut rng))).unwrap();
+            let condition = Boolean::constant(false);
+            let c = AllocatedNum::select(&mut cs, &a, &b, &condition).unwrap();
+
+            assert!(cs.is_satisfied());
+
+            assert_eq!(a.value.unwrap(), c.value.unwrap());
+        }
+
+        {
+            let mut cs = TestConstraintSystem::<Bls12>::new();
+
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::random(&mut rng))).unwrap();
+            let condition = Boolean::constant(true);
+            let c = AllocatedNum::select(&mut cs, &a, &b, &condition).unwrap();
+
+            assert!(cs.is_satisfied());
+
+            assert_eq!(b.value.unwrap(), c.value.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_num_lookup() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        {
+            let mut cs = TestConstraintSystem::<Bls12>::new();
+
+            let inputs = (0..16)
+                .map(|i| {
+                    AllocatedNum::alloc(cs.namespace(|| format!("input {}", i)), || {
+                        Ok(Fr::random(&mut rng))
+                    })
+                    .unwrap()
+                })
+                .collect_vec();
+            for i in 0..16 {
+                let mut cs = cs.namespace(|| format!("lookup {}", i));
+                let index = u64_into_boolean_vec_le(cs.namespace(|| "index"), Some(i)).unwrap();
+                let c = AllocatedNum::lookup(&mut cs, &inputs, &index[0..4]).unwrap();
+
+                assert_eq!(c.value.unwrap(), inputs[i as usize].value.unwrap());
+            }
+            assert!(cs.is_satisfied());
+            assert_eq!(cs.num_constraints() - 16 * 64, 15 * 16); // 16*64 is u64_into_boolean_vec_le
         }
     }
 
