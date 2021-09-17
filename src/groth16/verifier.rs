@@ -70,12 +70,12 @@ where
         // - Thread 1: Calculate ML alpha * beta
         let ml_a_b = &mut ml_a_b;
         s.spawn(move |_| {
-            *ml_a_b = E::multi_miller_loop(&[(&proof.a.into(), &proof.b.into())]);
+            *ml_a_b = E::multi_miller_loop(&[(&proof.a, &proof.b.into())]);
         });
 
         // - Thread 2: Calculate ML C * (-delta)
         let ml_all = &mut ml_all;
-        s.spawn(move |_| *ml_all = E::multi_miller_loop(&[(&proof.c.into(), &pvk.neg_delta_g2)]));
+        s.spawn(move |_| *ml_all = E::multi_miller_loop(&[(&proof.c, &pvk.neg_delta_g2)]));
 
         // - Accumulate inputs (on the current thread)
         let subset = pvk.multiscalar.at_point(1);
