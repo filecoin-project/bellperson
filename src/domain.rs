@@ -311,7 +311,7 @@ fn best_fft3<E: Engine + gpu::GpuEngine>(
     let mut coeffs = [a0, a1, a2];
     if let Some(ref mut kern) = kern {
         if kern
-            .with(|k: &mut gpu::FFTKernel<E>| k.radix_fft_many(&mut coeffs[..], omegas, log_ns))
+            .with(|k: &mut gpu::FFTKernel<E>| gpu_fft3(k, &mut coeffs, omegas, log_ns))
             .is_ok()
         {
             return;
@@ -335,6 +335,16 @@ pub fn gpu_fft<E: Engine + gpu::GpuEngine>(
     log_n: u32,
 ) -> gpu::GPUResult<()> {
     kern.radix_fft(a, omega, log_n)?;
+    Ok(())
+}
+
+fn gpu_fft3<E: Engine + gpu::GpuEngine>(
+    kern: &mut gpu::FFTKernel<E>,
+    coeffs: &mut [&mut [E::Fr]; 3],
+    omegas: &[E::Fr; 3],
+    log_ns: &[u32; 3],
+) -> gpu::GPUResult<()> {
+    kern.radix_fft_many(&mut coeffs[..], omegas, log_ns)?;
     Ok(())
 }
 
@@ -576,7 +586,8 @@ where
 #[cfg(any(feature = "cuda", feature = "opencl"))]
 #[cfg(test)]
 mod tests {
-    use crate::domain::{gpu_fft, parallel_fft, serial_fft, EvaluationDomain};
+    use super::*;
+
     use crate::gpu;
     use crate::multicore::Worker;
     use blstrs::{Bls12, Scalar as Fr};
@@ -620,6 +631,75 @@ mod tests {
             println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
 
             assert!(v1.coeffs == v2.coeffs);
+            println!("============================");
+        }
+    }
+
+    #[test]
+    pub fn gpu_fft3_consistency() {
+        let _ = env_logger::try_init();
+        gpu::dump_device_list();
+
+        let mut rng = rand::thread_rng();
+
+        let worker = Worker::new();
+        let log_cpus = worker.log_num_cpus();
+        let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
+
+        for log_d in 1..=20 {
+            let d = 1 << log_d;
+
+            let elems1 = (0..d)
+                .map(|_| Scalar::<Bls12>(Fr::random(&mut rng)))
+                .collect::<Vec<_>>();
+            let elems2 = (0..d)
+                .map(|_| Scalar::<Bls12>(Fr::random(&mut rng)))
+                .collect::<Vec<_>>();
+            let elems3 = (0..d)
+                .map(|_| Scalar::<Bls12>(Fr::random(&mut rng)))
+                .collect::<Vec<_>>();
+
+            let mut v11 = EvaluationDomain::<Bls12, _>::from_coeffs(elems1.clone()).unwrap();
+            let mut v12 = EvaluationDomain::<Bls12, _>::from_coeffs(elems2.clone()).unwrap();
+            let mut v13 = EvaluationDomain::<Bls12, _>::from_coeffs(elems3.clone()).unwrap();
+            let mut v21 = EvaluationDomain::<Bls12, _>::from_coeffs(elems1.clone()).unwrap();
+            let mut v22 = EvaluationDomain::<Bls12, _>::from_coeffs(elems2.clone()).unwrap();
+            let mut v23 = EvaluationDomain::<Bls12, _>::from_coeffs(elems3.clone()).unwrap();
+
+            println!("Testing FFT3 for {} elements...", d);
+
+            let mut now = Instant::now();
+            gpu_fft3(
+                &mut kern,
+                &mut v11.coeffs,
+                &mut v12.coeffs,
+                &mut v13.coeffs,
+                &[v11.omega, v12.omega, v13.omega],
+                &[log_d, log_d, log_d],
+            )
+            .expect("GPU FFT failed!");
+            let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
+            println!("GPU took {}ms.", gpu_dur);
+
+            now = Instant::now();
+            if log_d <= log_cpus {
+                serial_fft::<Bls12, _>(&mut v21.coeffs, &v21.omega, log_d);
+                serial_fft::<Bls12, _>(&mut v22.coeffs, &v22.omega, log_d);
+                serial_fft::<Bls12, _>(&mut v23.coeffs, &v23.omega, log_d);
+            } else {
+                parallel_fft::<Bls12, _>(&mut v21.coeffs, &worker, &v21.omega, log_d, log_cpus);
+                parallel_fft::<Bls12, _>(&mut v22.coeffs, &worker, &v22.omega, log_d, log_cpus);
+                parallel_fft::<Bls12, _>(&mut v23.coeffs, &worker, &v23.omega, log_d, log_cpus);
+            }
+            let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
+            println!("CPU ({} cores) took {}ms.", 1 << log_cpus, cpu_dur);
+
+            println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
+
+            assert!(v11.coeffs == v21.coeffs);
+            assert!(v12.coeffs == v22.coeffs);
+            assert!(v13.coeffs == v23.coeffs);
+
             println!("============================");
         }
     }
