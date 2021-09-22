@@ -1,51 +1,39 @@
+use std::cmp;
+use std::ops::MulAssign;
+use std::sync::{Arc, RwLock};
+
+use ff::Field;
+use log::{error, info};
+use pairing::Engine;
+use rust_gpu_tools::{program_closures, Device, LocalBuffer, Program};
+
 use crate::gpu::{
     error::{GPUError, GPUResult},
     locks, program, GpuEngine,
 };
-use ff::Field;
-use log::info;
-use pairing::Engine;
-use rust_gpu_tools::{program_closures, Device, LocalBuffer, Program};
-use std::cmp;
-use std::ops::MulAssign;
+use crate::multicore::THREAD_POOL;
 
 const LOG2_MAX_ELEMENTS: usize = 32; // At most 2^32 elements is supported.
 const MAX_LOG2_RADIX: u32 = 8; // Radix256
 const MAX_LOG2_LOCAL_WORK_SIZE: u32 = 7; // 128
 
-#[allow(clippy::upper_case_acronyms)]
-pub struct FFTKernel<E>
+pub struct SingleFftKernel<E>
 where
     E: Engine + GpuEngine,
 {
     program: Program,
-    _lock: locks::GPULock, // RFC 1857: struct fields are dropped in the same order as they are declared.
     priority: bool,
-    _phantom: std::marker::PhantomData<E>,
+    _phantom: std::marker::PhantomData<E::Fr>,
 }
 
-impl<E> FFTKernel<E>
-where
-    E: Engine + GpuEngine,
-{
-    pub fn create(priority: bool) -> GPUResult<FFTKernel<E>> {
-        let lock = locks::GPULock::lock();
-
-        // Select the first device for FFT
-        let device = *Device::all()
-            .first()
-            .ok_or(GPUError::Simple("No working GPUs found!"))?;
-
+impl<E: Engine + GpuEngine> SingleFftKernel<E> {
+    pub fn create(device: &Device, priority: bool) -> GPUResult<Self> {
         let program = program::program::<E>(&device)?;
 
-        info!("FFT: 1 working device(s) selected.");
-        info!("FFT: Device 0: {}", device.name());
-
-        Ok(FFTKernel {
+        Ok(SingleFftKernel {
             program,
-            _lock: lock,
             priority,
-            _phantom: std::marker::PhantomData,
+            _phantom: Default::default(),
         })
     }
 
@@ -126,5 +114,105 @@ where
         });
 
         self.program.run(closures, input)
+    }
+}
+
+#[allow(clippy::upper_case_acronyms)]
+pub struct FFTKernel<E>
+where
+    E: Engine + GpuEngine,
+{
+    kernels: Vec<SingleFftKernel<E>>,
+    _lock: locks::GPULock, // RFC 1857: struct fields are dropped in the same order as they are declared.
+}
+
+impl<E> FFTKernel<E>
+where
+    E: Engine + GpuEngine,
+{
+    pub fn create(priority: bool) -> GPUResult<FFTKernel<E>> {
+        let lock = locks::GPULock::lock();
+
+        let kernels: Vec<_> = Device::all()
+            .iter()
+            .filter_map(|device| {
+                let kernel = SingleFftKernel::<E>::create(device, priority);
+                if let Err(ref e) = kernel {
+                    error!(
+                        "Cannot initialize kernel for device '{}'! Error: {}",
+                        device.name(),
+                        e
+                    );
+                }
+                kernel.ok()
+            })
+            .collect();
+
+        if kernels.is_empty() {
+            return Err(GPUError::Simple("No working GPUs found!"));
+        }
+        info!("FFT: {} working device(s) selected. ", kernels.len());
+        for (i, k) in kernels.iter().enumerate() {
+            info!("FFT: Device {}: {}", i, k.program.device_name(),);
+        }
+
+        Ok(FFTKernel {
+            kernels,
+            _lock: lock,
+        })
+    }
+
+    /// Performs FFT on `a`
+    /// * `omega` - Special value `omega` is used for FFT over finite-fields
+    /// * `log_n` - Specifies log2 of number of elements
+    ///
+    /// Uses the first available GPU.
+    pub fn radix_fft(&mut self, input: &mut [E::Fr], omega: &E::Fr, log_n: u32) -> GPUResult<()> {
+        self.kernels[0].radix_fft(input, omega, log_n)
+    }
+
+    /// Performs FFT on `a`
+    /// * `omega` - Special value `omega` is used for FFT over finite-fields
+    /// * `log_n` - Specifies log2 of number of elements
+    ///
+    /// Uses all available GPUs to distribute the work.
+    pub fn radix_fft_many(
+        &mut self,
+        inputs: &mut [&mut [E::Fr]],
+        omegas: &[E::Fr],
+        log_ns: &[u32],
+    ) -> GPUResult<()> {
+        let n = inputs.len();
+        let num_devices = self.kernels.len();
+        let chunk_size = ((n as f64) / (num_devices as f64)).ceil() as usize;
+
+        let result = Arc::new(RwLock::new(Ok(())));
+
+        THREAD_POOL.scoped(|s| {
+            for (((inputs, omegas), log_ns), kern) in inputs
+                .chunks_mut(chunk_size)
+                .zip(omegas.chunks(chunk_size))
+                .zip(log_ns.chunks(chunk_size))
+                .zip(self.kernels.iter_mut())
+            {
+                let result = result.clone();
+                s.execute(move || {
+                    for ((input, omega), log_n) in
+                        inputs.iter_mut().zip(omegas.iter()).zip(log_ns.iter())
+                    {
+                        if result.read().unwrap().is_err() {
+                            break;
+                        }
+
+                        if let Err(err) = kern.radix_fft(input, omega, *log_n) {
+                            *result.write().unwrap() = Err(err);
+                            break;
+                        }
+                    }
+                });
+            }
+        });
+
+        Arc::try_unwrap(result).unwrap().into_inner().unwrap()
     }
 }

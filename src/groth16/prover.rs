@@ -537,33 +537,28 @@ where
     E: gpu::GpuEngine + MultiMillerLoop,
 {
     let mut a = EvaluationDomain::from_coeffs(std::mem::replace(&mut prover.a, Vec::new()))?;
-    a.ifft(&worker, fft_kern)?;
-    a.coset_fft(&worker, fft_kern)?;
-
     let mut b = EvaluationDomain::from_coeffs(std::mem::replace(&mut prover.b, Vec::new()))?;
+    let mut c = EvaluationDomain::from_coeffs(std::mem::replace(&mut prover.c, Vec::new()))?;
 
-    b.ifft(&worker, fft_kern)?;
-    b.coset_fft(&worker, fft_kern)?;
+    EvaluationDomain::ifft3(&mut a, &mut b, &mut c, &worker, fft_kern)?;
+    EvaluationDomain::coset_fft3(&mut a, &mut b, &mut c, &worker, fft_kern)?;
 
     a.mul_assign(&worker, &b);
     drop(b);
-
-    let mut c = EvaluationDomain::from_coeffs(std::mem::replace(&mut prover.c, Vec::new()))?;
-
-    c.ifft(&worker, fft_kern)?;
-    c.coset_fft(&worker, fft_kern)?;
     a.sub_assign(&worker, &c);
     drop(c);
 
     a.divide_by_z_on_coset(&worker);
     a.icoset_fft(&worker, fft_kern)?;
-    let mut a = a.into_coeffs();
-    let a_len = a.len() - 1;
-    a.truncate(a_len);
 
-    Ok(Arc::new(
-        a.into_iter().map(|s| s.to_repr()).collect::<Vec<_>>(),
-    ))
+    let a = a.into_coeffs();
+    let a_len = a.len() - 1;
+    let a = a
+        .into_par_iter()
+        .take(a_len)
+        .map(|s| s.to_repr())
+        .collect::<Vec<_>>();
+    Ok(Arc::new(a))
 }
 
 #[allow(clippy::type_complexity)]

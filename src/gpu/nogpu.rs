@@ -22,6 +22,14 @@ where
     pub fn radix_fft(&mut self, _: &mut [E::Fr], _: &E::Fr, _: u32) -> GPUResult<()> {
         Err(GPUError::GPUDisabled)
     }
+    pub fn radix_fft_many(
+        &mut self,
+        _: &mut [&mut [E::Fr]],
+        _: &[E::Fr],
+        _: &[u32],
+    ) -> GPUResult<()> {
+        Err(GPUError::GPUDisabled)
+    }
 }
 
 pub struct MultiexpKernel<E>(PhantomData<E>)
