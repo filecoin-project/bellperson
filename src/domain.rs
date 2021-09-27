@@ -84,27 +84,28 @@ impl<E: Engine + gpu::GpuEngine> EvaluationDomain<E> {
         worker: &Worker,
         kern: &mut Option<gpu::LockedFFTKernel<E>>,
     ) -> gpu::GPUResult<()> {
-        best_fft(kern, &mut self.coeffs, worker, &self.omega, self.exp);
+        best_fft::<E>(
+            kern,
+            worker,
+            &mut [&mut self.coeffs],
+            &[self.omega],
+            &[self.exp],
+        );
         Ok(())
     }
 
     /// Execute three FFTs in parallel.
-    pub fn fft3(
-        a0: &mut Self,
-        a1: &mut Self,
-        a2: &mut Self,
+    pub fn fft_many(
+        domains: &mut [&mut Self],
         worker: &Worker,
         kern: &mut Option<gpu::LockedFFTKernel<E>>,
     ) -> gpu::GPUResult<()> {
-        best_fft3(
-            worker,
-            kern,
-            &mut a0.coeffs,
-            &mut a1.coeffs,
-            &mut a2.coeffs,
-            &[a0.omega, a1.omega, a2.omega],
-            &[a0.exp, a1.exp, a2.exp],
-        );
+        let (mut coeffs, rest): (Vec<_>, Vec<_>) = domains
+            .iter_mut()
+            .map(|domain| (&mut domain.coeffs[..], (domain.omega, domain.exp)))
+            .unzip();
+        let (omegas, exps): (Vec<_>, Vec<_>) = rest.into_iter().unzip();
+        best_fft(kern, worker, &mut coeffs[..], &omegas, &exps);
 
         Ok(())
     }
@@ -114,48 +115,36 @@ impl<E: Engine + gpu::GpuEngine> EvaluationDomain<E> {
         worker: &Worker,
         kern: &mut Option<gpu::LockedFFTKernel<E>>,
     ) -> gpu::GPUResult<()> {
-        best_fft(kern, &mut self.coeffs, worker, &self.omegainv, self.exp);
-
-        self.inner_ifft(worker);
-
-        Ok(())
+        Self::ifft_many(&mut [self], worker, kern)
     }
 
-    fn inner_ifft(&mut self, worker: &Worker) {
-        worker.scope(self.coeffs.len(), |scope, chunk| {
-            let minv = self.minv;
-
-            for v in self.coeffs.chunks_mut(chunk) {
-                scope.execute(move || {
-                    for v in v {
-                        *v *= minv;
-                    }
-                });
-            }
-        });
-    }
-
-    /// Execute three IFFTs in parallel.
-    pub fn ifft3(
-        a0: &mut Self,
-        a1: &mut Self,
-        a2: &mut Self,
+    /// Execute multiple IFFTs in parallel.
+    pub fn ifft_many(
+        domains: &mut [&mut Self],
         worker: &Worker,
         kern: &mut Option<gpu::LockedFFTKernel<E>>,
     ) -> gpu::GPUResult<()> {
-        best_fft3(
-            worker,
-            kern,
-            &mut a0.coeffs,
-            &mut a1.coeffs,
-            &mut a2.coeffs,
-            &[a0.omegainv, a1.omegainv, a2.omegainv],
-            &[a0.exp, a1.exp, a2.exp],
-        );
+        let (mut coeffs, rest): (Vec<_>, Vec<_>) = domains
+            .iter_mut()
+            .map(|domain| (&mut domain.coeffs[..], (domain.omegainv, domain.exp)))
+            .unzip();
+        let (omegas, exps): (Vec<_>, Vec<_>) = rest.into_iter().unzip();
 
-        a0.inner_ifft(worker);
-        a1.inner_ifft(worker);
-        a2.inner_ifft(worker);
+        best_fft(kern, worker, &mut coeffs, &omegas, &exps);
+
+        for domain in domains {
+            worker.scope(domain.coeffs.len(), |scope, chunk| {
+                let minv = domain.minv;
+
+                for v in domain.coeffs.chunks_mut(chunk) {
+                    scope.execute(move || {
+                        for v in v {
+                            *v *= minv;
+                        }
+                    });
+                }
+            });
+        }
 
         Ok(())
     }
@@ -179,24 +168,20 @@ impl<E: Engine + gpu::GpuEngine> EvaluationDomain<E> {
         worker: &Worker,
         kern: &mut Option<gpu::LockedFFTKernel<E>>,
     ) -> gpu::GPUResult<()> {
-        self.distribute_powers(worker, E::Fr::multiplicative_generator());
-        self.fft(worker, kern)?;
-        Ok(())
+        Self::coset_fft_many(&mut [self], worker, kern)
     }
 
     /// Execute three Coset FFTs in parallel.
-    pub fn coset_fft3(
-        a0: &mut Self,
-        a1: &mut Self,
-        a2: &mut Self,
+    pub fn coset_fft_many(
+        domains: &mut [&mut Self],
         worker: &Worker,
         kern: &mut Option<gpu::LockedFFTKernel<E>>,
     ) -> gpu::GPUResult<()> {
-        a0.distribute_powers(worker, E::Fr::multiplicative_generator());
-        a1.distribute_powers(worker, E::Fr::multiplicative_generator());
-        a2.distribute_powers(worker, E::Fr::multiplicative_generator());
+        for domain in domains.iter_mut() {
+            domain.distribute_powers(worker, E::Fr::multiplicative_generator());
+        }
 
-        Self::fft3(a0, a1, a2, worker, kern)?;
+        Self::fft_many(domains, worker, kern)?;
 
         Ok(())
     }
@@ -277,41 +262,14 @@ impl<E: Engine + gpu::GpuEngine> EvaluationDomain<E> {
 
 fn best_fft<E: Engine + gpu::GpuEngine>(
     kern: &mut Option<gpu::LockedFFTKernel<E>>,
-    a: &mut [E::Fr],
     worker: &Worker,
-    omega: &E::Fr,
-    log_n: u32,
+    coeffs: &mut [&mut [E::Fr]],
+    omegas: &[E::Fr],
+    log_ns: &[u32],
 ) {
     if let Some(ref mut kern) = kern {
         if kern
-            .with(|k: &mut gpu::FFTKernel<E>| gpu_fft(k, a, omega, log_n))
-            .is_ok()
-        {
-            return;
-        }
-    }
-
-    let log_cpus = worker.log_num_cpus();
-    if log_n <= log_cpus {
-        serial_fft::<E>(a, omega, log_n);
-    } else {
-        parallel_fft::<E>(a, worker, omega, log_n, log_cpus);
-    }
-}
-
-fn best_fft3<E: Engine + gpu::GpuEngine>(
-    worker: &Worker,
-    kern: &mut Option<gpu::LockedFFTKernel<E>>,
-    a0: &mut [E::Fr],
-    a1: &mut [E::Fr],
-    a2: &mut [E::Fr],
-    omegas: &[E::Fr; 3],
-    log_ns: &[u32; 3],
-) {
-    let mut coeffs = [a0, a1, a2];
-    if let Some(ref mut kern) = kern {
-        if kern
-            .with(|k: &mut gpu::FFTKernel<E>| gpu_fft3(k, &mut coeffs, omegas, log_ns))
+            .with(|k: &mut gpu::FFTKernel<E>| gpu_fft(k, coeffs, omegas, log_ns))
             .is_ok()
         {
             return;
@@ -330,22 +288,11 @@ fn best_fft3<E: Engine + gpu::GpuEngine>(
 
 pub fn gpu_fft<E: Engine + gpu::GpuEngine>(
     kern: &mut gpu::FFTKernel<E>,
-    a: &mut [E::Fr],
-    omega: &E::Fr,
-    log_n: u32,
+    coeffs: &mut [&mut [E::Fr]],
+    omegas: &[E::Fr],
+    log_ns: &[u32],
 ) -> gpu::GPUResult<()> {
-    kern.radix_fft(a, omega, log_n)?;
-    Ok(())
-}
-
-fn gpu_fft3<E: Engine + gpu::GpuEngine>(
-    kern: &mut gpu::FFTKernel<E>,
-    coeffs: &mut [&mut [E::Fr]; 3],
-    omegas: &[E::Fr; 3],
-    log_ns: &[u32; 3],
-) -> gpu::GPUResult<()> {
-    kern.radix_fft_many(&mut coeffs[..], omegas, log_ns)?;
-    Ok(())
+    kern.radix_fft_many(coeffs, omegas, log_ns)
 }
 
 #[allow(clippy::many_single_char_names)]
@@ -615,7 +562,8 @@ mod tests {
             println!("Testing FFT for {} elements...", d);
 
             let mut now = Instant::now();
-            gpu_fft(&mut kern, &mut v1.coeffs, &v1.omega, log_d).expect("GPU FFT failed!");
+            gpu_fft(&mut kern, &mut [&mut v1.coeffs], &[v1.omega], &[log_d])
+                .expect("GPU FFT failed!");
             let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
             println!("GPU took {}ms.", gpu_dur);
 
@@ -649,31 +597,23 @@ mod tests {
         for log_d in 1..=20 {
             let d = 1 << log_d;
 
-            let elems1 = (0..d)
-                .map(|_| Scalar::<Bls12>(Fr::random(&mut rng)))
-                .collect::<Vec<_>>();
-            let elems2 = (0..d)
-                .map(|_| Scalar::<Bls12>(Fr::random(&mut rng)))
-                .collect::<Vec<_>>();
-            let elems3 = (0..d)
-                .map(|_| Scalar::<Bls12>(Fr::random(&mut rng)))
-                .collect::<Vec<_>>();
+            let elems1 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
+            let elems2 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
+            let elems3 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
 
-            let mut v11 = EvaluationDomain::<Bls12, _>::from_coeffs(elems1.clone()).unwrap();
-            let mut v12 = EvaluationDomain::<Bls12, _>::from_coeffs(elems2.clone()).unwrap();
-            let mut v13 = EvaluationDomain::<Bls12, _>::from_coeffs(elems3.clone()).unwrap();
-            let mut v21 = EvaluationDomain::<Bls12, _>::from_coeffs(elems1.clone()).unwrap();
-            let mut v22 = EvaluationDomain::<Bls12, _>::from_coeffs(elems2.clone()).unwrap();
-            let mut v23 = EvaluationDomain::<Bls12, _>::from_coeffs(elems3.clone()).unwrap();
+            let mut v11 = EvaluationDomain::<Bls12>::from_coeffs(elems1.clone()).unwrap();
+            let mut v12 = EvaluationDomain::<Bls12>::from_coeffs(elems2.clone()).unwrap();
+            let mut v13 = EvaluationDomain::<Bls12>::from_coeffs(elems3.clone()).unwrap();
+            let mut v21 = EvaluationDomain::<Bls12>::from_coeffs(elems1.clone()).unwrap();
+            let mut v22 = EvaluationDomain::<Bls12>::from_coeffs(elems2.clone()).unwrap();
+            let mut v23 = EvaluationDomain::<Bls12>::from_coeffs(elems3.clone()).unwrap();
 
             println!("Testing FFT3 for {} elements...", d);
 
             let mut now = Instant::now();
-            gpu_fft3(
+            gpu_fft(
                 &mut kern,
-                &mut v11.coeffs,
-                &mut v12.coeffs,
-                &mut v13.coeffs,
+                &mut [&mut v11.coeffs, &mut v12.coeffs, &mut v13.coeffs],
                 &[v11.omega, v12.omega, v13.omega],
                 &[log_d, log_d, log_d],
             )
@@ -683,13 +623,13 @@ mod tests {
 
             now = Instant::now();
             if log_d <= log_cpus {
-                serial_fft::<Bls12, _>(&mut v21.coeffs, &v21.omega, log_d);
-                serial_fft::<Bls12, _>(&mut v22.coeffs, &v22.omega, log_d);
-                serial_fft::<Bls12, _>(&mut v23.coeffs, &v23.omega, log_d);
+                serial_fft::<Bls12>(&mut v21.coeffs, &v21.omega, log_d);
+                serial_fft::<Bls12>(&mut v22.coeffs, &v22.omega, log_d);
+                serial_fft::<Bls12>(&mut v23.coeffs, &v23.omega, log_d);
             } else {
-                parallel_fft::<Bls12, _>(&mut v21.coeffs, &worker, &v21.omega, log_d, log_cpus);
-                parallel_fft::<Bls12, _>(&mut v22.coeffs, &worker, &v22.omega, log_d, log_cpus);
-                parallel_fft::<Bls12, _>(&mut v23.coeffs, &worker, &v23.omega, log_d, log_cpus);
+                parallel_fft::<Bls12>(&mut v21.coeffs, &worker, &v21.omega, log_d, log_cpus);
+                parallel_fft::<Bls12>(&mut v22.coeffs, &worker, &v22.omega, log_d, log_cpus);
+                parallel_fft::<Bls12>(&mut v23.coeffs, &worker, &v23.omega, log_d, log_cpus);
             }
             let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
             println!("CPU ({} cores) took {}ms.", 1 << log_cpus, cpu_dur);
