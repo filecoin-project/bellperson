@@ -9,9 +9,10 @@ use rust_gpu_tools::{program_closures, Device, LocalBuffer, Program};
 
 use crate::gpu::{
     error::{GPUError, GPUResult},
-    locks, program, GpuEngine,
+    program, GpuEngine,
 };
 use crate::multicore::THREAD_POOL;
+use scheduler_client::ResourceAlloc;
 
 const LOG2_MAX_ELEMENTS: usize = 32; // At most 2^32 elements is supported.
 const MAX_LOG2_RADIX: u32 = 8; // Radix256
@@ -22,8 +23,7 @@ where
     E: Engine + GpuEngine,
 {
     program: Program,
-    priority: bool,
-    _phantom: std::marker::PhantomData<E::Fr>,
+    _phantom: std::marker::PhantomData<E>,
 }
 
 impl<E: Engine + GpuEngine> SingleFftKernel<E> {
@@ -32,7 +32,6 @@ impl<E: Engine + GpuEngine> SingleFftKernel<E> {
 
         Ok(SingleFftKernel {
             program,
-            priority,
             _phantom: Default::default(),
         })
     }
@@ -80,10 +79,6 @@ impl<E: Engine + GpuEngine> SingleFftKernel<E> {
                 // 1=>radix2, 2=>radix4, 3=>radix8, ...
                 let deg = cmp::min(max_deg, log_n - log_p);
 
-                if locks::PriorityLock::should_break(self.priority) {
-                    return Err(GPUError::GPUTaken);
-                }
-
                 let n = 1u32 << log_n;
                 let local_work_size = 1 << cmp::min(deg - 1, MAX_LOG2_LOCAL_WORK_SIZE);
                 let global_work_size = n >> deg;
@@ -123,30 +118,47 @@ where
     E: Engine + GpuEngine,
 {
     kernels: Vec<SingleFftKernel<E>>,
-    _lock: locks::GPULock, // RFC 1857: struct fields are dropped in the same order as they are declared.
 }
 
 impl<E> FFTKernel<E>
 where
     E: Engine + GpuEngine,
 {
-    pub fn create(priority: bool) -> GPUResult<FFTKernel<E>> {
-        let lock = locks::GPULock::lock();
-
-        let kernels: Vec<_> = Device::all()
-            .iter()
-            .filter_map(|device| {
-                let kernel = SingleFftKernel::<E>::create(device, priority);
-                if let Err(ref e) = kernel {
-                    error!(
-                        "Cannot initialize kernel for device '{}'! Error: {}",
-                        device.name(),
-                        e
-                    );
-                }
-                kernel.ok()
-            })
-            .collect();
+    pub fn create(alloc: Option<&ResourceAlloc>) -> GPUResult<FFTKernel<E>> {
+        let kernels = if let Some(alloc) = alloc {
+            alloc
+                .devices
+                .iter()
+                .filter_map(|id| Device::by_unique_id(**id))
+                .map(|d| (d, SingleFftKernel::<E>::create(d)))
+                .filter_map(|(device, res)| {
+                    if let Err(ref e) = res {
+                        error!(
+                            "Cannot initialize kernel for device '{}'! Error: {}",
+                            device.name(),
+                            e
+                        );
+                    }
+                    res.ok()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            let devices = Device::all();
+            devices
+                .into_iter()
+                .map(|d| (d, SingleFftKernel::<E>::create(&d)))
+                .filter_map(|(device, res)| {
+                    if let Err(ref e) = res {
+                        error!(
+                            "Cannot initialize kernel for device '{}'! Error: {}",
+                            device.name(),
+                            e
+                        );
+                    }
+                    res.ok()
+                })
+                .collect::<Vec<_>>()
+        };
 
         if kernels.is_empty() {
             return Err(GPUError::Simple("No working GPUs found!"));
@@ -156,10 +168,7 @@ where
             info!("FFT: Device {}: {}", i, k.program.device_name(),);
         }
 
-        Ok(FFTKernel {
-            kernels,
-            _lock: lock,
-        })
+        Ok(FFTKernel { kernels })
     }
 
     /// Performs FFT on `a`
