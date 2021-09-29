@@ -18,7 +18,8 @@ use super::multicore::Worker;
 use super::SynthesisError;
 use crate::gpu;
 
-use log::{info, warn};
+#[cfg(any(feature = "cuda", feature = "opencl"))]
+use scheduler_client::ResourceAlloc;
 
 pub struct EvaluationDomain<E: Engine + gpu::GpuEngine> {
     coeffs: Vec<E::Fr>,
@@ -514,11 +515,16 @@ fn parallel_fft_consistency() {
     test_consistency::<Bls12, _>(rng);
 }
 
-pub fn create_fft_kernel<E>(_log_d: usize, priority: bool) -> Option<gpu::FFTKernel<E>>
+#[cfg(any(feature = "cuda", feature = "opencl"))]
+pub fn create_fft_kernel<E>(
+    _log_d: usize,
+    alloc: Option<&ResourceAlloc>,
+) -> Option<gpu::FFTKernel<E>>
 where
     E: Engine + gpu::GpuEngine,
 {
-    match gpu::FFTKernel::create(priority) {
+    use log::{info, warn};
+    match gpu::FFTKernel::create(alloc) {
         Ok(k) => {
             info!("GPU FFT kernel instantiated!");
             Some(k)
@@ -530,117 +536,118 @@ where
     }
 }
 
-#[cfg(any(feature = "cuda", feature = "opencl"))]
-#[cfg(test)]
-mod tests {
-    use super::*;
+// TODO enable this later
+//#[cfg(any(feature = "cuda", feature = "opencl"))]
+//#[cfg(test)]
+//mod tests {
+//use super::*;
 
-    use crate::gpu;
-    use crate::multicore::Worker;
-    use blstrs::{Bls12, Scalar as Fr};
-    use ff::Field;
-    use std::time::Instant;
+//use crate::gpu;
+//use crate::multicore::Worker;
+//use blstrs::{Bls12, Scalar as Fr};
+//use ff::Field;
+//use std::time::Instant;
 
-    #[test]
-    pub fn gpu_fft_consistency() {
-        let _ = env_logger::try_init();
-        gpu::dump_device_list();
+//#[test]
+//pub fn gpu_fft_consistency() {
+//let _ = env_logger::try_init();
+//gpu::dump_device_list();
 
-        let mut rng = rand::thread_rng();
+//let mut rng = rand::thread_rng();
 
-        let worker = Worker::new();
-        let log_cpus = worker.log_num_cpus();
-        let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
+//let worker = Worker::new();
+//let log_cpus = worker.log_num_cpus();
+//let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
 
-        for log_d in 1..=20 {
-            let d = 1 << log_d;
+//for log_d in 1..=20 {
+//let d = 1 << log_d;
 
-            let elems = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
-            let mut v1 = EvaluationDomain::<Bls12>::from_coeffs(elems.clone()).unwrap();
-            let mut v2 = EvaluationDomain::<Bls12>::from_coeffs(elems.clone()).unwrap();
+//let elems = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
+//let mut v1 = EvaluationDomain::<Bls12>::from_coeffs(elems.clone()).unwrap();
+//let mut v2 = EvaluationDomain::<Bls12>::from_coeffs(elems.clone()).unwrap();
 
-            println!("Testing FFT for {} elements...", d);
+//println!("Testing FFT for {} elements...", d);
 
-            let mut now = Instant::now();
-            gpu_fft(&mut kern, &mut [&mut v1.coeffs], &[v1.omega], &[log_d])
-                .expect("GPU FFT failed!");
-            let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
-            println!("GPU took {}ms.", gpu_dur);
+//let mut now = Instant::now();
+//gpu_fft(&mut kern, &mut [&mut v1.coeffs], &[v1.omega], &[log_d])
+//.expect("GPU FFT failed!");
+//let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
+//println!("GPU took {}ms.", gpu_dur);
 
-            now = Instant::now();
-            if log_d <= log_cpus {
-                serial_fft::<Bls12>(&mut v2.coeffs, &v2.omega, log_d);
-            } else {
-                parallel_fft::<Bls12>(&mut v2.coeffs, &worker, &v2.omega, log_d, log_cpus);
-            }
-            let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
-            println!("CPU ({} cores) took {}ms.", 1 << log_cpus, cpu_dur);
+//now = Instant::now();
+//if log_d <= log_cpus {
+//serial_fft::<Bls12>(&mut v2.coeffs, &v2.omega, log_d);
+//} else {
+//parallel_fft::<Bls12>(&mut v2.coeffs, &worker, &v2.omega, log_d, log_cpus);
+//}
+//let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
+//println!("CPU ({} cores) took {}ms.", 1 << log_cpus, cpu_dur);
 
-            println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
+//println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
 
-            assert!(v1.coeffs == v2.coeffs);
-            println!("============================");
-        }
-    }
+//assert!(v1.coeffs == v2.coeffs);
+//println!("============================");
+//}
+//}
 
-    #[test]
-    pub fn gpu_fft3_consistency() {
-        let _ = env_logger::try_init();
-        gpu::dump_device_list();
+//#[test]
+//pub fn gpu_fft3_consistency() {
+//let _ = env_logger::try_init();
+//gpu::dump_device_list();
 
-        let mut rng = rand::thread_rng();
+//let mut rng = rand::thread_rng();
 
-        let worker = Worker::new();
-        let log_cpus = worker.log_num_cpus();
-        let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
+//let worker = Worker::new();
+//let log_cpus = worker.log_num_cpus();
+//let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
 
-        for log_d in 1..=20 {
-            let d = 1 << log_d;
+//for log_d in 1..=20 {
+//let d = 1 << log_d;
 
-            let elems1 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
-            let elems2 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
-            let elems3 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
+//let elems1 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
+//let elems2 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
+//let elems3 = (0..d).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>();
 
-            let mut v11 = EvaluationDomain::<Bls12>::from_coeffs(elems1.clone()).unwrap();
-            let mut v12 = EvaluationDomain::<Bls12>::from_coeffs(elems2.clone()).unwrap();
-            let mut v13 = EvaluationDomain::<Bls12>::from_coeffs(elems3.clone()).unwrap();
-            let mut v21 = EvaluationDomain::<Bls12>::from_coeffs(elems1.clone()).unwrap();
-            let mut v22 = EvaluationDomain::<Bls12>::from_coeffs(elems2.clone()).unwrap();
-            let mut v23 = EvaluationDomain::<Bls12>::from_coeffs(elems3.clone()).unwrap();
+//let mut v11 = EvaluationDomain::<Bls12>::from_coeffs(elems1.clone()).unwrap();
+//let mut v12 = EvaluationDomain::<Bls12>::from_coeffs(elems2.clone()).unwrap();
+//let mut v13 = EvaluationDomain::<Bls12>::from_coeffs(elems3.clone()).unwrap();
+//let mut v21 = EvaluationDomain::<Bls12>::from_coeffs(elems1.clone()).unwrap();
+//let mut v22 = EvaluationDomain::<Bls12>::from_coeffs(elems2.clone()).unwrap();
+//let mut v23 = EvaluationDomain::<Bls12>::from_coeffs(elems3.clone()).unwrap();
 
-            println!("Testing FFT3 for {} elements...", d);
+//println!("Testing FFT3 for {} elements...", d);
 
-            let mut now = Instant::now();
-            gpu_fft(
-                &mut kern,
-                &mut [&mut v11.coeffs, &mut v12.coeffs, &mut v13.coeffs],
-                &[v11.omega, v12.omega, v13.omega],
-                &[log_d, log_d, log_d],
-            )
-            .expect("GPU FFT failed!");
-            let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
-            println!("GPU took {}ms.", gpu_dur);
+//let mut now = Instant::now();
+//gpu_fft(
+//&mut kern,
+//&mut [&mut v11.coeffs, &mut v12.coeffs, &mut v13.coeffs],
+//&[v11.omega, v12.omega, v13.omega],
+//&[log_d, log_d, log_d],
+//)
+//.expect("GPU FFT failed!");
+//let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
+//println!("GPU took {}ms.", gpu_dur);
 
-            now = Instant::now();
-            if log_d <= log_cpus {
-                serial_fft::<Bls12>(&mut v21.coeffs, &v21.omega, log_d);
-                serial_fft::<Bls12>(&mut v22.coeffs, &v22.omega, log_d);
-                serial_fft::<Bls12>(&mut v23.coeffs, &v23.omega, log_d);
-            } else {
-                parallel_fft::<Bls12>(&mut v21.coeffs, &worker, &v21.omega, log_d, log_cpus);
-                parallel_fft::<Bls12>(&mut v22.coeffs, &worker, &v22.omega, log_d, log_cpus);
-                parallel_fft::<Bls12>(&mut v23.coeffs, &worker, &v23.omega, log_d, log_cpus);
-            }
-            let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
-            println!("CPU ({} cores) took {}ms.", 1 << log_cpus, cpu_dur);
+//now = Instant::now();
+//if log_d <= log_cpus {
+//serial_fft::<Bls12>(&mut v21.coeffs, &v21.omega, log_d);
+//serial_fft::<Bls12>(&mut v22.coeffs, &v22.omega, log_d);
+//serial_fft::<Bls12>(&mut v23.coeffs, &v23.omega, log_d);
+//} else {
+//parallel_fft::<Bls12>(&mut v21.coeffs, &worker, &v21.omega, log_d, log_cpus);
+//parallel_fft::<Bls12>(&mut v22.coeffs, &worker, &v22.omega, log_d, log_cpus);
+//parallel_fft::<Bls12>(&mut v23.coeffs, &worker, &v23.omega, log_d, log_cpus);
+//}
+//let cpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
+//println!("CPU ({} cores) took {}ms.", 1 << log_cpus, cpu_dur);
 
-            println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
+//println!("Speedup: x{}", cpu_dur as f32 / gpu_dur as f32);
 
-            assert!(v11.coeffs == v21.coeffs);
-            assert!(v12.coeffs == v22.coeffs);
-            assert!(v13.coeffs == v23.coeffs);
+//assert!(v11.coeffs == v21.coeffs);
+//assert!(v12.coeffs == v22.coeffs);
+//assert!(v13.coeffs == v23.coeffs);
 
-            println!("============================");
-        }
-    }
-}
+//println!("============================");
+//}
+//}
+//}
