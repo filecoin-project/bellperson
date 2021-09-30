@@ -38,7 +38,7 @@ pairing = "0.21"
 yastl = "0.1.2"
 
 # cuda/opencl feature
-rust-gpu-tools = { version = "0.5.0", optional = true }
+rust-gpu-tools = { version = "0.5.0", optional = true, default-features = false }
 ec-gpu = { version = "0.1.0", optional = true }
 ec-gpu-gen = { version = "0.1.0", optional = true }
 fs2 = { version = "0.4.3", optional = true }
