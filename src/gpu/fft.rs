@@ -27,7 +27,7 @@ where
 }
 
 impl<E: Engine + GpuEngine> SingleFftKernel<E> {
-    pub fn create(device: &Device, priority: bool) -> GPUResult<Self> {
+    pub fn create(device: &Device) -> GPUResult<Self> {
         let program = program::program::<E>(&device)?;
 
         Ok(SingleFftKernel {
@@ -129,33 +129,37 @@ where
             alloc
                 .devices
                 .iter()
-                .filter_map(|id| Device::by_unique_id(**id))
-                .map(|d| (d, SingleFftKernel::<E>::create(d)))
-                .filter_map(|(device, res)| {
-                    if let Err(ref e) = res {
-                        error!(
-                            "Cannot initialize kernel for device '{}'! Error: {}",
-                            device.name(),
-                            e
-                        );
-                    }
-                    res.ok()
+                .filter_map(|id| {
+                    let res = if let Some(device) = Device::by_unique_id(**id) {
+                        let res = SingleFftKernel::<E>::create(device);
+                        if let Err(ref e) = res {
+                            error!(
+                                "Cannot initialize kernel for device '{}'! Error: {}",
+                                device.name(),
+                                e
+                            );
+                        }
+                        res.ok()
+                    } else {
+                        error!("Device with id: {:?} not found", **id);
+                        None
+                    };
+                    res
                 })
                 .collect::<Vec<_>>()
         } else {
-            let devices = Device::all();
-            devices
-                .into_iter()
-                .map(|d| (d, SingleFftKernel::<E>::create(&d)))
-                .filter_map(|(device, res)| {
-                    if let Err(ref e) = res {
+            Device::all()
+                .iter()
+                .filter_map(|device| {
+                    let kernel = SingleFftKernel::<E>::create(device);
+                    if let Err(ref e) = kernel {
                         error!(
                             "Cannot initialize kernel for device '{}'! Error: {}",
                             device.name(),
                             e
                         );
                     }
-                    res.ok()
+                    kernel.ok()
                 })
                 .collect::<Vec<_>>()
         };

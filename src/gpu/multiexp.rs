@@ -13,7 +13,7 @@ use std::any::TypeId;
 use std::ops::AddAssign;
 use std::sync::{Arc, RwLock};
 
-use scheduler_client::{ResourceAlloc, ResourceMemory, ResourceType};
+use scheduler_client::ResourceAlloc;
 
 const MAX_WINDOW_SIZE: usize = 10;
 const LOCAL_WORK_SIZE: usize = 256;
@@ -100,14 +100,10 @@ impl<E> SingleMultiexpKernel<E>
 where
     E: Engine + GpuEngine,
 {
-    pub fn create(device: &Device, memory: Option<u64>) -> GPUResult<SingleMultiexpKernel<E>> {
+    pub fn create(device: &Device) -> GPUResult<SingleMultiexpKernel<E>> {
         let exp_bits = exp_size::<E>() * 8;
         let core_count = utils::get_core_count(&device.name());
-        let mem = if let Some(mem) = memory {
-            mem
-        } else {
-            device.memory()
-        };
+        let mem = device.memory();
         let max_n = calc_chunk_size::<E>(mem, core_count);
         let best_n = calc_best_chunk_size(MAX_WINDOW_SIZE, core_count, exp_bits);
         let n = std::cmp::min(max_n, best_n);
@@ -228,41 +224,40 @@ where
 {
     pub fn create(alloc: Option<&ResourceAlloc>) -> GPUResult<MultiexpKernel<E>> {
         let kernels = if let Some(alloc) = alloc {
-            let mem = match alloc.requirement.resource {
-                ResourceType::Gpu(ResourceMemory::Mem(m)) => Some(m),
-                _ => None,
-            };
-
             alloc
                 .devices
                 .iter()
-                .filter_map(|id| Device::by_unique_id(**id))
-                .map(|d| (d, SingleMultiexpKernel::<E>::create(d, mem)))
-                .filter_map(|(device, res)| {
-                    if let Err(ref e) = res {
-                        error!(
-                            "Cannot initialize kernel for device '{}'! Error: {}",
-                            device.name(),
-                            e
-                        );
-                    }
-                    res.ok()
+                .filter_map(|id| {
+                    let res = if let Some(device) = Device::by_unique_id(**id) {
+                        let res = SingleMultiexpKernel::<E>::create(device);
+                        if let Err(ref e) = res {
+                            error!(
+                                "Cannot initialize kernel for device '{}'! Error: {}",
+                                device.name(),
+                                e
+                            );
+                        }
+                        res.ok()
+                    } else {
+                        error!("Device with id: {:?} not found", **id);
+                        None
+                    };
+                    res
                 })
                 .collect::<Vec<_>>()
         } else {
-            let devices = Device::all();
-            devices
-                .into_iter()
-                .map(|d| (d, SingleMultiexpKernel::<E>::create(&d, None)))
-                .filter_map(|(device, res)| {
-                    if let Err(ref e) = res {
+            Device::all()
+                .iter()
+                .filter_map(|device| {
+                    let kernel = SingleMultiexpKernel::<E>::create(device);
+                    if let Err(ref e) = kernel {
                         error!(
                             "Cannot initialize kernel for device '{}'! Error: {}",
                             device.name(),
                             e
                         );
                     }
-                    res.ok()
+                    kernel.ok()
                 })
                 .collect::<Vec<_>>()
         };
