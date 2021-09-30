@@ -39,8 +39,8 @@ impl<Scalar: PrimeField> Circuit<Scalar> for DummyDemo {
 #[test]
 pub fn test_parallel_prover() {
     use bellperson::groth16::{
-        create_random_proof, create_random_proof_in_priority, generate_random_parameters,
-        prepare_verifying_key, verify_proof,
+        create_random_proof, create_random_proof_with_type, generate_random_parameters,
+        prepare_verifying_key, verify_proof, BellTaskType,
     };
     use blstrs::Bls12;
     use rand::thread_rng;
@@ -80,7 +80,13 @@ pub fn test_parallel_prover() {
             let now = Instant::now();
 
             let rng = &mut thread_rng();
-            let proof_higher = create_random_proof_in_priority(c.clone(), &params, rng).unwrap();
+            let proof_higher = create_random_proof_with_type(
+                c.clone(),
+                &params,
+                rng,
+                Some(BellTaskType::WinningPost),
+            )
+            .unwrap();
             assert!(verify_proof(&pvk, &proof_higher, &[]).unwrap());
 
             println!(
@@ -88,9 +94,6 @@ pub fn test_parallel_prover() {
                 now.elapsed().as_secs(),
                 now.elapsed().subsec_millis()
             );
-
-            // Sleep in between higher proofs so that LOWER thread can acquire GPU again
-            thread::sleep(Duration::from_millis(3000));
         }
     });
 
