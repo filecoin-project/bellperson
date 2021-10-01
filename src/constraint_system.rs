@@ -56,6 +56,9 @@ pub enum SynthesisError {
     IncompatibleLengthVector(String),
     #[error("invalid pairing")]
     InvalidPairing,
+    #[cfg(any(feature = "cuda", feature = "opencl"))]
+    #[error("Scheduler error: {0}")]
+    Scheduler(#[from] scheduler_client::Error),
 }
 
 /// Represents a constraint system which can have new variables
