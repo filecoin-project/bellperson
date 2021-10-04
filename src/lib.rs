@@ -149,6 +149,8 @@ pub mod gpu;
 pub mod groth16;
 pub mod multicore;
 pub mod multiexp;
+#[cfg(feature = "nova")]
+pub mod nova;
 #[cfg(test)]
 pub mod test_utils;
 pub mod util_cs;

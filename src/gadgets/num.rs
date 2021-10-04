@@ -46,6 +46,45 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
         })
     }
 
+    pub fn alloc_input<CS, F>(mut cs: CS, value: F) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+        F: FnOnce() -> Result<Scalar, SynthesisError>,
+    {
+        let mut new_value = None;
+        let var = cs.alloc_input(
+            || "input num",
+            || {
+                let tmp = value()?;
+
+                new_value = Some(tmp);
+
+                Ok(tmp)
+            },
+        )?;
+
+        Ok(AllocatedNum {
+            value: new_value,
+            variable: var,
+        })
+    }
+
+    pub fn alloc_maybe_input<CS, F>(
+        cs: CS,
+        is_input: bool,
+        value: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+        F: FnOnce() -> Result<Scalar, SynthesisError>,
+    {
+        if is_input {
+            Self::alloc_input(cs, value)
+        } else {
+            Self::alloc(cs, value)
+        }
+    }
+
     pub fn inputize<CS>(&self, mut cs: CS) -> Result<(), SynthesisError>
     where
         CS: ConstraintSystem<Scalar>,
