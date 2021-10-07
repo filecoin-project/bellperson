@@ -306,18 +306,20 @@ where
             *params_h = Some(params.get_h(n));
         });
 
-        let as_call = |fft_kern: &mut Option<LockedFFTKernel<E>>| {
-            for prover in provers.iter_mut() {
-                a_s.push(execute_fft(worker, prover, fft_kern)?);
-            }
-            Ok(())
-        };
+        let as_call =
+            |_, fft_kern: &mut Option<LockedFFTKernel<E>>| -> Option<Result<(), SynthesisError>> {
+                for prover in provers.iter_mut() {
+                    match execute_fft(worker, prover, fft_kern) {
+                        Ok(v) => a_s.push(v),
+                        Err(e) => return Some(Err(e)),
+                    };
+                }
+                None
+            };
 
         client.update_context("as_solver".to_string(), format!("{}:{}", file!(), line!()));
         let mut as_solver = FftSolver::new(log_d, as_call);
-        as_solver
-            .solve(&mut client)
-            .map_err(|e| SynthesisError::from(e))
+        as_solver.solve(&mut client)
     })?;
 
     let params_h = params_h.unwrap()?;
@@ -334,7 +336,9 @@ where
 
         debug!("multiexp h");
 
-        let hs_call = |multiexp_kern: &mut Option<LockedMultiexpKernel<E>>| {
+        let hs_call = |_,
+                       multiexp_kern: &mut Option<LockedMultiexpKernel<E>>|
+         -> Option<Result<(), SynthesisError>> {
             for a in a_s.iter() {
                 h_s.push(multiexp(
                     &worker,
@@ -344,14 +348,12 @@ where
                     multiexp_kern,
                 ));
             }
-            Ok(())
+            None
         };
         client.update_context("multiexp h".to_string(), format!("{}:{}", file!(), line!()));
         let mut hs_solver = MultiexpSolver::new(log_d, hs_call);
 
-        hs_solver
-            .solve(&mut client)
-            .map_err(|e| SynthesisError::from(e))
+        hs_solver.solve(&mut client)
     })?;
 
     let params_l = params_l.unwrap()?;
@@ -376,7 +378,9 @@ where
         });
 
         debug!("multiexp l");
-        let ls_call = |multiexp_kern: &mut Option<LockedMultiexpKernel<E>>| {
+        let ls_call = |_,
+                       multiexp_kern: &mut Option<LockedMultiexpKernel<E>>|
+         -> Option<Result<(), SynthesisError>> {
             for aux in aux_assignments.iter() {
                 l_s.push(multiexp(
                     &worker,
@@ -386,14 +390,12 @@ where
                     multiexp_kern,
                 ));
             }
-            Ok(())
+            None
         };
         client.update_context("multiexp l".to_string(), format!("{}:{}", file!(), line!()));
         let mut ls_solver = MultiexpSolver::new(log_d, ls_call);
 
-        ls_solver
-            .solve(&mut client)
-            .map_err(|e| SynthesisError::from(e))
+        ls_solver.solve(&mut client)
     })?;
 
     debug!("get_a b_g1 b_g2");
@@ -403,11 +405,16 @@ where
 
     debug!("multiexp a b_g1 b_g2");
     let mut inputs = vec![];
-    let inputs_call = |multiexp_kern: &mut Option<LockedMultiexpKernel<E>>| {
-        inputs = provers
+    // this block makes multiple calls to multiexp so it is better to
+    // increase the level of granularity here to make room for preemption
+    let inputs_call = |index,
+                       multiexp_kern: &mut Option<LockedMultiexpKernel<E>>|
+     -> Option<Result<(), SynthesisError>> {
+        provers
             .iter()
-            .zip(input_assignments.iter())
-            .zip(aux_assignments.iter())
+            .nth(index)
+            .zip(input_assignments.iter().nth(index))
+            .zip(aux_assignments.iter().nth(index))
             .map(|((prover, input_assignment), aux_assignment)| {
                 let a_inputs = multiexp(
                     &worker,
@@ -460,17 +467,16 @@ where
                     multiexp_kern,
                 );
 
-                (
+                inputs.push((
                     a_inputs,
                     a_aux,
                     b_g1_inputs,
                     b_g1_aux,
                     b_g2_inputs,
                     b_g2_aux,
-                )
+                ));
+                Ok(())
             })
-            .collect::<Vec<_>>();
-        Ok(())
     };
     client.update_context(
         "multiexp a b_g1 b_g2".to_string(),
@@ -478,9 +484,7 @@ where
     );
     let mut inputs_solver = MultiexpSolver::new(log_d, inputs_call);
 
-    inputs_solver
-        .solve(&mut client)
-        .map_err(|e| SynthesisError::from(e))?;
+    inputs_solver.solve(&mut client)?;
 
     drop(a_inputs_source);
     drop(a_aux_source);

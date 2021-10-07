@@ -47,17 +47,18 @@ macro_rules! solver {
     ($class:ident, $kern:ident) => {
         pub struct $class<E, F, R>
         where
-            for<'a> F: FnMut(&'a mut Option<$kern<E>>) -> Result<R, SynthesisError>,
+            for<'a> F: FnMut(usize, &'a mut Option<$kern<E>>) -> Option<Result<R, SynthesisError>>,
             E: Engine + gpu::GpuEngine,
         {
             kernel: Option<$kern<E>>,
             _log_d: usize,
             call: F,
+            index: usize,
         }
 
         impl<E, F, R> $class<E, F, R>
         where
-            for<'a> F: FnMut(&'a mut Option<$kern<E>>) -> Result<R, SynthesisError>,
+            for<'a> F: FnMut(usize, &'a mut Option<$kern<E>>) -> Option<Result<R, SynthesisError>>,
             E: Engine + gpu::GpuEngine,
         {
             pub fn new(log_d: usize, call: F) -> Self {
@@ -65,6 +66,7 @@ macro_rules! solver {
                     _log_d: log_d,
                     kernel: None,
                     call,
+                    index: 0,
                 }
             }
 
@@ -120,15 +122,28 @@ macro_rules! solver {
             }
 
             fn use_cpu(&mut self) -> Result<(), SynthesisError> {
-                let mut kernel = self.kernel.take();
-                (self.call)(&mut kernel).map(|_| ())
+                loop {
+                    match (self.call)(self.index, &mut self.kernel) {
+                        Some(Ok(_)) => {
+                            self.index += 1;
+                        }
+                        Some(Err(e)) => {
+                            self.kernel.take();
+                            return Err(e);
+                        }
+                        None => {
+                            self.kernel.take();
+                            return Ok(());
+                        }
+                    }
+                }
             }
         }
 
         #[cfg(any(feature = "cuda", feature = "opencl"))]
         impl<E, F, R> TaskFunc for $class<E, F, R>
         where
-            for<'a> F: FnMut(&'a mut Option<$kern<E>>) -> Result<R, SynthesisError>,
+            for<'a> F: FnMut(usize, &'a mut Option<$kern<E>>) -> Option<Result<R, SynthesisError>>,
             E: Engine + gpu::GpuEngine,
         {
             type Output = ();
@@ -142,12 +157,20 @@ macro_rules! solver {
                 Ok(())
             }
             fn task(&mut self, _alloc: Option<&ResourceAlloc>) -> Result<TaskResult, Self::Error> {
-                let mut kernel = self.kernel.take();
-                let res = match (self.call)(&mut kernel) {
-                    Ok(_) => Ok(TaskResult::Done),
-                    Err(e) => Err(e),
-                };
-                res
+                match (self.call)(self.index, &mut self.kernel) {
+                    Some(Ok(_)) => {
+                        self.index += 1;
+                        Ok(TaskResult::Continue)
+                    }
+                    Some(Err(e)) => {
+                        self.kernel.take();
+                        Err(e)
+                    }
+                    None => {
+                        self.kernel.take();
+                        Ok(TaskResult::Done)
+                    }
+                }
             }
         }
     };
