@@ -6,7 +6,7 @@ use crate::multiexp::DensityTracker;
 
 /// Represents a variable in our constraint system.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Variable(pub(crate) Index);
+pub struct Variable(pub Index);
 
 impl Variable {
     /// This constructs a variable with an arbitrary index.

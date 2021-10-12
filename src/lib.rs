@@ -156,7 +156,7 @@ pub mod util_cs;
 mod lc;
 pub use lc::{Index, LinearCombination, Variable};
 mod constraint_system;
-pub use constraint_system::{Circuit, ConstraintSystem, SynthesisError};
+pub use constraint_system::{Circuit, ConstraintSystem, Namespace, SynthesisError};
 
 pub const BELLMAN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
