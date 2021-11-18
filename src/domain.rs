@@ -550,7 +550,7 @@ mod tests {
 
         let worker = Worker::new();
         let log_cpus = worker.log_num_cpus();
-        let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
+        let mut locked_kern = gpu::LockedFFTKernel::<Bls12>::new(0, false);
 
         for log_d in 1..=20 {
             let d = 1 << log_d;
@@ -562,7 +562,10 @@ mod tests {
             println!("Testing FFT for {} elements...", d);
 
             let mut now = Instant::now();
-            gpu_fft(&mut kern, &mut [&mut v1.coeffs], &[v1.omega], &[log_d])
+            locked_kern
+                .with(|kern: &mut gpu::FFTKernel<_>| {
+                    gpu_fft(kern, &mut [&mut v1.coeffs], &[v1.omega], &[log_d])
+                })
                 .expect("GPU FFT failed!");
             let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
             println!("GPU took {}ms.", gpu_dur);
@@ -592,7 +595,7 @@ mod tests {
 
         let worker = Worker::new();
         let log_cpus = worker.log_num_cpus();
-        let mut kern = gpu::FFTKernel::<Bls12>::create(false).expect("Cannot initialize kernel!");
+        let mut locked_kern = gpu::LockedFFTKernel::<Bls12>::new(0, false);
 
         for log_d in 1..=20 {
             let d = 1 << log_d;
@@ -611,13 +614,16 @@ mod tests {
             println!("Testing FFT3 for {} elements...", d);
 
             let mut now = Instant::now();
-            gpu_fft(
-                &mut kern,
-                &mut [&mut v11.coeffs, &mut v12.coeffs, &mut v13.coeffs],
-                &[v11.omega, v12.omega, v13.omega],
-                &[log_d, log_d, log_d],
-            )
-            .expect("GPU FFT failed!");
+            locked_kern
+                .with(|kern: &mut gpu::FFTKernel<_>| {
+                    gpu_fft(
+                        kern,
+                        &mut [&mut v11.coeffs, &mut v12.coeffs, &mut v13.coeffs],
+                        &[v11.omega, v12.omega, v13.omega],
+                        &[log_d, log_d, log_d],
+                    )
+                })
+                .expect("GPU FFT failed!");
             let gpu_dur = now.elapsed().as_secs() * 1000 + now.elapsed().subsec_millis() as u64;
             println!("GPU took {}ms.", gpu_dur);
 

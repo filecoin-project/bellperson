@@ -123,7 +123,6 @@ where
     E: Engine + GpuEngine,
 {
     kernels: Vec<SingleFftKernel<E>>,
-    _lock: locks::GPULock, // RFC 1857: struct fields are dropped in the same order as they are declared.
 }
 
 impl<E> FFTKernel<E>
@@ -131,8 +130,6 @@ where
     E: Engine + GpuEngine,
 {
     pub fn create(priority: bool) -> GPUResult<FFTKernel<E>> {
-        let lock = locks::GPULock::lock();
-
         let kernels: Vec<_> = Device::all()
             .iter()
             .filter_map(|device| {
@@ -156,10 +153,7 @@ where
             info!("FFT: Device {}: {}", i, k.program.device_name(),);
         }
 
-        Ok(FFTKernel {
-            kernels,
-            _lock: lock,
-        })
+        Ok(FFTKernel { kernels })
     }
 
     /// Performs FFT on `a`

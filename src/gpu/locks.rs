@@ -107,6 +107,9 @@ macro_rules! locked_kernel {
             log_d: usize,
             priority: bool,
             kernel: Option<$kern<E>>,
+            // There should always be only one thing running on the GPU, hence create a
+            // lock. It is set when a kernel is initiallized and released when the kernel is freed.
+            gpu_lock: Option<GPULock>,
         }
 
         impl<E> $class<E>
@@ -118,6 +121,7 @@ macro_rules! locked_kernel {
                     log_d,
                     priority,
                     kernel: None,
+                    gpu_lock: None,
                 }
             }
 
@@ -125,6 +129,7 @@ macro_rules! locked_kernel {
                 if self.kernel.is_none() {
                     PriorityLock::wait(self.priority);
                     info!("GPU is available for {}!", $name);
+                    self.gpu_lock = Some(GPULock::lock());
                     self.kernel = $func::<E>(self.log_d, self.priority);
                 }
             }
@@ -136,6 +141,8 @@ macro_rules! locked_kernel {
                         $name
                     );
                 }
+                // The lock is released if it is dropped.
+                self.gpu_lock.take();
             }
 
             pub fn with<F, R>(&mut self, mut f: F) -> GPUResult<R>
