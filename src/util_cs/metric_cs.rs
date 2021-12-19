@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 
+use super::Comparable;
 use ff::PrimeField;
 
 use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
@@ -45,15 +46,28 @@ impl Ord for OrderedVariable {
 pub struct MetricCS<Scalar: PrimeField> {
     named_objects: HashMap<String, NamedObject>,
     current_namespace: Vec<String>,
-    #[allow(clippy::type_complexity)]
-    constraints: Vec<(
-        LinearCombination<Scalar>,
-        LinearCombination<Scalar>,
-        LinearCombination<Scalar>,
-        String,
-    )>,
+    constraints: Vec<crate::util_cs::Constraint<Scalar>>,
     inputs: Vec<String>,
     aux: Vec<String>,
+}
+impl<Scalar: PrimeField> Comparable<Scalar> for MetricCS<Scalar> {
+    fn num_inputs(&self) -> usize {
+        self.num_inputs()
+    }
+    fn num_constraints(&self) -> usize {
+        self.num_constraints()
+    }
+
+    fn aux(&self) -> Vec<String> {
+        self.aux.clone()
+    }
+
+    fn inputs(&self) -> Vec<String> {
+        self.inputs.clone()
+    }
+    fn constraints(&self) -> &[crate::util_cs::Constraint<Scalar>] {
+        &self.constraints
+    }
 }
 
 fn proc_lc<Scalar: PrimeField>(

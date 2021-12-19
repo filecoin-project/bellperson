@@ -32,13 +32,13 @@ pub enum Index {
 
 /// This represents a linear combination of some variables, with coefficients
 /// in the scalar field of a pairing-friendly elliptic curve group.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LinearCombination<Scalar: PrimeField> {
     inputs: Indexer<Scalar>,
     aux: Indexer<Scalar>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 struct Indexer<T> {
     /// Stores a list of `T` indexed by the number in the first slot of the tuple.
     values: Vec<(usize, T)>,

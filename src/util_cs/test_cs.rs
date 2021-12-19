@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use super::Comparable;
 use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable};
 use blake2s_simd::State as Blake2s;
 use byteorder::{BigEndian, ByteOrder};
@@ -314,6 +315,32 @@ impl<Scalar: PrimeField> TestConstraintSystem<Scalar> {
         }
 
         self.named_objects.insert(path, to);
+    }
+}
+
+impl<Scalar: PrimeField> Comparable<Scalar> for TestConstraintSystem<Scalar> {
+    fn num_inputs(&self) -> usize {
+        self.num_inputs()
+    }
+    fn num_constraints(&self) -> usize {
+        self.num_constraints()
+    }
+
+    fn aux(&self) -> Vec<String> {
+        self.aux
+            .iter()
+            .map(|(_scalar, string)| string.to_string())
+            .collect()
+    }
+
+    fn inputs(&self) -> Vec<String> {
+        self.inputs
+            .iter()
+            .map(|(_scalar, string)| string.to_string())
+            .collect()
+    }
+    fn constraints(&self) -> &[crate::util_cs::Constraint<Scalar>] {
+        &self.constraints
     }
 }
 
