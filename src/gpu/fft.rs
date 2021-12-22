@@ -130,10 +130,10 @@ impl<E> FFTKernel<E>
 where
     E: Engine + GpuEngine,
 {
-    pub fn create(priority: bool) -> GPUResult<FFTKernel<E>> {
-        let lock = locks::GPULock::lock();
+    pub fn create(priority: bool, isWinPost: bool) -> GPUResult<FFTKernel<E>> {
+        let lock = locks::GPULock::lock(isWinPost);
 
-        let kernels: Vec<_> = Device::all()
+        let mut kernels_local: Vec<_> = Device::all()
             .iter()
             .filter_map(|device| {
                 let kernel = SingleFftKernel::<E>::create(device, priority);
@@ -148,18 +148,38 @@ where
             })
             .collect();
 
-        if kernels.is_empty() {
+        if kernels_local.is_empty() {
             return Err(GPUError::Simple("No working GPUs found!"));
         }
-        info!("FFT: {} working device(s) selected. ", kernels.len());
-        for (i, k) in kernels.iter().enumerate() {
+        info!("FFT: {} working device(s) selected. ", kernels_local.len());
+        for (i, k) in kernels_local.iter().enumerate() {
             info!("FFT: Device {}: {}", i, k.program.device_name(),);
         }
 
-        Ok(FFTKernel {
-            kernels,
-            _lock: lock,
-        })
+        if kernels_local.len() > 1 {
+            if isWinPost {
+                kernels_local.remove(1);
+                let kernels = kernels_local;
+                info!("FFT: Choose device 0: {} for winning post.", kernels_local[0].program.device_name());
+                Ok(FFTKernel::<E> {
+                    kernels,
+                    _lock: lock,
+                })
+            } else {
+                kernels_local.remove(0);
+                let kernels = kernels_local;
+                Ok(FFTKernel::<E> {
+                    kernels,
+                    _lock: lock,
+                })
+            }
+        } else {
+            let kernels = kernels_local;
+            Ok(FFTKernel::<E> {
+                kernels,
+                _lock: lock,
+            })
+        }
     }
 
     /// Performs FFT on `a`
