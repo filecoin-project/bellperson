@@ -23,7 +23,6 @@ impl<Scalar: PrimeField> Clone for AllocatedNum<Scalar> {
 }
 
 impl<Scalar: PrimeField> AllocatedNum<Scalar> {
-    /// Allocate a `Variable(Aux)` in a `ConstraintSystem`.
     pub fn alloc<CS, F>(mut cs: CS, value: F) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<Scalar>,
@@ -45,50 +44,6 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
             value: new_value,
             variable: var,
         })
-    }
-
-    /// Allocate a `Variable(Input)` in a `ConstraintSystem`.
-    pub fn alloc_input<CS, F>(mut cs: CS, value: F) -> Result<Self, SynthesisError>
-    where
-        CS: ConstraintSystem<Scalar>,
-        F: FnOnce() -> Result<Scalar, SynthesisError>,
-    {
-        let mut new_value = None;
-        let var = cs.alloc_input(
-            || "input num",
-            || {
-                let tmp = value()?;
-
-                new_value = Some(tmp);
-
-                Ok(tmp)
-            },
-        )?;
-
-        Ok(AllocatedNum {
-            value: new_value,
-            variable: var,
-        })
-    }
-
-    /// Allocate a `Variable` of either `Aux` or `Input` in a
-    /// `ConstraintSystem`. The `Variable` is a an `Input` if `is_input` is
-    /// true. This allows uniform creation of circuits containing components
-    /// which may or may not be public inputs.
-    pub fn alloc_maybe_input<CS, F>(
-        cs: CS,
-        is_input: bool,
-        value: F,
-    ) -> Result<Self, SynthesisError>
-    where
-        CS: ConstraintSystem<Scalar>,
-        F: FnOnce() -> Result<Scalar, SynthesisError>,
-    {
-        if is_input {
-            Self::alloc_input(cs, value)
-        } else {
-            Self::alloc(cs, value)
-        }
     }
 
     pub fn inputize<CS>(&self, mut cs: CS) -> Result<(), SynthesisError>

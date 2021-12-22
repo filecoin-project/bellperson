@@ -9,7 +9,7 @@ documentation = "https://docs.rs/bellperson"
 homepage = "https://github.com/filecoin-project/bellman"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/filecoin-project/bellman"
-version = "0.18.0"
+version = "0.17.0"
 readme = "README.md"
 edition = "2018"
 
@@ -76,11 +76,6 @@ _coverage = []
 [[test]]
 name = "mimc"
 path = "tests/mimc.rs"
-required-features = ["groth16"]
-
-[[test]]
-name = "groth16_aggregation"
-path = "tests/groth16_aggregation.rs"
 required-features = ["groth16"]
 
 [badges]

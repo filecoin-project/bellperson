@@ -227,10 +227,10 @@ impl<E> MultiexpKernel<E>
 where
     E: Engine + GpuEngine,
 {
-    pub fn create(priority: bool) -> GPUResult<MultiexpKernel<E>> {
-        let lock = locks::GPULock::lock();
+    pub fn create(priority: bool, isWinPost: bool) -> GPUResult<MultiexpKernel<E>> {
+        let lock = locks::GPULock::lock(isWinPost);
 
-        let kernels: Vec<_> = Device::all()
+        let mut kernels_bak: Vec<_> = Device::all()
             .iter()
             .filter_map(|device| {
                 let kernel = SingleMultiexpKernel::<E>::create(device, priority);
@@ -245,15 +245,15 @@ where
             })
             .collect();
 
-        if kernels.is_empty() {
+        if kernels_bak.is_empty() {
             return Err(GPUError::Simple("No working GPUs found!"));
         }
         info!(
             "Multiexp: {} working device(s) selected. (CPU utilization: {})",
-            kernels.len(),
+            kernels_bak.len(),
             get_cpu_utilization()
         );
-        for (i, k) in kernels.iter().enumerate() {
+        for (i, k) in kernels_bak.iter().enumerate() {
             info!(
                 "Multiexp: Device {}: {} (Chunk-size: {})",
                 i,
@@ -261,10 +261,30 @@ where
                 k.n
             );
         }
-        Ok(MultiexpKernel::<E> {
-            kernels,
-            _lock: lock,
-        })
+	
+	if kernels_bak.len() > 1 {
+	    if isWinPost {
+	        kernels_bak.remove(1);
+	        let kernels = kernels_bak;
+		Ok(MultiexpKernel::<E> {
+                    kernels,
+                    _lock: lock,
+                })
+	    } else {
+	        kernels_bak.remove(0);
+	        let kernels = kernels_bak;
+		Ok(MultiexpKernel::<E> {
+                    kernels,
+                    _lock: lock,
+                })
+	    }
+	} else {
+	    let kernels = kernels_bak;
+            Ok(MultiexpKernel::<E> {
+                kernels,
+                _lock: lock,
+            })
+	}
     }
 
     pub fn multiexp<G>(

@@ -15,6 +15,7 @@ use super::multicore::{Waiter, Worker};
 use super::SynthesisError;
 use crate::gpu;
 
+
 /// An object that builds a source of bases.
 pub trait SourceBuilder<G: PrimeCurveAffine>: Send + Sync + 'static + Clone {
     type Source: Source<G>;
@@ -153,6 +154,8 @@ impl<'a> QueryDensity for &'a DensityTracker {
             .zip(self.bv.iter())
             .filter_map(|(&e, d)| if *d { Some(e) } else { None })
             .collect();
+
+        debug_assert_eq!(exps.len(), exponents.len());
 
         Arc::new(exps)
     }
@@ -446,11 +449,11 @@ fn test_with_bls12() {
     assert_eq!(naive, fast);
 }
 
-pub fn create_multiexp_kernel<E>(_log_d: usize, priority: bool) -> Option<gpu::MultiexpKernel<E>>
+pub fn create_multiexp_kernel<E>(_log_d: usize, priority: bool, isWinPost: bool) -> Option<gpu::MultiexpKernel<E>>
 where
     E: Engine + gpu::GpuEngine,
 {
-    match gpu::MultiexpKernel::<E>::create(priority) {
+    match gpu::MultiexpKernel::<E>::create(priority, isWinPost) {
         Ok(k) => {
             info!("GPU Multiexp kernel instantiated!");
             Some(k)

@@ -223,11 +223,6 @@ workflows:
           requires:
             - cargo_fetch
       - test:
-          name: "Test CPU (no default features)"
-          cargo-args: "--workspace --no-default-features"
-          requires:
-            - cargo_fetch
-      - test:
           name: "Test OpenCL only"
           cargo-args: "--workspace --release --features opencl"
           requires:

@@ -6,7 +6,7 @@ use crate::multiexp::DensityTracker;
 
 /// Represents a variable in our constraint system.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Variable(pub Index);
+pub struct Variable(pub(crate) Index);
 
 impl Variable {
     /// This constructs a variable with an arbitrary index.
@@ -160,12 +160,12 @@ impl<Scalar: PrimeField> LinearCombination<Scalar> {
     }
 
     #[inline]
-    pub fn iter_inputs(&self) -> impl Iterator<Item = (&usize, &Scalar)> + '_ {
+    pub(crate) fn iter_inputs(&self) -> impl Iterator<Item = (&usize, &Scalar)> + '_ {
         self.inputs.iter()
     }
 
     #[inline]
-    pub fn iter_aux(&self) -> impl Iterator<Item = (&usize, &Scalar)> + '_ {
+    pub(crate) fn iter_aux(&self) -> impl Iterator<Item = (&usize, &Scalar)> + '_ {
         self.aux.iter()
     }
 
@@ -242,7 +242,7 @@ impl<Scalar: PrimeField> LinearCombination<Scalar> {
         self.inputs.is_empty() && self.aux.is_empty()
     }
 
-    pub fn eval(
+    pub(crate) fn eval(
         &self,
         mut input_density: Option<&mut DensityTracker>,
         mut aux_density: Option<&mut DensityTracker>,
