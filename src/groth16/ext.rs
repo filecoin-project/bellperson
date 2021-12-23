@@ -15,12 +15,12 @@ where
     C: Circuit<E::Fr> + Send,
 {
     let proofs = create_proof_batch_priority::<E, C, P>(
-        vec![circuit], 
-        params, 
-        vec![r], 
-        vec![s], 
-        false, 
-        false
+        vec![circuit],
+        params,
+        vec![r],
+        vec![s],
+        false,
+        false,
     )?;
     Ok(proofs.into_iter().next().unwrap())
 }
@@ -78,12 +78,12 @@ where
     C: Circuit<E::Fr> + Send,
 {
     let proofs = create_proof_batch_priority::<E, C, P>(
-        vec![circuit], 
-        params, 
-        vec![r], 
-        vec![s], 
-        true, 
-        false
+        vec![circuit],
+        params,
+        vec![r],
+        vec![s],
+        true,
+        false,
     )?;
     Ok(proofs.into_iter().next().unwrap())
 }

@@ -160,7 +160,7 @@ where
             if is_win_post {
                 kernels_local.remove(1);
                 info!(
-                    "FFT: Choose device 0: {} for winning post.", 
+                    "FFT: Choose device 0: {} for winning post.",
                     kernels_local[0].program.device_name()
                 );
                 let kernels = kernels_local;

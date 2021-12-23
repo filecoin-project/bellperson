@@ -447,9 +447,9 @@ fn test_with_bls12() {
 }
 
 pub fn create_multiexp_kernel<E>(
-    _log_d: usize, 
-    priority: bool, 
-    is_win_post: bool
+    _log_d: usize,
+    priority: bool,
+    is_win_post: bool,
 ) -> Option<gpu::MultiexpKernel<E>>
 where
     E: Engine + gpu::GpuEngine,
