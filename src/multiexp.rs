@@ -474,7 +474,7 @@ pub fn gpu_multiexp_consistency() {
 
     const MAX_LOG_D: usize = 16;
     const START_LOG_D: usize = 10;
-    let mut kern = Some(gpu::LockedMultiexpKernel::<Bls12>::new(MAX_LOG_D, false));
+    let mut kern = Some(gpu::LockedMultiexpKernel::<Bls12>::new(MAX_LOG_D, false, false));
     let pool = Worker::new();
 
     let mut rng = rand::thread_rng();

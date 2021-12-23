@@ -227,8 +227,8 @@ impl<E> MultiexpKernel<E>
 where
     E: Engine + GpuEngine,
 {
-    pub fn create(priority: bool, isWinPost: bool) -> GPUResult<MultiexpKernel<E>> {
-        let lock = locks::GPULock::lock(isWinPost);
+    pub fn create(priority: bool, is_win_post: bool) -> GPUResult<MultiexpKernel<E>> {
+        let lock = locks::GPULock::lock(is_win_post);
 
         let mut kernels_local: Vec<_> = Device::all()
             .iter()
@@ -263,7 +263,7 @@ where
         }
 	
 	    if kernels_local.len() > 1 {
-            if isWinPost {
+            if is_win_post {
                 kernels_local.remove(1);
                 info!("Multiexp: Choose device 0: {} for winning post.", kernels_local[0].program.device_name());
                 let kernels = kernels_local;

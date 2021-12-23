@@ -222,7 +222,7 @@ pub fn create_random_proof_batch_priority<E, C, R, P: ParameterSource<E>>(
     params: P,
     rng: &mut R,
     priority: bool,
-    isWinPost: bool,
+    is_win_post: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
@@ -236,7 +236,7 @@ where
         .map(|_| E::Fr::random(&mut *rng))
         .collect();
 
-    create_proof_batch_priority::<E, C, P>(circuits, params, r_s, s_s, priority, isWinPost)
+    create_proof_batch_priority::<E, C, P>(circuits, params, r_s, s_s, priority, is_win_post)
 }
 
 #[allow(clippy::clippy::needless_collect)]
@@ -246,7 +246,7 @@ pub fn create_proof_batch_priority<E, C, P: ParameterSource<E>>(
     r_s: Vec<E::Fr>,
     s_s: Vec<E::Fr>,
     priority: bool,
-    isWinPost: bool,
+    is_win_post: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
@@ -299,7 +299,7 @@ where
     #[cfg(any(feature = "cuda", feature = "opencl"))]
     let prio_lock = if priority {
         trace!("acquiring priority lock");
-        Some(PriorityLock::lock(isWinPost))
+        Some(PriorityLock::lock(is_win_post))
     } else {
         None
     };
@@ -317,14 +317,14 @@ where
             *params_h = Some(params.get_h(n));
         });
 
-        let mut fft_kern = Some(LockedFFTKernel::<E>::new(log_d, priority, isWinPost));
+        let mut fft_kern = Some(LockedFFTKernel::<E>::new(log_d, priority, is_win_post));
         for prover in provers_ref {
             a_s.push(execute_fft(worker, prover, &mut fft_kern)?);
         }
         Ok(())
     })?;
 
-    let mut multiexp_kern = Some(LockedMultiexpKernel::<E>::new(log_d, priority, isWinPost));
+    let mut multiexp_kern = Some(LockedMultiexpKernel::<E>::new(log_d, priority, is_win_post));
     let params_h = params_h.unwrap()?;
 
     let mut h_s = Vec::with_capacity(num_circuits);

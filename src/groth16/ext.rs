@@ -51,14 +51,14 @@ pub fn create_random_proof_batch<E, C, R, P: ParameterSource<E>>(
     circuits: Vec<C>,
     params: P,
     rng: &mut R,
-    isWinPost: bool,
+    is_win_post: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
     R: RngCore,
 {
-    create_random_proof_batch_priority::<E, C, R, P>(circuits, params, rng, false, isWinPost)
+    create_random_proof_batch_priority::<E, C, R, P>(circuits, params, rng, false, is_win_post)
 }
 
 pub fn create_proof_in_priority<E, C, P: ParameterSource<E>>(
@@ -108,12 +108,12 @@ pub fn create_random_proof_batch_in_priority<E, C, R, P: ParameterSource<E>>(
     circuits: Vec<C>,
     params: P,
     rng: &mut R,
-    isWinPost: bool,
+    is_win_post: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
     E: gpu::GpuEngine + MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
     R: RngCore,
 {
-    create_random_proof_batch_priority::<E, C, R, P>(circuits, params, rng, true, isWinPost)
+    create_random_proof_batch_priority::<E, C, R, P>(circuits, params, rng, true, is_win_post)
 }
