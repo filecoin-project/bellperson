@@ -261,11 +261,13 @@ where
                 k.n
             );
         }
-	
-	    if kernels_local.len() > 1 {
+        if kernels_local.len() > 1 {
             if is_win_post {
                 kernels_local.remove(1);
-                info!("Multiexp: Choose device 0: {} for winning post.", kernels_local[0].program.device_name());
+                info!(
+                    "Multiexp: Choose device 0: {} for winning post.", 
+                    kernels_local[0].program.device_name()
+                );
                 let kernels = kernels_local;
                 Ok(MultiexpKernel::<E> {
                     kernels,

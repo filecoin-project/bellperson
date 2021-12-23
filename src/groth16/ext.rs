@@ -14,8 +14,14 @@ where
     E: gpu::GpuEngine + MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
 {
-    let proofs =
-        create_proof_batch_priority::<E, C, P>(vec![circuit], params, vec![r], vec![s], false, false)?;
+    let proofs = create_proof_batch_priority::<E, C, P>(
+        vec![circuit], 
+        params, 
+        vec![r], 
+        vec![s], 
+        false, 
+        false
+    )?;
     Ok(proofs.into_iter().next().unwrap())
 }
 
@@ -71,8 +77,14 @@ where
     E: gpu::GpuEngine + MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
 {
-    let proofs =
-        create_proof_batch_priority::<E, C, P>(vec![circuit], params, vec![r], vec![s], true, false)?;
+    let proofs = create_proof_batch_priority::<E, C, P>(
+        vec![circuit], 
+        params, 
+        vec![r], 
+        vec![s], 
+        true, 
+        false
+    )?;
     Ok(proofs.into_iter().next().unwrap())
 }
 

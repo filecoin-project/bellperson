@@ -198,7 +198,9 @@ fn main() {
 
         for _ in 0..opts.samples {
             let (_proofs, took) =
-                timer!(create_random_proof_batch(circuits.clone(), &params, &mut rng, false).unwrap());
+                timer!(
+                    create_random_proof_batch(circuits.clone(), &params, &mut rng, false).unwrap()
+                );
             println!("Proof generation finished in {}ms", took);
         }
     }
