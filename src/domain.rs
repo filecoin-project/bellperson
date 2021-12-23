@@ -554,8 +554,8 @@ mod tests {
 
         let worker = Worker::new();
         let log_cpus = worker.log_num_cpus();
-        let mut kern = g
-            pu::FFTKernel::<Bls12>::create(false, false).expect("Cannot initialize kernel!");
+        let mut kern = 
+            gpu::FFTKernel::<Bls12>::create(false, false).expect("Cannot initialize kernel!");
 
         for log_d in 1..=20 {
             let d = 1 << log_d;
