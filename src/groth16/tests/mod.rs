@@ -546,7 +546,7 @@ fn test_verify_random_batch() {
         };
 
         let proof =
-            create_random_proof_batch(vec![c.clone(), c.clone(), c.clone()], &params, &mut rng)
+            create_random_proof_batch(vec![c.clone(), c.clone(), c.clone()], &params, &mut rng, false)
                 .unwrap();
 
         // real proofs
