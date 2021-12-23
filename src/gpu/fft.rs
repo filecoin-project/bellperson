@@ -159,8 +159,8 @@ where
         if kernels_local.len() > 1 {
             if isWinPost {
                 kernels_local.remove(1);
-                let kernels = kernels_local;
                 info!("FFT: Choose device 0: {} for winning post.", kernels_local[0].program.device_name());
+                let kernels = kernels_local;
                 Ok(FFTKernel::<E> {
                     kernels,
                     _lock: lock,
