@@ -15,32 +15,40 @@ use scheduler_client::{
 
 #[cfg(any(feature = "cuda", feature = "opencl"))]
 const TIMEOUT: u64 = 1200;
+
 pub struct Client {
-    _task_type: BellTaskType,
+    #[cfg(any(feature = "cuda", feature = "opencl"))]
+    task_type: TaskType,
 
     #[cfg(any(feature = "cuda", feature = "opencl"))]
     inner: SClient,
 }
 
+#[cfg(any(feature = "cuda", feature = "opencl"))]
 impl Client {
-    pub fn new(_task_type: Option<BellTaskType>) -> Result<Client, SynthesisError> {
-        let _task_type = _task_type.unwrap_or(BellTaskType::MerkleTree);
-        #[cfg(any(feature = "cuda", feature = "opencl"))]
+    pub fn new(task_type: Option<BellTaskType>) -> Result<Client, SynthesisError> {
+        let task_type = match task_type.unwrap_or(BellTaskType::MerkleTree) {
+            BellTaskType::WinningPost => TaskType::WinningPost,
+            BellTaskType::WindowPost => TaskType::WindowPost,
+            _ => TaskType::MerkleTree,
+        };
         let inner = SClient::register::<SynthesisError>()?;
 
-        Ok(Self {
-            _task_type,
-            #[cfg(any(feature = "cuda", feature = "opencl"))]
-            inner,
-        })
+        Ok(Self { task_type, inner })
     }
 
     pub fn update_context(&mut self, _name: String, _context: String) {
-        #[cfg(any(feature = "cuda", feature = "opencl"))]
         self.inner.set_name(_name);
-        #[cfg(any(feature = "cuda", feature = "opencl"))]
         self.inner.set_context(_context);
     }
+}
+
+#[cfg(not(any(feature = "cuda", feature = "opencl")))]
+impl Client {
+    pub fn new(_task_type: Option<BellTaskType>) -> Result<Client, SynthesisError> {
+        Ok(Self)
+    }
+    pub fn update_context(&mut self, _name: String, _context: String) {}
 }
 
 macro_rules! solver {
@@ -74,12 +82,6 @@ macro_rules! solver {
             pub fn solve(&mut self, client: &mut Client) -> Result<(), SynthesisError> {
                 use std::time::Duration;
 
-                let task_type = match client._task_type {
-                    BellTaskType::WinningPost => TaskType::WinningPost,
-                    BellTaskType::WindowPost => TaskType::WindowPost,
-                    _ => TaskType::MerkleTree,
-                };
-
                 let requirements = {
                     let resouce_req = ResourceReq {
                         resource: ResourceType::Gpu(ResourceMemory::All),
@@ -88,11 +90,9 @@ macro_rules! solver {
                     };
                     let task_req = TaskReqBuilder::new()
                         .resource_req(resouce_req)
-                        .with_task_type(task_type);
+                        .with_task_type(client.task_type);
                     task_req.build()
                 };
-
-                let task_type = requirements.task_type;
 
                 let res = client
                     .inner
@@ -103,7 +103,7 @@ macro_rules! solver {
                     Ok(res) => Ok(res),
                     // fallback to CPU in case of a timeout for winning_post task
                     Err(SynthesisError::Scheduler(ClientError::Timeout))
-                        if task_type == Some(TaskType::WinningPost) =>
+                        if client.task_type == TaskType::WinningPost =>
                     {
                         warn!("WinningPost timeout error -> falling back to CPU");
                         self.use_cpu()
