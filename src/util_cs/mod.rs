@@ -59,8 +59,8 @@ pub trait Comparable<Scalar: PrimeField> {
             let mismatch = c
                 .iter()
                 .zip(o)
-                .filter(|(a, b)| a != b)
                 .enumerate()
+                .filter(|(_, (a, b))| a != b)
                 .map(|(i, (a, b))| (i, a, b))
                 .next();
 
