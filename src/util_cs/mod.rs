@@ -23,10 +23,13 @@ pub trait Comparable<Scalar: PrimeField> {
     /// a constraint system is satisfied, but the corresponding Groth16 proof does
     /// not verify.
     ///
+    /// If `ignore_counts` is  true, count mismatches will be ignored, and any constraint
+    /// mismatch will be returned. This is useful in pinpointing the source of a mismatch.
+    ///
     /// Example usage:
     ///
     /// ```norun
-    /// let delta = cs.delta(&cs_blank);
+    /// let delta = cs.delta(&cs_blank, false);
     /// assert!(delta == Delta::Equal);
     /// ```
     fn num_inputs(&self) -> usize;
@@ -35,7 +38,7 @@ pub trait Comparable<Scalar: PrimeField> {
     fn aux(&self) -> Vec<String>;
     fn constraints(&self) -> &[Constraint<Scalar>];
 
-    fn delta<C: Comparable<Scalar>>(&self, other: &C) -> Delta<Scalar>
+    fn delta<C: Comparable<Scalar>>(&self, other: &C, ignore_counts: bool) -> Delta<Scalar>
     where
         Scalar: PrimeField,
     {
@@ -48,9 +51,9 @@ pub trait Comparable<Scalar: PrimeField> {
         let equal =
             input_count_matches && constraint_count_matches && inputs_match && constraints_match;
 
-        if !input_count_matches {
+        if !ignore_counts && !input_count_matches {
             Delta::InputCountMismatch(self.num_inputs(), other.num_inputs())
-        } else if !constraint_count_matches {
+        } else if !ignore_counts && !constraint_count_matches {
             Delta::ConstraintCountMismatch(self.num_constraints(), other.num_constraints())
         } else if !constraints_match {
             let c = self.constraints();
