@@ -102,6 +102,7 @@ Depending on the size of the proof being passed to the gpu for work, certain car
 | Tesla T4               | 2560  |                |
 | Quadro M5000           | 2048  |                |
 | GeForce RTX 3090       |10496  |                |
+| GeForce RTX 3080 Ti    |10240  |                |
 | GeForce RTX 3080       | 8704  |                |
 | GeForce RTX 3070       | 5888  |                |
 | GeForce RTX 2080 Ti    | 4352  |                |

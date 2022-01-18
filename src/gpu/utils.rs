@@ -1,7 +1,8 @@
-use log::{info, warn};
-use rust_gpu_tools::Device;
 use std::collections::HashMap;
 use std::env;
+
+use log::{info, warn};
+use rust_gpu_tools::Device;
 
 lazy_static::lazy_static! {
     static ref CORE_COUNTS: HashMap<String, usize> = {
@@ -23,6 +24,7 @@ lazy_static::lazy_static! {
             ("Quadro M5000".to_string(), 2048),
 
             ("GeForce RTX 3090".to_string(), 10496),
+            ("GeForce RTX 3080 Ti".to_string(), 10240),
             ("GeForce RTX 3080".to_string(), 8704),
             ("GeForce RTX 3070".to_string(), 5888),
 
@@ -56,6 +58,7 @@ lazy_static::lazy_static! {
 }
 
 const DEFAULT_CORE_COUNT: usize = 2560;
+
 pub fn get_core_count(name: &str) -> usize {
     match CORE_COUNTS.get(name) {
         Some(&cores) => cores,
