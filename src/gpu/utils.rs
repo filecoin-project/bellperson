@@ -1,63 +1,31 @@
-use log::{info, warn};
-use rust_gpu_tools::Device;
-use std::collections::HashMap;
 use std::env;
 
-lazy_static::lazy_static! {
-    static ref CORE_COUNTS: HashMap<String, usize> = {
-        let mut core_counts : HashMap<String, usize> = vec![
-            // AMD
-            ("gfx1010".to_string(), 2560),
-            // This value was chosen to give (approximately) empirically best performance for a Radeon Pro VII.
-            ("gfx906".to_string(), 7400),
-
-            // NVIDIA
-            ("Quadro RTX 6000".to_string(), 4608),
-            ("Quadro RTX A6000".to_string(), 10752),
-
-            ("TITAN RTX".to_string(), 4608),
-
-            ("Tesla V100".to_string(), 5120),
-            ("Tesla P100".to_string(), 3584),
-            ("Tesla T4".to_string(), 2560),
-            ("Quadro M5000".to_string(), 2048),
-
-            ("GeForce RTX 3090".to_string(), 10496),
-            ("GeForce RTX 3080".to_string(), 8704),
-            ("GeForce RTX 3070".to_string(), 5888),
-
-            ("GeForce RTX 2080 Ti".to_string(), 4352),
-            ("GeForce RTX 2080 SUPER".to_string(), 3072),
-            ("GeForce RTX 2080".to_string(), 2944),
-            ("GeForce RTX 2070 SUPER".to_string(), 2560),
-
-            ("GeForce GTX 1080 Ti".to_string(), 3584),
-            ("GeForce GTX 1080".to_string(), 2560),
-            ("GeForce GTX 2060".to_string(), 1920),
-            ("GeForce GTX 1660 Ti".to_string(), 1536),
-            ("GeForce GTX 1060".to_string(), 1280),
-            ("GeForce GTX 1650 SUPER".to_string(), 1280),
-            ("GeForce GTX 1650".to_string(), 896),
-        ].into_iter().collect();
-
-        if let Ok(var) = env::var("BELLMAN_CUSTOM_GPU") {
-            for card in var.split(',') {
-                let splitted = card.split(':').collect::<Vec<_>>();
-                if splitted.len() != 2 { panic!("Invalid BELLMAN_CUSTOM_GPU!"); }
-                let name = splitted[0].trim().to_string();
-                let cores : usize = splitted[1].trim().parse().expect("Invalid BELLMAN_CUSTOM_GPU!");
-                info!("Adding \"{}\" to GPU list with {} CUDA cores.", name, cores);
-                core_counts.insert(name, cores);
-            }
-        }
-
-        core_counts
-    };
-}
+use log::{info, warn};
+use rust_gpu_tools::{Device, CUDA_CORES};
 
 const DEFAULT_CORE_COUNT: usize = 2560;
 pub fn get_core_count(name: &str) -> usize {
-    match CORE_COUNTS.get(name) {
+    // Determining the number of cores was moved to rust-gpu-tools, which uses the
+    // `RUST_GPU_TOOLS_CUSTOM_GPU` environment variable to set custom GPUs. Users should upgrade
+    // using that one instead. Though using `BELLMAN_CUSTOM_GPU` is still supported for backwards
+    // compatibility, but will be ignored if `RUST_GPU_TOOLS_CUSTOM_GPU` is also set.
+    // Setting `RUST_GPU_TOOLS_CUSTOM_GPU` must happen before the first call to `CUDA_CORES`, as
+    // it will be initialized only once for the lifetime of the library.
+    if let Ok(custom_gpu) = env::var("BELLMAN_CUSTOM_GPU") {
+        match env::var("RUST_GPU_TOOLS_CUSTOM_GPU") {
+            Ok(_) => {
+                info!("`BELLMAN_CUSTOM_GPU` was ignored as `RUST_GPU_TOOLS_CUSTOM_GPU` is set.");
+            }
+            Err(_) => {
+                info!(
+                    "Please use `RUST_GPU_TOOLS_CUSTOM_GPU` instead of `BELLMAN_CUSTOM_GPU`, \
+                     their values are fully compatible."
+                );
+                env::set_var("RUST_GPU_TOOLS_CUSTOM_GPU", custom_gpu)
+            }
+        }
+    }
+    match CUDA_CORES.get(name) {
         Some(&cores) => cores,
         None => {
             warn!(
@@ -76,11 +44,4 @@ pub fn dump_device_list() {
     for d in Device::all() {
         info!("Device: {:?}", d);
     }
-}
-
-#[cfg(any(feature = "cuda", feature = "opencl"))]
-#[test]
-pub fn test_list_devices() {
-    let _ = env_logger::try_init();
-    dump_device_list();
 }

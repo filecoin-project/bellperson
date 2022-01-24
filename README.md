@@ -43,13 +43,13 @@ The gpu extension contains some env vars that may be set externally to this libr
     env::set_var("BELLMAN_VERIFIER", "gpu");
     ```
 
-- `BELLMAN_CUSTOM_GPU`
+- `RUST_GPU_TOOLS_CUSTOM_GPU`
 
     Will allow for adding a GPU not in the tested list. This requires researching the name of the GPU device and the number of cores in the format `["name:cores"]`.
 
     ```rust
     // Example
-    env::set_var("BELLMAN_CUSTOM_GPU", "GeForce RTX 2080 Ti:4352, GeForce GTX 1060:1280");
+    env::set_var("RUST_GPU_TOOLS_CUSTOM_GPU", "GeForce RTX 2080 Ti:4352, GeForce GTX 1060:1280");
     ```
 
 - `BELLMAN_CPU_UTILIZATION`
