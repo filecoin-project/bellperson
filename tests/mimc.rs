@@ -242,7 +242,8 @@ fn test_mimc() {
 
         // Create a groth16 proof with our parameters.
         let proofs =
-            create_random_proof_batch(vec![c; SAMPLES as usize], &params, &mut *rng).unwrap();
+            create_random_proof_batch(vec![c; SAMPLES as usize], &params, &mut *rng, false)
+                .unwrap();
         assert_eq!(proofs.len(), 50);
     }
 

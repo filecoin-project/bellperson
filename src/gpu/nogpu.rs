@@ -15,7 +15,7 @@ impl<E> FFTKernel<E>
 where
     E: Engine,
 {
-    pub fn create(_: bool) -> GPUResult<FFTKernel<E>> {
+    pub fn create(_: bool, _: bool) -> GPUResult<FFTKernel<E>> {
         Err(GPUError::GPUDisabled)
     }
 
@@ -40,7 +40,7 @@ impl<E> MultiexpKernel<E>
 where
     E: Engine,
 {
-    pub fn create(_: bool) -> GPUResult<MultiexpKernel<E>> {
+    pub fn create(_: bool, _: bool) -> GPUResult<MultiexpKernel<E>> {
         Err(GPUError::GPUDisabled)
     }
 
@@ -70,7 +70,7 @@ macro_rules! locked_kernel {
         where
             E: Engine,
         {
-            pub fn new(_: usize, _: bool) -> $class<E> {
+            pub fn new(_: usize, _: bool, _: bool) -> $class<E> {
                 $class::<E>(PhantomData)
             }
 
