@@ -8,6 +8,20 @@ use serde::{Deserialize, Serialize};
 use crate::groth16::aggregate::{commit, srs};
 use crate::SynthesisError;
 
+// #[derive(Clone)]
+pub struct AggregateProofAndInstance<E: Engine>
+where
+    E: MultiMillerLoop,
+    <E as Engine>::Gt: Compress,
+{
+    pub pi_agg: AggregateProof<E>,
+    pub com_f: Vec<E::G1>,
+    pub com_w0: Vec<E::G1>,
+    pub com_wd: Vec<E::G1>,
+    pub f_eval: Vec<E::Fr>,
+    pub f_eval_proof: Vec<E::G1>,
+}
+
 /// AggregateProof contains all elements to verify n aggregated Groth16 proofs
 /// using inner pairing product arguments. This proof can be created by any
 /// party in possession of valid Groth16 proofs.
