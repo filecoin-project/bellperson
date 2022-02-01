@@ -14,7 +14,7 @@ use super::{
     prove::polynomial_evaluation_product_form_from_transcript,
     structured_scalar_power,
     transcript::{Challenge, Transcript},
-    AggregateProof, KZGOpening, VerifierSRS,
+    AggregateProof,    AggregateProofAndInstance, KZGOpening, VerifierSRS,
 };
 use crate::groth16::{
     multiscalar::{par_multiscalar, MultiscalarPrecomp, ScalarList},
@@ -198,6 +198,201 @@ where
     info!("aggregate verify done");
     res
 }
+
+/// verification of related instances i.e. when instances are given by
+// [a1, ... , an, b1, ... , bn], [b1, ... , bn, c1, ..., cn], [c1, ..., cn, d1, ..., dn] etc
+
+// pub fn verify_aggregate_proof_and_aggregate_instances<E: Engine + std::fmt::Debug, R: rand::RngCore + Send>(
+//     ip_verifier_srs: &VerifierSRS<E>,
+//     pvk: &PreparedVerifyingKey<E>,
+//     rng: R,
+//     public_inputs: &Vec<E::Fr>,
+//     public_outputs: &Vec<E::Fr>,
+//     aggregate_proof_and_instance: &AggregateProofAndInstance<E>,
+//     transcript_include: &[u8],
+// ) -> Result<bool, SynthesisError> 
+// where
+//     E: MultiMillerLoop + std::fmt::Debug,
+//     E::Fr: Serialize,
+//     <E as Engine>::Gt: Compress + Serialize,
+//     E::G1: Serialize,
+//     E::G1Affine: Serialize,
+//     E::G2Affine: Serialize,
+//     R: rand_core::RngCore + Send,
+// {
+
+//     let proof = &aggregate_proof_and_instance.pi_agg.clone();
+
+//     info!("verify_aggregate_proof");
+//     proof.parsing_check()?;
+//     if (public_inputs.len() + public_outputs.len() + 1) != pvk.ic.len() {
+//             return Err(SynthesisError::MalformedVerifyingKey);
+//         }
+
+//     let transcript_new = Transcript::<E>::new("transcript-with-coms")
+//         .write(&aggregate_proof_and_instance.com_f)
+//         .write(&aggregate_proof_and_instance.com_w0)
+//         .write(&aggregate_proof_and_instance.com_wd)
+//         .write(&transcript_include).buffer;
+
+
+//     let hcom = Transcript::<E>::new("hcom")
+//         .write(&proof.com_ab)
+//         .write(&proof.com_c)
+//         .into_challenge();
+
+//     // Random linear combination of proofs
+//     let r = Transcript::<E>::new("random-r")
+//         .write(&hcom)
+//         .write(&transcript_new)
+//         .into_challenge();
+
+
+//     let r_f = (*r).pow(&[1 as u64]);
+
+// //    let pairing_checks_instance: PairingChecks<E,R> = PairingChecks::new(rng2);
+//     let pairing_checks: PairingChecks<E, R> = PairingChecks::new(rng);
+//     let pairing_checks_copy = &pairing_checks;
+
+//     for i in 0..public_inputs.len() {
+
+//         // check com_f has a_0 as zero'th coefficient: com_f - a0 * g
+//         let d = (aggregate_proof_and_instance.com_f[i] -
+//                  (ip_verifier_srs.g * public_inputs[i])).into_affine();
+
+//         pairing_checks_copy.merge_miller_inputs(
+//             &[ (&d, &ip_verifier_srs.h.into_affine())
+//             ,
+//         (   &aggregate_proof_and_instance.com_w0[i].into_affine(),
+//             &ip_verifier_srs.h_alpha.into_affine() ) ],
+//         &E::Fqk::one() ) ;
+
+//         // check com_f has bounded degree
+//         pairing_checks_copy.merge_miller_inputs(
+//             &[ (&aggregate_proof_and_instance.com_f[i].into_affine(), &ip_verifier_srs.h_alpha_d.into_affine())
+//             ,
+//                 (&aggregate_proof_and_instance.com_wd[i].into_affine(),
+//             &ip_verifier_srs.h.into_affine() ) ],
+//         &E::Fqk::one() ) ;
+
+//         // check com_f evaluates to d2 at r d2 = F g^(-eval)
+//         let mut d2 =
+//             (aggregate_proof_and_instance.com_f[i] -
+//              (ip_verifier_srs.g * aggregate_proof_and_instance.f_eval[i])).into_affine();
+
+//         d2.negate();
+
+//         let d3 =
+//             (ip_verifier_srs.h_alpha -(ip_verifier_srs.h * r_f)).into_affine();
+
+//         pairing_checks_copy.merge_miller_inputs(
+//             &[ (&d2, &ip_verifier_srs.h.into_affine())
+//                     ,
+//                 (&aggregate_proof_and_instance.f_eval_proof[i].into_affine(),
+//                     &d3 ) ],
+//                 &E::Fqk::one() ) ;
+
+//         }
+
+
+//     rayon::scope(move |_s| {
+//         // 1.Check TIPA proof ab
+//         // 2.Check TIPA proof c
+//         //        s.spawn(move |_| {
+
+//         let now = Instant::now();
+//         verify_tipp_mipp::<E, R>(
+//             ip_verifier_srs,
+//             proof,
+//             &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
+//             pairing_checks_copy,
+//             &hcom,
+//         );
+
+//         debug!("TIPP took {} ms", now.elapsed().as_millis(),);
+
+//         // Check aggregate pairing product equation
+//         // SUM of a geometric progression
+//         // SUM a^i = (1 - a^n) / (1 - a) = -(1-a^n)/-(1-a)
+//         // = (a^n - 1) / (a - 1)
+//         info!("checking aggregate pairing");
+//         let mut r_sum = r.pow(&[ ip_verifier_srs.n as u64]);
+//         r_sum.sub_assign(&E::Fr::one());
+//         let b = (*r - &E::Fr::one()).inverse().unwrap();
+//         r_sum.mul_assign(&b);
+
+//         // The following parts 3 4 5 are independently computing the parts of the Groth16
+//         // verification equation
+//         // NOTE From this point on, we are only checking *one* pairing check (the Groth16
+//         // verification equation) so we don't need to randomize as all other checks are being
+//         // randomized already. When merging all pairing checks together, this will be the only one
+//         // non-randomized.
+//         //
+
+//         par! {
+//             // 3. Compute left part of the final pairing equation
+//             let left = {
+//                 let mut alpha_g1_r_sum = pvk.alpha_g1;
+//                 alpha_g1_r_sum.mul_assign(r_sum);
+
+//                 E::miller_loop(&[(&alpha_g1_r_sum.into_affine().prepare(), &pvk.beta_g2)])
+//             },
+
+//             let middle = {
+//                 let mut g_ic = pvk.ic_projective[0];
+//                 // first public input is 1 for all circuits.
+//                 g_ic.mul_assign(r_sum);
+
+
+//                 for i in 0..public_inputs.len() {
+
+//                     // g_ic = prod_i Si^(f_i(r)) S_(i + n)^( 1/r( f_i(r) - a0) + a_n r^(n-1))
+//                     g_ic =
+//                          g_ic +
+//                             (pvk.ic[1+i].into_projective() * aggregate_proof_and_instance.f_eval[i]);
+
+//                     // d = f(r) - a0
+//                     let mut d = aggregate_proof_and_instance.f_eval[i] - &public_inputs[i];
+//                     // d = (1/r) (f(r) - a0)
+//                     d.mul_assign( & r.inverse().unwrap() );
+//                     // d = (1/r) (f(r) - a0 ) + r^(n-1) an
+//                     let n_neg_one = (ip_verifier_srs.n - 1) as u64;
+//                     d.add_assign( & public_outputs[i] * &r.pow(& [n_neg_one] ) ) ;
+
+//                     // pk_ic_in = S_(i + m + 1)^d
+//                     let mut pk_ic_in = pvk.ic[1 + i + public_inputs.len()].into_projective();
+//                     pk_ic_in.mul_assign(d);
+
+//                     g_ic = g_ic + pk_ic_in;
+//                 }
+
+//                 E::miller_loop(&[( &g_ic.into_affine().prepare() , &pvk.gamma_g2)])
+//             },
+//             // 4. Compute right part of the final pairing equation
+//             let right = {
+//                 E::miller_loop(&[(
+//                     // e(c^r vector form, h^delta)
+//                     // let agg_c = inner_product::multiexponentiation::<E::G1Affine>(&c, r_vec)
+//                     &proof.agg_c.into_affine().prepare(),
+//                     &pvk.delta_g2,
+//                 )])
+//             }
+//         };
+
+//         pairing_checks_copy.merge_nonrandom(
+//             vec![left, middle, right],
+//             // final value ip_ab is what we want to compare in the groth16
+//             // aggregated equation A * B
+//             proof.ip_ab.clone(),
+//         );
+//     });
+
+//     let res = pairing_checks.verify();
+//     info!("aggregate verify done");
+//     res
+
+// }
+
 
 /// verify_tipp_mipp returns a pairing equation to check the tipp proof.  $r$ is
 /// the randomness used to produce a random linear combination of A and B and

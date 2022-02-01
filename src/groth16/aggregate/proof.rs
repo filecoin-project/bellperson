@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::groth16::aggregate::{commit, srs};
 use crate::SynthesisError;
 
-// #[derive(Clone)]
+#[derive(Clone)]
 pub struct AggregateProofAndInstance<E: Engine>
 where
     E: MultiMillerLoop,
@@ -25,7 +25,7 @@ where
 /// AggregateProof contains all elements to verify n aggregated Groth16 proofs
 /// using inner pairing product arguments. This proof can be created by any
 /// party in possession of valid Groth16 proofs.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AggregateProof<E>
 where
     E: MultiMillerLoop,
@@ -173,7 +173,7 @@ where
 
 /// It contains all elements derived in the GIPA loop for both TIPP and MIPP at
 /// the same time.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GipaProof<E>
 where
     E: MultiMillerLoop,
@@ -390,7 +390,7 @@ where
 
 /// It contains the GIPA recursive elements as well as the KZG openings for v
 /// and w
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TippMippProof<E>
 where
     E: MultiMillerLoop,
