@@ -11,7 +11,7 @@ const PREFIX: &str = "snarkpack-v1";
 #[derive(Debug)]
 pub struct Transcript<E: Engine> {
     hasher: Sha256,
-    pub (crate) buffer: Vec<u8>,
+    pub(crate) buffer: Vec<u8>,
     _e: PhantomData<E>,
 }
 

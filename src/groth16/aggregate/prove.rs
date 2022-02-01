@@ -12,7 +12,7 @@ use super::{
     compress, inner_product,
     poly::DensePolynomial,
     structured_scalar_power,
-    transcript::{Transcript, Challenge},
+    transcript::{Challenge, Transcript},
     AggregateProof, AggregateProofAndInstance, GipaProof, KZGOpening, ProverSRS, TippMippProof,
 };
 use crate::groth16::{multiscalar::*, Proof};
@@ -153,8 +153,6 @@ where
     E::G1: Serialize + PrimeCurveAffine,
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
-    MultiscalarPrecompOwned<<E as Engine>::G1Affine>: MultiscalarPrecomp<<E as Engine>::G1>
-
 {
     let mut com_f: Vec<E::G1> = Vec::new();
     let mut com_w0: Vec<E::G1> = Vec::new();
@@ -177,14 +175,6 @@ where
         let poly_f_cp = poly_f_j.clone();
         let poly_f_cp_2 = poly_f_j.clone();
 
-        //try_par! {
-        // compute F
-        // let com_f_j = inner_product::multiexponentiation::<E::G1Affine>(
-
-        //     &srs.g_alpha_powers_table[..proofs.len()], &poly_f_j)
-
-        // };
-
         // compute F
         let com_f_j = {
             let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
@@ -201,12 +191,7 @@ where
             )
         };
 
-        // try_par! {
         // check that a0 is the zero coefficient of F
-        // let com_w0_j = inner_product::multiexponentiation::<E::G1Affine>(
-        //     &srs.g_alpha_powers_table[..(proofs.len() - 1)], &poly_w0)
-        // };
-
         let com_w0_j = {
             let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
                 if i >= proofs.len() - 1 {
@@ -222,32 +207,22 @@ where
             )
         };
 
-        // try_par! {
-        // // Check F^x^(n - d) exists i.e. that F is bounded
-        // let com_wd_j = inner_product::multiexponentiation::<E::G1Affine>(
-        //     &srs.g_alpha_powers_table[(srs.g_alpha_powers.len() - proofs.len())..], &poly_f_cp)
-        // };
-
-        // FIXME: I don't think this yet implements the commented-out code above correctly.
+        // Check F^x^(n - d) exists i.e. that F is bounded
         let com_wd_j = {
+            let n = srs.n;
             let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
-                if i >= proofs.len() {
+                if i >= n - proofs.len() {
                     return E::Fr::zero().to_repr();
                 }
                 poly_f_cp[i].to_repr()
             };
 
             par_multiscalar::<_, E::G1Affine>(
-                &ScalarList::Getter(getter, proofs.len()),
-                &srs.g_alpha_powers_table,
+                &ScalarList::Getter(getter, n - proofs.len()),
+                &srs.g_alpha_powers_table.at_point(proofs.len()),
                 std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
             )
         };
-
-        // let mut n_com_w0_j = com_w0_j.clone();
-        // let mut n_com_wd_j = com_wd_j.clone();
-        // n_com_w0_j.negate();
-        // n_com_wd_j.negate();
 
         let n_com_w0_j = -com_w0_j;
         let n_com_wd_j = -com_wd_j;
@@ -288,7 +263,7 @@ where
         f_eval.push(poly_eval.clone());
 
         f_eval_proof.push(
-            create_kzg_opening_for_instance::<E::G1>(
+            create_kzg_opening_for_instance::<E>(
                 &srs.g_alpha_powers_table,
                 DensePolynomial::from_coeffs(poly_f[j].clone()),
                 poly_eval,
@@ -299,12 +274,12 @@ where
     }
 
     Ok(AggregateProofAndInstance {
-        pi_agg: pi_agg,
-        com_f: com_f,
-        com_w0: com_w0,
-        com_wd: com_wd,
-        f_eval: f_eval,
-        f_eval_proof: f_eval_proof,
+        pi_agg,
+        com_f,
+        com_w0,
+        com_wd,
+        f_eval,
+        f_eval_proof,
     })
 }
 
@@ -639,40 +614,34 @@ where
     )
 }
 
-////
-fn create_kzg_opening_for_instance<G>(
-    srs_powers_alpha_table: &dyn MultiscalarPrecomp<G>, // h^alpha^i
-    poly: DensePolynomial<G::Scalar>,
-    eval_poly: G::Scalar,
-    kzg_challenge: &G::Scalar,
-) -> Result<G, SynthesisError>
-where
-    G: PrimeCurveAffine,
-    <G::Scalar as PrimeField>::Repr: Send + Sync,
-{
+fn create_kzg_opening_for_instance<E: Engine>(
+    srs_powers_alpha_table: &dyn MultiscalarPrecomp<E::G1Affine>, // h^alpha^i
+    poly: DensePolynomial<E::Fr>,
+    eval_poly: E::Fr,
+    kzg_challenge: &E::Fr,
+) -> Result<E::G1, SynthesisError> {
     let neg_kzg_challenge = -*kzg_challenge;
 
     // f_v(X) - f_v(z) / (X - z)
     let quotient_polynomial = &(&poly - &DensePolynomial::from_coeffs(vec![eval_poly]))
-        / &(DensePolynomial::from_coeffs(vec![neg_kzg_challenge, G::Scalar::one()]));
+        / &(DensePolynomial::from_coeffs(vec![neg_kzg_challenge, E::Fr::one()]));
 
     let quotient_polynomial_coeffs = quotient_polynomial.into_coeffs();
 
     // multiexponentiation inner_product, inlined to optimize
     let quotient_polynomial_coeffs_len = quotient_polynomial_coeffs.len();
-    let getter = |i: usize| -> <G::Scalar as PrimeField>::Repr {
+    let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
         if i >= quotient_polynomial_coeffs_len {
-            return G::Scalar::zero().to_repr();
+            return E::Fr::zero().to_repr();
         }
         quotient_polynomial_coeffs[i].to_repr()
     };
 
-    let pi_open = par_multiscalar::<_, G>(
+    let pi_open = par_multiscalar::<_, E::G1Affine>(
         &ScalarList::Getter(getter, quotient_polynomial_coeffs_len),
         srs_powers_alpha_table,
-        std::mem::size_of::<<G::Scalar as PrimeField>::Repr>() * 8,
-    )
-    .to_affine();
+        std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
+    );
 
     Ok(pi_open)
 }
