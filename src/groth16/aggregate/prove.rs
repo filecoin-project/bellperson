@@ -141,16 +141,15 @@ where
 pub fn aggregate_proofs_and_instances<E: Engine + std::fmt::Debug>(
     srs: &ProverSRS<E>,
     transcript_include: &[u8],
-    statements: &Vec<Vec<E::Fr>>,
+    statements: &[Vec<E::Fr>],
     proofs: &[Proof<E>],
 ) -> Result<AggregateProofAndInstance<E>, SynthesisError>
 where
     E: MultiMillerLoop + std::fmt::Debug,
-    E::Fr: MulAssign<Challenge<E>>,
     E::Fr: Serialize,
     <E::Fr as PrimeField>::Repr: Send + Sync,
     <E as Engine>::Gt: Compress + Serialize,
-    E::G1: Serialize + PrimeCurveAffine,
+    E::G1: Serialize,
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
 {
@@ -258,7 +257,7 @@ where
         let mut r_pow = E::Fr::one();
         for i in 0..poly_f[j].len() {
             poly_eval.add_assign(poly_f[j][i].clone() * &r_pow);
-            r_pow.mul_assign(r);
+            r_pow.mul_assign(r.0);
         }
         f_eval.push(poly_eval.clone());
 
