@@ -208,8 +208,8 @@ pub fn verify_aggregate_proof_and_aggregate_instances<
     ip_verifier_srs: &VerifierSRS<E>,
     pvk: &PreparedVerifyingKey<E>,
     rng: R,
-    public_inputs: &Vec<E::Fr>,
-    public_outputs: &Vec<E::Fr>,
+    public_inputs: &[E::Fr],
+    public_outputs: &[E::Fr],
     aggregate_proof_and_instance: &AggregateProofAndInstance<E>,
     transcript_include: &[u8],
 ) -> Result<bool, SynthesisError>

@@ -153,6 +153,7 @@ where
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
 {
+    assert!(statements.len() > 1);
     let mut com_f: Vec<E::G1> = Vec::new();
     let mut com_w0: Vec<E::G1> = Vec::new();
     let mut com_wd: Vec<E::G1> = Vec::new();
