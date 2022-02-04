@@ -70,7 +70,7 @@ macro_rules! locked_kernel {
         where
             E: Engine,
         {
-            pub fn new(_: usize, _: bool) -> $class<E> {
+            pub fn new(_: bool) -> $class<E> {
                 $class::<E>(PhantomData)
             }
 

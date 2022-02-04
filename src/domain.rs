@@ -514,7 +514,7 @@ fn parallel_fft_consistency() {
     test_consistency::<Bls12, _>(rng);
 }
 
-pub fn create_fft_kernel<E>(_log_d: usize, priority: bool) -> Option<gpu::FFTKernel<E>>
+pub fn create_fft_kernel<E>(priority: bool) -> Option<gpu::FFTKernel<E>>
 where
     E: Engine + gpu::GpuEngine,
 {
@@ -550,7 +550,7 @@ mod tests {
 
         let worker = Worker::new();
         let log_cpus = worker.log_num_cpus();
-        let mut locked_kern = gpu::LockedFFTKernel::<Bls12>::new(0, false);
+        let mut locked_kern = gpu::LockedFFTKernel::<Bls12>::new(false);
 
         for log_d in 1..=20 {
             let d = 1 << log_d;
@@ -595,7 +595,7 @@ mod tests {
 
         let worker = Worker::new();
         let log_cpus = worker.log_num_cpus();
-        let mut locked_kern = gpu::LockedFFTKernel::<Bls12>::new(0, false);
+        let mut locked_kern = gpu::LockedFFTKernel::<Bls12>::new(false);
 
         for log_d in 1..=20 {
             let d = 1 << log_d;

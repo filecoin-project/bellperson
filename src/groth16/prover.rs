@@ -289,11 +289,6 @@ where
         );
     }
 
-    let mut log_d = 0;
-    while (1 << log_d) < n {
-        log_d += 1;
-    }
-
     #[cfg(any(feature = "cuda", feature = "opencl"))]
     let prio_lock = if priority {
         trace!("acquiring priority lock");
@@ -315,14 +310,14 @@ where
             *params_h = Some(params.get_h(n));
         });
 
-        let mut fft_kern = Some(LockedFFTKernel::<E>::new(log_d, priority));
+        let mut fft_kern = Some(LockedFFTKernel::<E>::new(priority));
         for prover in provers_ref {
             a_s.push(execute_fft(worker, prover, &mut fft_kern)?);
         }
         Ok(())
     })?;
 
-    let mut multiexp_kern = Some(LockedMultiexpKernel::<E>::new(log_d, priority));
+    let mut multiexp_kern = Some(LockedMultiexpKernel::<E>::new(priority));
     let params_h = params_h.unwrap()?;
 
     let mut h_s = Vec::with_capacity(num_circuits);

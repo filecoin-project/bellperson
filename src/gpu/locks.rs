@@ -104,7 +104,6 @@ macro_rules! locked_kernel {
         where
             E: pairing::Engine + crate::gpu::GpuEngine,
         {
-            log_d: usize,
             priority: bool,
             kernel: Option<$kern<E>>,
             // There should always be only one thing running on the GPU, hence create a
@@ -116,9 +115,8 @@ macro_rules! locked_kernel {
         where
             E: pairing::Engine + crate::gpu::GpuEngine,
         {
-            pub fn new(log_d: usize, priority: bool) -> $class<E> {
+            pub fn new(priority: bool) -> $class<E> {
                 $class::<E> {
-                    log_d,
                     priority,
                     kernel: None,
                     gpu_lock: None,
@@ -130,7 +128,7 @@ macro_rules! locked_kernel {
                     PriorityLock::wait(self.priority);
                     info!("GPU is available for {}!", $name);
                     self.gpu_lock = Some(GPULock::lock());
-                    self.kernel = $func::<E>(self.log_d, self.priority);
+                    self.kernel = $func::<E>(self.priority);
                 }
             }
 
