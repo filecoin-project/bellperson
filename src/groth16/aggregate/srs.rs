@@ -68,8 +68,8 @@ pub struct ProverSRS<E: Engine> {
     pub vkey: VKey<E>,
     /// commitment key using in TIPP
     pub wkey: WKey<E>,
-    /// Size of g_alpha_powers
-    pub g_alpha_powers_len: usize,
+    /// Needed for optimized input aggregation
+    pub g_alpha_powers_end_table: MultiscalarPrecompOwned<E::G1Affine>,
 }
 
 /// Contains the necessary elements to verify an aggregated Groth16 proof; it is of fixed size
@@ -136,8 +136,8 @@ where
         assert!(self.h_alpha_powers.len() >= tn);
         assert!(self.g_beta_powers.len() >= tn);
         assert!(self.h_beta_powers.len() >= tn);
-        let n = dbg!(num_proofs);
-        dbg!(self.g_alpha_powers.len());
+        let n = num_proofs;
+
         // when doing the KZG opening we need _all_ coefficients from 0
         // to 2n-1 because the polynomial is of degree 2n-1.
         let g_low = 0;
@@ -146,6 +146,10 @@ where
         let h_up = h_low + n;
         let g_alpha_powers_table =
             precompute_fixed_window(&self.g_alpha_powers[g_low..g_up], WINDOW_SIZE);
+        let g_alpha_powers_end_table = precompute_fixed_window(
+            &self.g_alpha_powers[self.g_alpha_powers.len() - n..],
+            WINDOW_SIZE,
+        );
         let g_beta_powers_table =
             precompute_fixed_window(&self.g_beta_powers[g_low..g_up], WINDOW_SIZE);
         let h_alpha_powers_table =
@@ -170,7 +174,7 @@ where
             vkey,
             wkey,
             n,
-            g_alpha_powers_len: self.g_alpha_powers.len(),
+            g_alpha_powers_end_table,
         };
         let vk = VerifierSRS::<E> {
             n,

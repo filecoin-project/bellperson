@@ -191,12 +191,7 @@ where
         let com_w0_j = calc_multiscalar(&poly_w0, &srs.g_alpha_powers_table, proofs.len() - 1);
 
         // Check F^x^(n - d) exists i.e. that F is bounded
-        let com_wd_j = calc_multiscalar(
-            &poly_f_cp,
-            &srs.g_alpha_powers_table
-                .at_point(srs.g_alpha_powers_len - proofs.len()),
-            proofs.len(),
-        );
+        let com_wd_j = calc_multiscalar(&poly_f_cp, &srs.g_alpha_powers_end_table, proofs.len());
 
         com_f.push(com_f_j);
         com_w0.push(-com_w0_j);
