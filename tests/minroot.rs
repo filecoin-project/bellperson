@@ -264,7 +264,10 @@ fn minroot_aggregate_proof() {
         xl = statement_circuit.0[2];
         xr = statement_circuit.0[3];
 
-        proofs.push(create_random_proof(statement_circuit.1, &params, &mut rng).unwrap());
+        let proof = create_random_proof(statement_circuit.1, &params, &mut rng).unwrap();
+
+        assert!(verify_proof(&pvk, &proof, &statement_circuit.0).unwrap());
+        proofs.push(proof);
         statements.push(statement_circuit.0);
     }
 
@@ -273,6 +276,8 @@ fn minroot_aggregate_proof() {
     let mut buf = Vec::new();
     proofs[0].write(&mut buf).expect("buffer");
     let inclusion = vec![1, 2, 3];
+
+    env_logger::try_init().ok();
 
     let (pk, vk) = generic.specialize(nb_proofs);
 
@@ -296,7 +301,7 @@ fn minroot_aggregate_proof() {
     )
     .unwrap();
 
-    assert!(verified);
+    assert!(verified, "failed to verify aggregate proof");
 }
 
 fn generate_proof(
@@ -305,8 +310,7 @@ fn generate_proof(
 ) -> (Vec<Fr>, MinRoot<Bls12>) {
     let (image_xl, image_xr) = minroot::<Bls12>(xl_old, xr_old);
 
-    // Create an instance of our circuit (with the
-    // witness)
+    // Create an instance of our circuit (with the witness)
     let c = MinRoot::<Bls12> {
         xl: Some(xl_old),
         xr: Some(xr_old),

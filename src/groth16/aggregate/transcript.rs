@@ -11,13 +11,13 @@ const PREFIX: &str = "snarkpack-v1";
 #[derive(Debug)]
 pub struct Transcript<E: Engine> {
     hasher: Sha256,
-    pub(crate) buffer: Vec<u8>,
+    buffer: Vec<u8>,
     _e: PhantomData<E>,
 }
 
 /// A challenge derived from the transcript.
 #[derive(Debug, Clone)]
-pub struct Challenge<E: Engine>(pub(crate) E::Fr);
+pub struct Challenge<E: Engine>(E::Fr);
 
 impl<E: Engine> Copy for Challenge<E> {}
 
@@ -67,6 +67,10 @@ impl<E: Engine> Transcript<E> {
         self.hasher.update(&self.buffer);
         self.buffer.clear();
         self
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.hasher.finalize().to_vec()
     }
 
     /// Generate a challenge from the transcript.

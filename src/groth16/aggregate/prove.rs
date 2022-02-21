@@ -12,7 +12,7 @@ use super::{
     compress, inner_product,
     poly::DensePolynomial,
     structured_scalar_power,
-    transcript::{Challenge, Transcript},
+    transcript::Transcript,
     AggregateProof, AggregateProofAndInstance, GipaProof, KZGOpening, ProverSRS, TippMippProof,
 };
 use crate::groth16::{multiscalar::*, Proof};
@@ -175,61 +175,32 @@ where
         let poly_f_cp = poly_f_j.clone();
         let poly_f_cp_2 = poly_f_j.clone();
 
-        // compute F
-        let com_f_j = {
-            let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
-                if i >= proofs.len() {
-                    return E::Fr::zero().to_repr();
-                }
-                poly_f_j[i].to_repr()
-            };
-
+        let calc_multiscalar = |left: &[E::Fr], table, len: usize| {
+            let getter = |i: usize| -> <E::Fr as PrimeField>::Repr { left[i].to_repr() };
             par_multiscalar::<_, E::G1Affine>(
-                &ScalarList::Getter(getter, proofs.len()),
-                &srs.g_alpha_powers_table,
+                &ScalarList::Getter(getter, len),
+                table,
                 std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
             )
         };
+
+        // compute F
+        let com_f_j = calc_multiscalar(&poly_f_j, &srs.g_alpha_powers_table, proofs.len());
 
         // check that a0 is the zero coefficient of F
-        let com_w0_j = {
-            let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
-                if i >= proofs.len() - 1 {
-                    return E::Fr::zero().to_repr();
-                }
-                poly_w0[i].to_repr()
-            };
-
-            par_multiscalar::<_, E::G1Affine>(
-                &ScalarList::Getter(getter, proofs.len() - 1),
-                &srs.g_alpha_powers_table,
-                std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
-            )
-        };
+        let com_w0_j = calc_multiscalar(&poly_w0, &srs.g_alpha_powers_table, proofs.len() - 1);
 
         // Check F^x^(n - d) exists i.e. that F is bounded
-        let com_wd_j = {
-            let n = srs.n;
-            let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
-                if i >= n - proofs.len() {
-                    return E::Fr::zero().to_repr();
-                }
-                poly_f_cp[i].to_repr()
-            };
-
-            par_multiscalar::<_, E::G1Affine>(
-                &ScalarList::Getter(getter, n - proofs.len()),
-                &srs.g_alpha_powers_table.at_point(proofs.len()),
-                std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
-            )
-        };
-
-        let n_com_w0_j = -com_w0_j;
-        let n_com_wd_j = -com_wd_j;
+        let com_wd_j = calc_multiscalar(
+            &poly_f_cp,
+            &srs.g_alpha_powers_table
+                .at_point(srs.g_alpha_powers_len - proofs.len()),
+            proofs.len(),
+        );
 
         com_f.push(com_f_j);
-        com_w0.push(n_com_w0_j);
-        com_wd.push(n_com_wd_j);
+        com_w0.push(-com_w0_j);
+        com_wd.push(-com_wd_j);
         poly_f.push(poly_f_cp_2);
     }
 
@@ -238,7 +209,7 @@ where
         .write(&com_w0)
         .write(&com_wd)
         .write(&transcript_include)
-        .buffer;
+        .into_bytes();
 
     let pi_agg = aggregate_proofs(srs, &transcript_new, proofs).unwrap();
 
@@ -257,8 +228,8 @@ where
         let mut poly_eval = E::Fr::zero();
         let mut r_pow = E::Fr::one();
         for i in 0..poly_f[j].len() {
-            poly_eval.add_assign(poly_f[j][i].clone() * &r_pow);
-            r_pow.mul_assign(r.0);
+            poly_eval += poly_f[j][i].clone() * &r_pow;
+            r_pow *= &*r;
         }
         f_eval.push(poly_eval.clone());
 
@@ -628,20 +599,17 @@ fn create_kzg_opening_for_instance<E: Engine>(
 
     let quotient_polynomial_coeffs = quotient_polynomial.into_coeffs();
 
-    // multiexponentiation inner_product, inlined to optimize
-    let quotient_polynomial_coeffs_len = quotient_polynomial_coeffs.len();
-    let getter = |i: usize| -> <E::Fr as PrimeField>::Repr {
-        if i >= quotient_polynomial_coeffs_len {
-            return E::Fr::zero().to_repr();
-        }
-        quotient_polynomial_coeffs[i].to_repr()
-    };
+    // Check F^x^(n - d) exists i.e. that F is bounded
+    let pi_open = {
+        let getter =
+            |i: usize| -> <E::Fr as PrimeField>::Repr { quotient_polynomial_coeffs[i].to_repr() };
 
-    let pi_open = par_multiscalar::<_, E::G1Affine>(
-        &ScalarList::Getter(getter, quotient_polynomial_coeffs_len),
-        srs_powers_alpha_table,
-        std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
-    );
+        par_multiscalar::<_, E::G1Affine>(
+            &ScalarList::Getter(getter, quotient_polynomial_coeffs.len()),
+            srs_powers_alpha_table,
+            std::mem::size_of::<<E::Fr as PrimeField>::Repr>() * 8,
+        )
+    };
 
     Ok(pi_open)
 }

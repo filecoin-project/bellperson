@@ -68,6 +68,8 @@ pub struct ProverSRS<E: Engine> {
     pub vkey: VKey<E>,
     /// commitment key using in TIPP
     pub wkey: WKey<E>,
+    /// Size of g_alpha_powers
+    pub g_alpha_powers_len: usize,
 }
 
 /// Contains the necessary elements to verify an aggregated Groth16 proof; it is of fixed size
@@ -83,6 +85,7 @@ pub struct VerifierSRS<E: Engine> {
     pub g_beta: E::G1,
     pub h_alpha: E::G2,
     pub h_beta: E::G2,
+    pub h_alpha_d: E::G2,
 }
 
 impl<E: Engine> PartialEq for GenericSRS<E> {
@@ -102,6 +105,7 @@ impl<E: Engine> PartialEq for VerifierSRS<E> {
             && self.g_beta == other.g_beta
             && self.h_alpha == other.h_alpha
             && self.h_beta == other.h_beta
+            && self.h_alpha_d == other.h_alpha_d
     }
 }
 
@@ -132,7 +136,8 @@ where
         assert!(self.h_alpha_powers.len() >= tn);
         assert!(self.g_beta_powers.len() >= tn);
         assert!(self.h_beta_powers.len() >= tn);
-        let n = num_proofs;
+        let n = dbg!(num_proofs);
+        dbg!(self.g_alpha_powers.len());
         // when doing the KZG opening we need _all_ coefficients from 0
         // to 2n-1 because the polynomial is of degree 2n-1.
         let g_low = 0;
@@ -165,6 +170,7 @@ where
             vkey,
             wkey,
             n,
+            g_alpha_powers_len: self.g_alpha_powers.len(),
         };
         let vk = VerifierSRS::<E> {
             n,
@@ -174,6 +180,7 @@ where
             g_beta: self.g_beta_powers[1].to_curve(),
             h_alpha: self.h_alpha_powers[1].to_curve(),
             h_beta: self.h_beta_powers[1].to_curve(),
+            h_alpha_d: self.h_alpha_powers[self.g_alpha_powers.len() - num_proofs].into(),
         };
         (pk, vk)
     }

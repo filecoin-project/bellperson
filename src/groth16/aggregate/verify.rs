@@ -235,7 +235,7 @@ where
         .write(&aggregate_proof_and_instance.com_w0)
         .write(&aggregate_proof_and_instance.com_wd)
         .write(&transcript_include)
-        .buffer;
+        .into_bytes();
 
     let hcom = Transcript::<E>::new("hcom")
         .write(&proof.com_ab)
@@ -275,7 +275,7 @@ where
             &[
                 (
                     &aggregate_proof_and_instance.com_f[i].to_affine(),
-                    &ip_verifier_srs.h_alpha.to_affine(),
+                    &ip_verifier_srs.h_alpha_d.to_affine(),
                 ),
                 (
                     &aggregate_proof_and_instance.com_wd[i].to_affine(),
@@ -343,28 +343,23 @@ where
         par! {
             // 3. Compute left part of the final pairing equation
             let left = {
-                let mut alpha_g1_r_sum = pvk.alpha_g1;
-                alpha_g1_r_sum.mul_assign(r_sum);
+                let alpha_g1_r_sum = pvk.alpha_g1 * r_sum;
 
                 E::multi_miller_loop(&[(&alpha_g1_r_sum.to_affine(), &pvk.beta_g2)])
             },
 
             let middle = {
-                let mut g_ic = pvk.ic_projective[0];
                 // first public input is 1 for all circuits.
-                g_ic.mul_assign(r_sum);
+                let mut g_ic = pvk.ic_projective[0] * r_sum;
 
                 for i in 0..public_inputs.len() {
-
                     // g_ic = prod_i Si^(f_i(r)) S_(i + n)^( 1/r( f_i(r) - a0) + a_n r^(n-1))
-                    g_ic =
-                         g_ic +
-                            (pvk.ic[1+i] * aggregate_proof_and_instance.f_eval[i]);
+                    g_ic += pvk.ic[1 + i] * aggregate_proof_and_instance.f_eval[i];
 
                     // d = f(r) - a0
                     let mut d = aggregate_proof_and_instance.f_eval[i] - &public_inputs[i];
                     // d = (1/r) (f(r) - a0)
-                    d.mul_assign( & r.invert().unwrap() );
+                    d *= &r.invert().unwrap();
                     // d = (1/r) (f(r) - a0 ) + r^(n-1) an
                     let n_neg_one = (ip_verifier_srs.n - 1) as u64;
                     d += public_outputs[i] * r.pow_vartime(&[n_neg_one]) ;
@@ -374,8 +369,9 @@ where
                     g_ic += pk_ic_in;
                 }
 
-                E::multi_miller_loop(&[( &g_ic.to_affine() , &pvk.gamma_g2)])
+                E::multi_miller_loop(&[(&g_ic.to_affine() , &pvk.gamma_g2)])
             },
+
             // 4. Compute right part of the final pairing equation
             let right = {
                 E::multi_miller_loop(&[(
