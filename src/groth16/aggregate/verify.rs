@@ -248,15 +248,15 @@ where
         .write(&transcript_new)
         .into_challenge();
 
-    let r_f = (*r).pow_vartime(&[1 as u64]);
+    let r_f = (*r).pow_vartime(&[1u64]);
 
     //    let pairing_checks_instance: PairingChecks<E,R> = PairingChecks::new(rng2);
     let pairing_checks: PairingChecks<E, R> = PairingChecks::new(rng);
     let pairing_checks_copy = &pairing_checks;
 
-    for i in 0..public_inputs.len() {
+    for (i, public_input) in public_inputs.iter().enumerate() {
         // check com_f has a_0 as zero'th coefficient: com_f - a0 * g
-        let d = (aggregate_proof_and_instance.com_f[i] - (ip_verifier_srs.g * public_inputs[i]))
+        let d = (aggregate_proof_and_instance.com_f[i] - (ip_verifier_srs.g * public_input))
             .to_affine();
 
         pairing_checks_copy.merge_miller_inputs(
@@ -329,7 +329,7 @@ where
         info!("checking aggregate pairing");
         let mut r_sum = r.pow_vartime(&[ip_verifier_srs.n as u64]);
         r_sum.sub_assign(&E::Fr::one());
-        let b = (*r - &E::Fr::one()).invert().unwrap();
+        let b = (*r - E::Fr::one()).invert().unwrap();
         r_sum.mul_assign(&b);
 
         // The following parts 3 4 5 are independently computing the parts of the Groth16
@@ -357,7 +357,7 @@ where
                     g_ic += pvk.ic[1 + i] * aggregate_proof_and_instance.f_eval[i];
 
                     // d = f(r) - a0
-                    let mut d = aggregate_proof_and_instance.f_eval[i] - &public_inputs[i];
+                    let mut d = aggregate_proof_and_instance.f_eval[i] - public_inputs[i];
                     // d = (1/r) (f(r) - a0)
                     d *= &r.invert().unwrap();
                     // d = (1/r) (f(r) - a0 ) + r^(n-1) an
@@ -387,7 +387,7 @@ where
             vec![left, middle, right],
             // final value ip_ab is what we want to compare in the groth16
             // aggregated equation A * B
-            proof.ip_ab.clone(),
+            proof.ip_ab,
         );
     });
 

@@ -255,6 +255,7 @@ where
 
 /// creates a batch of proofs where the randomization vector is already
 /// predefined
+#[allow(clippy::needless_collect)]
 pub fn create_proof_batch_priority<E, C, P: ParameterSource<E>>(
     circuits: Vec<C>,
     params: P,

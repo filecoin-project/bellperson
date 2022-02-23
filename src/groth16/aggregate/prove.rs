@@ -166,7 +166,7 @@ where
         let mut poly_f_j: Vec<E::Fr> = Vec::new();
         let mut poly_w0: Vec<E::Fr> = Vec::new();
         for i in 0..proofs.len() {
-            poly_f_j.push(statements[i][j].clone());
+            poly_f_j.push(statements[i][j]);
             if i < (proofs.len() - 1) {
                 poly_w0.push(statements[i + 1][j]);
             }
@@ -219,19 +219,19 @@ where
         .write(&transcript_new)
         .into_challenge();
 
-    for j in 0..poly_f.len() {
+    for poly_f_j in poly_f {
         let mut poly_eval = E::Fr::zero();
         let mut r_pow = E::Fr::one();
-        for i in 0..poly_f[j].len() {
-            poly_eval += poly_f[j][i].clone() * &r_pow;
+        for poly_f_j_i in &poly_f_j {
+            poly_eval += *poly_f_j_i * r_pow;
             r_pow *= &*r;
         }
-        f_eval.push(poly_eval.clone());
+        f_eval.push(poly_eval);
 
         f_eval_proof.push(
             create_kzg_opening_for_instance::<E>(
                 &srs.g_alpha_powers_table,
-                DensePolynomial::from_coeffs(poly_f[j].clone()),
+                DensePolynomial::from_coeffs(poly_f_j.clone()),
                 poly_eval,
                 &*r,
             )
