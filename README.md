@@ -153,6 +153,12 @@ Bellperson uses `rust-gpu-tools` as its CUDA/OpenCL backend, therefore you may s
 directory named `~/.rust-gpu-tools` in your home folder, which contains the
 compiled binaries of OpenCL kernels used in this repository.
 
+### Experimental
+
+The instance aggregation provided by `groth16::aggregate::prove::aggregate_proofs_and_instances()` has not yet been
+audited so should be used with caution. It is not recommended to use instance aggregation in production until it has
+been audited.
+
 ## License
 
 Licensed under either of
