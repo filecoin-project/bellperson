@@ -80,9 +80,8 @@ impl<E: Engine> Circuit<E::Fr> for MinRoot<E> {
             // power equals (2 * p - 1) / 5.
 
             let mut new_xl_value = None;
-            if xl_value.is_none() {
-            } else {
-                let mut tmp1 = xl_value.unwrap();
+            if let Some(xl_value) = xl_value {
+                let mut tmp1 = xl_value;
                 tmp1 += &xr_value.unwrap();
                 new_xl_value = fifth_root::<E>(tmp1);
             }
@@ -195,8 +194,8 @@ fn minroot_test() {
     let mut images = vec![];
 
     // Generate a random preimage and compute the image
-    let xl = <Bls12 as Engine>::Fr::random(rng.clone());
-    let xr = <Bls12 as Engine>::Fr::random(rng.clone());
+    let xl = <Bls12 as Engine>::Fr::random(*rng);
+    let xr = <Bls12 as Engine>::Fr::random(*rng);
     let (image_xl, image_xr) = minroot::<Bls12>(xl, xr);
 
     proof_vec.truncate(0);
@@ -251,7 +250,7 @@ fn minroot_aggregate_proof() {
     let mut xl = <Bls12 as Engine>::Fr::random(&mut rng);
     let mut xr = <Bls12 as Engine>::Fr::random(&mut rng);
 
-    let public_inputs = [xl.clone(), xr.clone()].to_vec();
+    let public_inputs = [xl, xr].to_vec();
 
     let mut proofs: Vec<Proof<Bls12>> = Vec::new();
     let mut statements: Vec<Vec<Fr>> = Vec::new();
@@ -271,7 +270,7 @@ fn minroot_aggregate_proof() {
         statements.push(statement_circuit.0);
     }
 
-    let public_outputs = [xl.clone(), xr.clone()].to_vec();
+    let public_outputs = [xl, xr].to_vec();
 
     let mut buf = Vec::new();
     proofs[0].write(&mut buf).expect("buffer");
