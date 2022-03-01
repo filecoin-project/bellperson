@@ -154,15 +154,6 @@ impl<E: Engine> Circuit<E::Fr> for MinRoot<E> {
                 |lc| lc + xl + xr,
             );
 
-            // think this constraint isn't actually necessary because can just take in same witness wire.
-            // new_xr = xl
-            //        cs.enforce(
-            //            || "new_xr = xl",
-            //            |lc| lc + new_xr,
-            //            |lc| lc + CS::one(),
-            //            |lc| lc + xl,
-            //        );
-
             // update xl and xr for next round
             xr = new_xr;
             xr_value = xl_value;
