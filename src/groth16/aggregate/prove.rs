@@ -594,7 +594,7 @@ fn create_kzg_opening_for_instance<E: Engine>(
 
     let quotient_polynomial_coeffs = quotient_polynomial.into_coeffs();
 
-    // Check F^x^(n - d) exists i.e. that F is bounded
+    //// Compute the proof that F opens to f_v(z) at z as g^{quotient_polynomial(alpha)}.
     let pi_open = {
         let getter =
             |i: usize| -> <E::Fr as PrimeField>::Repr { quotient_polynomial_coeffs[i].to_repr() };
