@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::ops::{AddAssign, MulAssign};
 
 use blstrs::Compress;
@@ -153,7 +154,20 @@ where
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
 {
+    if statements.len() < 2 {
+        return Err(SynthesisError::MalformedProofs(
+            "aggregating less than 2 proofs is not allowed".to_string(),
+        ));
+    }
     assert!(statements.len() > 1);
+    let n = statements[0].len();
+    for s in statements {
+        if s.len() != n {
+            return Err(SynthesisError::MalformedProofs(
+                "all statements must be equally sized".to_string(),
+            ));
+        }
+    }
     let mut com_f: Vec<E::G1> = Vec::new();
     let mut com_w0: Vec<E::G1> = Vec::new();
     let mut com_wd: Vec<E::G1> = Vec::new();
@@ -162,7 +176,7 @@ where
 
     let mut poly_f: Vec<Vec<E::Fr>> = Vec::new();
 
-    for j in 0..(statements[0].len() / 2) {
+    for j in 0..n / 2 {
         let mut poly_f_j: Vec<E::Fr> = Vec::new();
         let mut poly_w0: Vec<E::Fr> = Vec::new();
         for i in 0..proofs.len() {
@@ -240,6 +254,7 @@ where
     }
 
     Ok(AggregateProofAndInstance {
+        num_inputs: u32::try_from(n).expect("too many statements"),
         pi_agg,
         com_f,
         com_w0,

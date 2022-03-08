@@ -222,10 +222,10 @@ where
     E::G2Affine: Serialize,
     R: rand_core::RngCore + Send,
 {
-    let proof = &aggregate_proof_and_instance.pi_agg.clone();
-
     info!("verify_aggregate_proof");
-    proof.parsing_check()?;
+    aggregate_proof_and_instance.parsing_check()?;
+    let proof = &aggregate_proof_and_instance.pi_agg;
+
     if (public_inputs.len() + public_outputs.len() + 1) != pvk.ic.len() {
         return Err(SynthesisError::MalformedVerifyingKey);
     }
