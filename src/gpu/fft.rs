@@ -151,6 +151,7 @@ where
         if kernels_local.is_empty() {
             return Err(GPUError::Simple("No working GPUs found!"));
         }
+
         info!("FFT: {} working device(s) selected. ", kernels_local.len());
         for (i, k) in kernels_local.iter().enumerate() {
             info!("FFT: Device {}: {}", i, k.program.device_name(),);
