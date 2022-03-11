@@ -176,16 +176,7 @@ where
             n,
             g_alpha_powers_end_table,
         };
-        let vk = VerifierSRS::<E> {
-            n,
-            g: self.g_alpha_powers[0].to_curve(),
-            h: self.h_alpha_powers[0].to_curve(),
-            g_alpha: self.g_alpha_powers[1].to_curve(),
-            g_beta: self.g_beta_powers[1].to_curve(),
-            h_alpha: self.h_alpha_powers[1].to_curve(),
-            h_beta: self.h_beta_powers[1].to_curve(),
-            h_alpha_d: self.h_alpha_powers[self.g_alpha_powers.len() - num_proofs].into(),
-        };
+        let vk = self.specialize_vk(num_proofs);
         (pk, vk)
     }
 
