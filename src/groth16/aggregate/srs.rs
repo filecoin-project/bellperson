@@ -189,6 +189,22 @@ where
         (pk, vk)
     }
 
+    pub fn specialize_vk(&self, num_proofs: usize) -> VerifierSRS<E> {
+        assert!(num_proofs.is_power_of_two());
+        let n = num_proofs;
+        let vk = VerifierSRS::<E> {
+            n,
+            g: self.g_alpha_powers[0].to_curve(),
+            h: self.h_alpha_powers[0].to_curve(),
+            g_alpha: self.g_alpha_powers[1].to_curve(),
+            g_beta: self.g_beta_powers[1].to_curve(),
+            h_alpha: self.h_alpha_powers[1].to_curve(),
+            h_beta: self.h_beta_powers[1].to_curve(),
+            h_alpha_d: self.h_alpha_powers[self.g_alpha_powers.len() - num_proofs].into(),
+        };
+        vk
+    }
+
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         write_vec(writer, &self.g_alpha_powers)?;
         write_vec(writer, &self.g_beta_powers)?;
