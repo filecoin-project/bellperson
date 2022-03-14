@@ -45,8 +45,7 @@ pub struct GenericSRS<E: Engine> {
 
 /// ProverSRS is the specialized SRS version for the prover for a specific number of proofs to
 /// aggregate. It contains as well the commitment keys for this specific size.
-/// Note the size must be a power of two for the moment - if it is not, padding must be
-/// applied.
+/// Note the size must be a power of two for the moment - if it is not, padding must be applied.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug)]
 pub struct ProverSRS<E: Engine> {
@@ -68,8 +67,25 @@ pub struct ProverSRS<E: Engine> {
     pub vkey: VKey<E>,
     /// commitment key using in TIPP
     pub wkey: WKey<E>,
+}
+
+/// ProverSRS is the specialized SRS version for the prover for a specific number of proofs to
+/// aggregate. It contains as well the commitment keys for this specific size.
+/// Note the size must be a power of two for the moment - if it is not, padding must be applied.
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Clone, Debug)]
+pub struct ProverSRSInputAggregation<E: Engine> {
+    pub prover_srs: ProverSRS<E>,
     /// Needed for optimized input aggregation
     pub g_alpha_powers_end_table: MultiscalarPrecompOwned<E::G1Affine>,
+}
+
+impl<E: Engine> std::ops::Deref for ProverSRSInputAggregation<E> {
+    type Target = ProverSRS<E>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.prover_srs
+    }
 }
 
 /// Contains the necessary elements to verify an aggregated Groth16 proof; it is of fixed size
@@ -119,17 +135,56 @@ impl<E: Engine> ProverSRS<E> {
     }
 }
 
+impl<E: Engine> ProverSRSInputAggregation<E> {
+    /// Returns true if commitment keys have the exact required length.
+    /// It is necessary for the IPP scheme to work that commitment
+    /// key have the exact same number of arguments as the number of proofs to
+    /// aggregate.
+    pub fn has_correct_len(&self, n: usize) -> bool {
+        self.vkey.has_correct_len(n) && self.wkey.has_correct_len(n)
+    }
+}
+
 impl<E> GenericSRS<E>
 where
     E: Engine,
     <E::G1Affine as GroupEncoding>::Repr: Sync,
     <E::G2Affine as GroupEncoding>::Repr: Sync,
 {
-    /// specializes returns the prover and verifier SRS for a specific number of
+    /// Returns the prover and verifier SRS for a specific number of
     /// proofs to aggregate. The number of proofs MUST BE a power of two, it
     /// panics otherwise. The number of proofs must be inferior to half of the
     /// size of the generic srs otherwise it panics.
     pub fn specialize(&self, num_proofs: usize) -> (ProverSRS<E>, VerifierSRS<E>) {
+        let pk = self.specialize_prover(num_proofs);
+        let vk = self.specialize_vk(num_proofs);
+        (pk, vk)
+    }
+
+    /// Returns the prover and verifier SRS for a specific number of
+    /// proofs to aggregate. The number of proofs MUST BE a power of two, it
+    /// panics otherwise. The number of proofs must be inferior to half of the
+    /// size of the generic srs otherwise it panics.
+    pub fn specialize_input_aggregation(
+        &self,
+        num_proofs: usize,
+    ) -> (ProverSRSInputAggregation<E>, VerifierSRS<E>) {
+        let prover_srs = self.specialize_prover(num_proofs);
+
+        let g_alpha_powers_end_table = precompute_fixed_window(
+            &self.g_alpha_powers[self.g_alpha_powers.len() - num_proofs..],
+            WINDOW_SIZE,
+        );
+
+        let pk = ProverSRSInputAggregation::<E> {
+            prover_srs,
+            g_alpha_powers_end_table,
+        };
+        let vk = self.specialize_vk(num_proofs);
+        (pk, vk)
+    }
+
+    pub fn specialize_prover(&self, num_proofs: usize) -> ProverSRS<E> {
         assert!(num_proofs.is_power_of_two());
         let tn = 2 * num_proofs; // size of the CRS we need
         assert!(self.g_alpha_powers.len() >= tn);
@@ -146,10 +201,6 @@ where
         let h_up = h_low + n;
         let g_alpha_powers_table =
             precompute_fixed_window(&self.g_alpha_powers[g_low..g_up], WINDOW_SIZE);
-        let g_alpha_powers_end_table = precompute_fixed_window(
-            &self.g_alpha_powers[self.g_alpha_powers.len() - n..],
-            WINDOW_SIZE,
-        );
         let g_beta_powers_table =
             precompute_fixed_window(&self.g_beta_powers[g_low..g_up], WINDOW_SIZE);
         let h_alpha_powers_table =
@@ -166,7 +217,7 @@ where
         let w2 = self.g_beta_powers[n..g_up].to_vec();
         let wkey = WKey::<E> { a: w1, b: w2 };
         assert!(wkey.has_correct_len(n));
-        let pk = ProverSRS::<E> {
+        ProverSRS::<E> {
             g_alpha_powers_table,
             g_beta_powers_table,
             h_alpha_powers_table,
@@ -174,16 +225,13 @@ where
             vkey,
             wkey,
             n,
-            g_alpha_powers_end_table,
-        };
-        let vk = self.specialize_vk(num_proofs);
-        (pk, vk)
+        }
     }
 
     pub fn specialize_vk(&self, num_proofs: usize) -> VerifierSRS<E> {
         assert!(num_proofs.is_power_of_two());
         let n = num_proofs;
-        let vk = VerifierSRS::<E> {
+        VerifierSRS::<E> {
             n,
             g: self.g_alpha_powers[0].to_curve(),
             h: self.h_alpha_powers[0].to_curve(),
@@ -192,8 +240,7 @@ where
             h_alpha: self.h_alpha_powers[1].to_curve(),
             h_beta: self.h_beta_powers[1].to_curve(),
             h_alpha_d: self.h_alpha_powers[self.g_alpha_powers.len() - num_proofs].into(),
-        };
-        vk
+        }
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {

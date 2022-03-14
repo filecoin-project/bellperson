@@ -269,7 +269,7 @@ fn minroot_aggregate_proof() {
 
     env_logger::try_init().ok();
 
-    let (pk, vk) = generic.specialize(nb_proofs);
+    let (pk, vk) = generic.specialize_input_aggregation(nb_proofs);
 
     // Aggregate proofs using inner product proofs
     let aggregate_proof_and_instance = aggregate_proofs_and_instances::<Bls12>(

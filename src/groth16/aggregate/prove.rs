@@ -14,7 +14,8 @@ use super::{
     poly::DensePolynomial,
     structured_scalar_power,
     transcript::Transcript,
-    AggregateProof, AggregateProofAndInstance, GipaProof, KZGOpening, ProverSRS, TippMippProof,
+    AggregateProof, AggregateProofAndInstance, GipaProof, KZGOpening, ProverSRS,
+    ProverSRSInputAggregation, TippMippProof,
 };
 use crate::groth16::{multiscalar::*, Proof};
 use crate::SynthesisError;
@@ -140,7 +141,7 @@ where
 }
 
 pub fn aggregate_proofs_and_instances<E: Engine + std::fmt::Debug>(
-    srs: &ProverSRS<E>,
+    srs: &ProverSRSInputAggregation<E>,
     transcript_include: &[u8],
     statements: &[Vec<E::Fr>],
     proofs: &[Proof<E>],
