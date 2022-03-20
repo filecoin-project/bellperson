@@ -8,6 +8,7 @@ use group::prime::PrimeCurveAffine;
 use pairing::Engine;
 
 use crate::gpu;
+pub use ec_gpu_gen::multiexp_cpu::DensityTracker;
 
 /// Perform multi-exponentiation. The caller is responsible for ensuring the
 /// query size is the same as the number of exponents.
