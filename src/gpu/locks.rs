@@ -159,10 +159,9 @@ macro_rules! locked_kernel {
             E: pairing::Engine + ec_gpu::GpuEngine,
         {
             priority: bool,
-            kernel: Option<$kern<'a, E>>,
-            // There should always be only one thing running on the GPU, hence create a
-            // lock. It is set when a kernel is initiallized and released when the kernel is freed.
-            gpu_lock: Option<GPULock>,
+            // Keep the GPU lock alongside the kernel, so that the lock is automatically dropped
+            // if the kernel is dropped.
+            kernel_and_lock: Option<($kern<'a, E>, GPULock)>,
         }
 
         impl<'a, E> $class<'a, E>
@@ -172,27 +171,33 @@ macro_rules! locked_kernel {
             pub fn new(priority: bool) -> $class<'a, E> {
                 $class::<E> {
                     priority,
-                    kernel: None,
-                    gpu_lock: None,
+                    kernel_and_lock: None,
                 }
             }
 
+            /// Intialize a kernel.
+            ///
+            /// On OpenCL that also means that the kernel source is compiled.
             fn init(&mut self) {
-                if self.kernel.is_none() {
+                if self.kernel_and_lock.is_none() {
                     PriorityLock::wait(self.priority);
                     info!("GPU is available for {}!", $name);
-                    self.gpu_lock = Some(GPULock::lock());
-                    self.kernel = $func::<E>(self.priority);
+                    if let Some(kernel) = $func::<E>(self.priority) {
+                        self.kernel_and_lock = Some((kernel, GPULock::lock()));
+                    }
                 }
             }
 
+            /// Free kernel resources early.
+            ///
+            /// When the locked kernel is dropped, it will free the resources automatically. In
+            /// case we are waiting for the GPU to be used, we free those resources early.
             fn free(&mut self) {
-                if let Some(_kernel) = self.kernel.take() {
+                if let Some(_) = self.kernel_and_lock.take() {
                     warn!(
                         "GPU acquired by a high priority process! Freeing up {} kernels...",
                         $name
                     );
-                    self.gpu_lock.take();
                 }
             }
 
@@ -204,14 +209,15 @@ macro_rules! locked_kernel {
                     return Err(GpuError::GpuDisabled);
                 }
 
-                self.init();
-
                 loop {
-                    if let Some(ref mut k) = self.kernel {
+                    // `init()` is a possibly blocking call that waits until the GPU is available.
+                    self.init();
+                    if let Some((ref mut k, ref _gpu_lock)) = self.kernel_and_lock {
                         match f(k) {
+                            // Re-trying to run on the GPU is the core of this loop, all other
+                            // cases abort the loop.
                             Err(GpuError::GpuTaken) => {
                                 self.free();
-                                self.init();
                             }
                             Err(e) => {
                                 warn!("GPU {} failed! Falling back to CPU... Error: {}", $name, e);
