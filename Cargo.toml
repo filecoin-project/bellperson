@@ -1,3 +1,6 @@
+# NOTE vmx 2022-08-19: Using the `__private_bench` feature of `blstrs` is just temporarily until
+# https://github.com/zkcrypto/group/pull/29 is fixed. Then we won't need the exports of `Fp` and
+# `Fp2` any more.
 [package]
 name = "bellperson"
 authors = [
@@ -34,11 +37,11 @@ itertools = "0.10.0"
 bincode = "1.3.1"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.9"
-blstrs = "0.5.0"
+blstrs = { version = "0.6.0", features = ["__private_bench"] }
 pairing = "0.22"
 yastl = "0.1.2"
-ec-gpu = { version = "0.1.0" }
-ec-gpu-gen = { version = "0.3.0", default-features = false, features = ["fft", "multiexp"] }
+ec-gpu = { version = "0.2.0" }
+ec-gpu-gen = { version = "0.4.0" }
 
 fs2 = { version = "0.4.3", optional = true }
 
@@ -88,4 +91,6 @@ members = [
 ]
 
 [build-dependencies]
+blstrs = { version = "0.6.0", features = ["__private_bench"] }
+ec-gpu-gen = { version = "0.4.0" }
 rustversion = "1.0.6"

@@ -10,7 +10,7 @@ use rayon::prelude::*;
 
 use super::{ParameterSource, Proof};
 use crate::domain::EvaluationDomain;
-use crate::gpu::{GpuEngine, LockedFFTKernel, LockedMultiexpKernel};
+use crate::gpu::{GpuName, LockedFftKernel, LockedMultiexpKernel};
 use crate::multiexp::multiexp;
 use crate::{
     Circuit, ConstraintSystem, Index, LinearCombination, SynthesisError, Variable, BELLMAN_VERSION,
@@ -225,9 +225,12 @@ pub fn create_random_proof_batch_priority<E, C, R, P: ParameterSource<E>>(
     priority: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
-    E: GpuEngine + MultiMillerLoop,
+    E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
     R: RngCore,
+    E::Fr: GpuName,
+    E::G1Affine: GpuName,
+    E::G2Affine: GpuName,
 {
     let r_s = (0..circuits.len())
         .map(|_| E::Fr::random(&mut *rng))
@@ -247,8 +250,11 @@ pub fn create_proof_batch_priority_nonzk<E, C, P: ParameterSource<E>>(
     priority: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
-    E: GpuEngine + MultiMillerLoop,
+    E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
+    E::Fr: GpuName,
+    E::G1Affine: GpuName,
+    E::G2Affine: GpuName,
 {
     create_proof_batch_priority_inner(circuits, params, None, priority)
 }
@@ -264,8 +270,11 @@ pub fn create_proof_batch_priority<E, C, P: ParameterSource<E>>(
     priority: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
-    E: GpuEngine + MultiMillerLoop,
+    E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
+    E::Fr: GpuName,
+    E::G1Affine: GpuName,
+    E::G2Affine: GpuName,
 {
     create_proof_batch_priority_inner(circuits, params, Some((r_s, s_s)), priority)
 }
@@ -279,8 +288,11 @@ fn create_proof_batch_priority_inner<E, C, P: ParameterSource<E>>(
     priority: bool,
 ) -> Result<Vec<Proof<E>>, SynthesisError>
 where
-    E: GpuEngine + MultiMillerLoop,
+    E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
+    E::Fr: GpuName,
+    E::G1Affine: GpuName,
+    E::G2Affine: GpuName,
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
@@ -348,14 +360,14 @@ where
             *params_h = Some(params.get_h(n));
         });
 
-        let mut fft_kern = Some(LockedFFTKernel::<E>::new(priority));
+        let mut fft_kern = Some(LockedFftKernel::new(priority));
         for prover in provers_ref {
             a_s.push(execute_fft(worker, prover, &mut fft_kern)?);
         }
         Ok(())
     })?;
 
-    let mut multiexp_kern = LockedMultiexpKernel::<E>::new(priority);
+    let mut multiexp_g1_kern = LockedMultiexpKernel::<E::G1Affine>::new(priority);
     let params_h = params_h.unwrap()?;
 
     let mut h_s = Vec::with_capacity(num_circuits);
@@ -375,7 +387,7 @@ where
                 params_h.clone(),
                 FullDensity,
                 a,
-                &mut multiexp_kern,
+                &mut multiexp_g1_kern,
             ));
         }
     });
@@ -410,7 +422,7 @@ where
                 params_l.clone(),
                 FullDensity,
                 aux.clone(),
-                &mut multiexp_kern,
+                &mut multiexp_g1_kern,
             ));
         }
     });
@@ -449,7 +461,7 @@ where
                     a_inputs_source.clone(),
                     FullDensity,
                     input_assignment.clone(),
-                    &mut multiexp_kern,
+                    &mut multiexp_g1_kern,
                 );
 
                 let a_aux = multiexp(
@@ -457,7 +469,7 @@ where
                     a_aux_source.clone(),
                     a_aux_density.clone(),
                     aux_assignment.clone(),
-                    &mut multiexp_kern,
+                    &mut multiexp_g1_kern,
                 );
 
                 let b_g1_inputs_aux_opt =
@@ -470,14 +482,14 @@ where
                                     b_g1_inputs_source.clone(),
                                     b_input_density.clone(),
                                     input_assignment.clone(),
-                                    &mut multiexp_kern,
+                                    &mut multiexp_g1_kern,
                                 ),
                                 multiexp(
                                     worker,
                                     b_g1_aux_source.clone(),
                                     b_aux_density.clone(),
                                     aux_assignment.clone(),
-                                    &mut multiexp_kern,
+                                    &mut multiexp_g1_kern,
                                 ),
                             )
                         });
@@ -486,9 +498,14 @@ where
             },
         )
         .collect::<Vec<_>>();
+    drop(multiexp_g1_kern);
     drop(a_inputs_source);
     drop(a_aux_source);
     drop(params_b_g1_opt);
+
+    // The multiexp kernel for G1 can only be initiated after the kernel for G1 was dropped. Else
+    // it would block, trying to acquire the GPU lock.
+    let mut multiexp_g2_kern = LockedMultiexpKernel::<E::G2Affine>::new(priority);
 
     debug!("get b_g2");
     let (b_g2_inputs_source, b_g2_aux_source) = params_b_g2.unwrap()?;
@@ -505,21 +522,21 @@ where
                     b_g2_inputs_source.clone(),
                     b_input_density.clone(),
                     input_assignment.clone(),
-                    &mut multiexp_kern,
+                    &mut multiexp_g2_kern,
                 );
                 let b_g2_aux = multiexp(
                     worker,
                     b_g2_aux_source.clone(),
                     b_aux_density.clone(),
                     aux_assignment.clone(),
-                    &mut multiexp_kern,
+                    &mut multiexp_g2_kern,
                 );
 
                 (b_g2_inputs, b_g2_aux)
             },
         )
         .collect::<Vec<_>>();
-    drop(multiexp_kern);
+    drop(multiexp_g2_kern);
     drop(densities);
     drop(b_g2_inputs_source);
     drop(b_g2_aux_source);
@@ -594,13 +611,13 @@ where
     Ok(proofs)
 }
 
-fn execute_fft<E>(
+fn execute_fft<F>(
     worker: &Worker,
-    prover: &mut ProvingAssignment<E::Fr>,
-    fft_kern: &mut Option<LockedFFTKernel<E>>,
-) -> Result<Arc<Vec<<E::Fr as PrimeField>::Repr>>, SynthesisError>
+    prover: &mut ProvingAssignment<F>,
+    fft_kern: &mut Option<LockedFftKernel<F>>,
+) -> Result<Arc<Vec<F::Repr>>, SynthesisError>
 where
-    E: GpuEngine + MultiMillerLoop,
+    F: PrimeField + GpuName,
 {
     let mut a = EvaluationDomain::from_coeffs(std::mem::take(&mut prover.a))?;
     let mut b = EvaluationDomain::from_coeffs(std::mem::take(&mut prover.b))?;
@@ -718,14 +735,15 @@ mod tests {
 
                 let mut full_assignment = ProvingAssignment::<Fr>::new();
                 full_assignment
-                    .alloc_input(|| "one", || Ok(Fr::one()))
+                    .alloc_input(|| "one", || Ok(<Fr as Field>::one()))
                     .unwrap();
 
                 let mut partial_assignments = Vec::with_capacity(count / k);
                 for i in 0..count {
                     if i % k == 0 {
                         let mut p = ProvingAssignment::new();
-                        p.alloc_input(|| "one", || Ok(Fr::one())).unwrap();
+                        p.alloc_input(|| "one", || Ok(<Fr as Field>::one()))
+                            .unwrap();
                         partial_assignments.push(p)
                     }
 
@@ -756,7 +774,9 @@ mod tests {
                 }
 
                 let mut combined = ProvingAssignment::new();
-                combined.alloc_input(|| "one", || Ok(Fr::one())).unwrap();
+                combined
+                    .alloc_input(|| "one", || Ok(<Fr as Field>::one()))
+                    .unwrap();
 
                 for assignment in partial_assignments.into_iter() {
                     combined.extend(assignment);

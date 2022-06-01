@@ -23,11 +23,12 @@ pub fn generate_random_parameters<E, C, R>(
     rng: &mut R,
 ) -> Result<Parameters<E>, SynthesisError>
 where
-    E: gpu::GpuEngine + MultiMillerLoop,
+    E: MultiMillerLoop,
     <E as Engine>::G1: WnafGroup,
     <E as Engine>::G2: WnafGroup,
     C: Circuit<E::Fr>,
     R: RngCore,
+    E::Fr: gpu::GpuName,
 {
     let g1 = E::G1::random(&mut *rng);
     let g2 = E::G2::random(&mut *rng);
@@ -193,15 +194,16 @@ pub fn generate_parameters<E, C>(
     tau: E::Fr,
 ) -> Result<Parameters<E>, SynthesisError>
 where
-    E: gpu::GpuEngine + MultiMillerLoop,
+    E: MultiMillerLoop,
     <E as Engine>::G1: WnafGroup,
     <E as Engine>::G2: WnafGroup,
     C: Circuit<E::Fr>,
+    E::Fr: gpu::GpuName,
 {
     let mut assembly = KeypairAssembly::new();
 
     // Allocate the "one" input variable
-    assembly.alloc_input(|| "", || Ok(E::Fr::one()))?;
+    assembly.alloc_input(|| "", || Ok(<E::Fr as Field>::one()))?;
 
     // Synthesize the circuit.
     circuit.synthesize(&mut assembly)?;
@@ -214,7 +216,7 @@ where
 
     // Create bases for blind evaluation of polynomials at tau
     let powers_of_tau = vec![E::Fr::zero(); assembly.num_constraints];
-    let mut powers_of_tau = EvaluationDomain::<E>::from_coeffs(powers_of_tau)?;
+    let mut powers_of_tau = EvaluationDomain::from_coeffs(powers_of_tau)?;
 
     // Compute G1 window table
     let mut g1_wnaf = Wnaf::new();

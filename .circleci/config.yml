@@ -148,6 +148,7 @@ jobs:
       - *restore-workspace
       - *restore-cache
       - set-env-path
+      - install-gpu-deps
       - run:
           name: Run cargo clippy (default features)
           command: cargo clippy --all --all-targets -- -D warnings

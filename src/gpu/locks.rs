@@ -1,15 +1,15 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use ec_gpu::GpuEngine;
 use ec_gpu_gen::fft::FftKernel;
 use ec_gpu_gen::rust_gpu_tools::Device;
+use ff::Field;
 use fs2::FileExt;
+use group::prime::PrimeCurveAffine;
 use log::{debug, info, warn};
-use pairing::Engine;
 
 use crate::gpu::error::{GpuError, GpuResult};
-use crate::gpu::CpuGpuMultiexpKernel;
+use crate::gpu::{CpuGpuMultiexpKernel, GpuName};
 
 const GPU_LOCK_NAME: &str = "bellman.gpu.lock";
 const PRIORITY_LOCK_NAME: &str = "bellman.priority.lock";
@@ -99,19 +99,25 @@ impl Drop for PriorityLock {
     }
 }
 
-fn create_fft_kernel<'a, E>(priority: bool) -> Option<FftKernel<'a, E>>
+fn create_fft_kernel<'a, F>(priority: bool) -> Option<FftKernel<'a, F>>
 where
-    E: Engine + GpuEngine,
+    F: Field + GpuName,
 {
     let devices = Device::all();
+    let programs = devices
+        .iter()
+        .map(|device| ec_gpu_gen::program!(device))
+        .collect::<Result<_, _>>()
+        .ok()?;
+
     let kernel = if priority {
-        FftKernel::create_with_abort(&devices, &|| -> bool {
+        FftKernel::create_with_abort(programs, &|| -> bool {
             // We only supply a function in case it is high priority, hence always passing in
             // `true`.
             PriorityLock::should_break(true)
         })
     } else {
-        FftKernel::create(&devices)
+        FftKernel::create(programs)
     };
     match kernel {
         Ok(k) => {
@@ -125,9 +131,9 @@ where
     }
 }
 
-fn create_multiexp_kernel<'a, E>(priority: bool) -> Option<CpuGpuMultiexpKernel<'a, E>>
+fn create_multiexp_kernel<'a, G>(priority: bool) -> Option<CpuGpuMultiexpKernel<'a, G>>
 where
-    E: Engine + GpuEngine,
+    G: PrimeCurveAffine + GpuName,
 {
     let devices = Device::all();
     let kernel = if priority {
@@ -152,24 +158,29 @@ where
 }
 
 macro_rules! locked_kernel {
-    ($class:ident, $kern:ident, $func:ident, $name:expr) => {
-        #[allow(clippy::upper_case_acronyms)]
-        pub struct $class<'a, E>
-        where
-            E: pairing::Engine + ec_gpu::GpuEngine,
+    ($kernel:ty, $func:ident, $name:expr, pub struct $class:ident<$lifetime:lifetime, $generic:ident>
+        where $(
+            $bound:ty: $boundvalue:tt $(+ $morebounds:tt )*,
+        )+
+    ) => {
+        pub struct $class<$lifetime, $generic>
+        where $(
+            $bound : $boundvalue $(+ $morebounds)*,
+        )+
         {
             priority: bool,
             // Keep the GPU lock alongside the kernel, so that the lock is automatically dropped
             // if the kernel is dropped.
-            kernel_and_lock: Option<($kern<'a, E>, GPULock)>,
+            kernel_and_lock: Option<($kernel, GPULock)>,
         }
 
-        impl<'a, E> $class<'a, E>
-        where
-            E: pairing::Engine + ec_gpu::GpuEngine,
+        impl<'a, $generic> $class<$lifetime, $generic>
+        where $(
+            $bound: $boundvalue $(+ $morebounds)*,
+        )+
         {
-            pub fn new(priority: bool) -> $class<'a, E> {
-                $class::<E> {
+            pub fn new(priority: bool) -> Self {
+                Self {
                     priority,
                     kernel_and_lock: None,
                 }
@@ -182,7 +193,7 @@ macro_rules! locked_kernel {
                 if self.kernel_and_lock.is_none() {
                     PriorityLock::wait(self.priority);
                     info!("GPU is available for {}!", $name);
-                    if let Some(kernel) = $func::<E>(self.priority) {
+                    if let Some(kernel) = $func(self.priority) {
                         self.kernel_and_lock = Some((kernel, GPULock::lock()));
                     }
                 }
@@ -201,9 +212,9 @@ macro_rules! locked_kernel {
                 }
             }
 
-            pub fn with<F, R>(&mut self, mut f: F) -> GpuResult<R>
+            pub fn with<Fun, R>(&mut self, mut f: Fun) -> GpuResult<R>
             where
-                F: FnMut(&mut $kern<E>) -> GpuResult<R>,
+                Fun: FnMut(&mut $kernel) -> GpuResult<R>,
             {
                 if std::env::var("BELLMAN_NO_GPU").is_ok() {
                     return Err(GpuError::GpuDisabled);
@@ -234,10 +245,17 @@ macro_rules! locked_kernel {
     };
 }
 
-locked_kernel!(LockedFFTKernel, FftKernel, create_fft_kernel, "FFT");
 locked_kernel!(
-    LockedMultiexpKernel,
-    CpuGpuMultiexpKernel,
+    FftKernel<'a, F>,
+    create_fft_kernel,
+    "FFT",
+    pub struct LockedFftKernel<'a, F> where F: Field + GpuName,
+);
+locked_kernel!(
+    CpuGpuMultiexpKernel<'a, G>,
     create_multiexp_kernel,
-    "Multiexp"
+    "Multiexp",
+    pub struct LockedMultiexpKernel<'a, G>
+    where
+        G: PrimeCurveAffine + GpuName,
 );

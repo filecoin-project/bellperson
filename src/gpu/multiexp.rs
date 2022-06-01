@@ -10,9 +10,8 @@ use ec_gpu_gen::EcResult;
 use ff::PrimeField;
 use group::{prime::PrimeCurveAffine, Group};
 use log::{error, info};
-use pairing::Engine;
 
-use crate::gpu::GpuEngine;
+use crate::gpu::GpuName;
 
 pub fn get_cpu_utilization() -> f64 {
     env::var("BELLMAN_CPU_UTILIZATION")
@@ -54,19 +53,23 @@ fn set_custom_gpu_env_var() {
 }
 
 /// A Multiexp kernel that can share the workload between the GPU and the CPU.
-pub struct CpuGpuMultiexpKernel<'a, E>(MultiexpKernel<'a, E>)
+pub struct CpuGpuMultiexpKernel<'a, G>(MultiexpKernel<'a, G>)
 where
-    E: Engine + GpuEngine;
+    G: PrimeCurveAffine;
 
-impl<'a, E> CpuGpuMultiexpKernel<'a, E>
+impl<'a, G> CpuGpuMultiexpKernel<'a, G>
 where
-    E: Engine + GpuEngine,
+    G: PrimeCurveAffine + GpuName,
 {
     /// Create new kernels, one for each given device.
     pub fn create(devices: &[&Device]) -> EcResult<Self> {
         info!("Multiexp: CPU utilization: {}.", get_cpu_utilization());
         set_custom_gpu_env_var();
-        let kernel = MultiexpKernel::create(devices)?;
+        let programs = devices
+            .iter()
+            .map(|device| ec_gpu_gen::program!(device))
+            .collect::<Result<_, _>>()?;
+        let kernel = MultiexpKernel::create(programs, devices)?;
         Ok(Self(kernel))
     }
 
@@ -80,21 +83,22 @@ where
     ) -> EcResult<Self> {
         info!("Multiexp: CPU utilization: {}.", get_cpu_utilization());
         set_custom_gpu_env_var();
-        let kernel = MultiexpKernel::create_with_abort(devices, maybe_abort)?;
+        let programs = devices
+            .iter()
+            .map(|device| ec_gpu_gen::program!(device))
+            .collect::<Result<_, _>>()?;
+        let kernel = MultiexpKernel::create_with_abort(programs, devices, maybe_abort)?;
         Ok(Self(kernel))
     }
 
     /// Calculate multiexp.
-    pub fn multiexp<G>(
+    pub fn multiexp(
         &mut self,
         pool: &Worker,
         bases: Arc<Vec<G>>,
         exps: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
         skip: usize,
-    ) -> EcResult<<G as PrimeCurveAffine>::Curve>
-    where
-        G: PrimeCurveAffine<Scalar = E::Fr>,
-    {
+    ) -> EcResult<G::Curve> {
         // Bases are skipped by `self.1` elements, when converted from (Arc<Vec<G>>, usize) to Source
         // https://github.com/zkcrypto/bellman/blob/10c5010fd9c2ca69442dc9775ea271e286e776d8/src/multiexp.rs#L38
         let bases = &bases[skip..(skip + exps.len())];
@@ -110,12 +114,12 @@ where
 
         let cpu_acc = pool.scoped(|s| {
             if n > 0 {
-                results = vec![<G as PrimeCurveAffine>::Curve::identity(); self.0.num_kernels()];
+                results = vec![G::Curve::identity(); self.0.num_kernels()];
                 self.0
                     .parallel_multiexp(s, bases, exps, &mut results, error.clone());
             }
 
-            multiexp_cpu::<_, _, _, E, _>(
+            multiexp_cpu(
                 pool,
                 (Arc::new(cpu_bases.to_vec()), 0),
                 FullDensity,
@@ -127,7 +131,7 @@ where
             .expect("only one ref left")
             .into_inner()
             .unwrap()?;
-        let mut acc = <G as PrimeCurveAffine>::Curve::identity();
+        let mut acc = G::Curve::identity();
         for r in results {
             acc.add_assign(&r);
         }
