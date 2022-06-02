@@ -242,6 +242,8 @@ mod test_with_bls12_381 {
 
     #[test]
     fn serialization() {
+        env_logger::try_init().ok();
+
         struct MySillyCircuit<Scalar: PrimeField> {
             a: Option<Scalar>,
             b: Option<Scalar>,

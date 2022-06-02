@@ -415,79 +415,112 @@ where
         }
     });
 
-    debug!("get_a b_g1 b_g2");
+    debug!("get a b_g1");
     let (a_inputs_source, a_aux_source) = params_a.unwrap()?;
-    let (b_g2_inputs_source, b_g2_aux_source) = params_b_g2.unwrap()?;
     let params_b_g1_opt = params_b_g1.transpose()?;
 
-    debug!("multiexp a b_g1 b_g2");
-    let inputs = provers
-        .into_iter()
-        .zip(input_assignments.iter())
-        .zip(aux_assignments.iter())
-        .map(|((prover, input_assignment), aux_assignment)| {
-            let a_inputs = multiexp(
-                worker,
-                a_inputs_source.clone(),
-                FullDensity,
-                input_assignment.clone(),
-                &mut multiexp_kern,
-            );
-
-            let a_aux = multiexp(
-                worker,
-                a_aux_source.clone(),
-                Arc::new(prover.a_aux_density),
-                aux_assignment.clone(),
-                &mut multiexp_kern,
-            );
-            let b_input_density = Arc::new(prover.b_input_density);
-            let b_aux_density = Arc::new(prover.b_aux_density);
-
-            let b_g1_inputs_aux_opt =
-                params_b_g1_opt
-                    .as_ref()
-                    .map(|(b_g1_inputs_source, b_g1_aux_source)| {
-                        (
-                            multiexp(
-                                worker,
-                                b_g1_inputs_source.clone(),
-                                b_input_density.clone(),
-                                input_assignment.clone(),
-                                &mut multiexp_kern,
-                            ),
-                            multiexp(
-                                worker,
-                                b_g1_aux_source.clone(),
-                                b_aux_density.clone(),
-                                aux_assignment.clone(),
-                                &mut multiexp_kern,
-                            ),
-                        )
-                    });
-
-            let b_g2_inputs = multiexp(
-                worker,
-                b_g2_inputs_source.clone(),
-                b_input_density,
-                input_assignment.clone(),
-                &mut multiexp_kern,
-            );
-            let b_g2_aux = multiexp(
-                worker,
-                b_g2_aux_source.clone(),
-                b_aux_density,
-                aux_assignment.clone(),
-                &mut multiexp_kern,
-            );
-
-            (a_inputs, a_aux, b_g1_inputs_aux_opt, b_g2_inputs, b_g2_aux)
+    let densities = provers
+        .iter_mut()
+        .map(|prover| {
+            let a_aux_density = std::mem::take(&mut prover.a_aux_density);
+            let b_input_density = std::mem::take(&mut prover.b_input_density);
+            let b_aux_density = std::mem::take(&mut prover.b_aux_density);
+            (
+                Arc::new(a_aux_density),
+                Arc::new(b_input_density),
+                Arc::new(b_aux_density),
+            )
         })
         .collect::<Vec<_>>();
-    drop(multiexp_kern);
+    drop(provers);
+
+    debug!("multiexp a b_g1");
+    let inputs_g1 = input_assignments
+        .iter()
+        .zip(aux_assignments.iter())
+        .zip(densities.iter())
+        .map(
+            |(
+                (input_assignment, aux_assignment),
+                (a_aux_density, b_input_density, b_aux_density),
+            )| {
+                let a_inputs = multiexp(
+                    worker,
+                    a_inputs_source.clone(),
+                    FullDensity,
+                    input_assignment.clone(),
+                    &mut multiexp_kern,
+                );
+
+                let a_aux = multiexp(
+                    worker,
+                    a_aux_source.clone(),
+                    a_aux_density.clone(),
+                    aux_assignment.clone(),
+                    &mut multiexp_kern,
+                );
+
+                let b_g1_inputs_aux_opt =
+                    params_b_g1_opt
+                        .as_ref()
+                        .map(|(b_g1_inputs_source, b_g1_aux_source)| {
+                            (
+                                multiexp(
+                                    worker,
+                                    b_g1_inputs_source.clone(),
+                                    b_input_density.clone(),
+                                    input_assignment.clone(),
+                                    &mut multiexp_kern,
+                                ),
+                                multiexp(
+                                    worker,
+                                    b_g1_aux_source.clone(),
+                                    b_aux_density.clone(),
+                                    aux_assignment.clone(),
+                                    &mut multiexp_kern,
+                                ),
+                            )
+                        });
+
+                (a_inputs, a_aux, b_g1_inputs_aux_opt)
+            },
+        )
+        .collect::<Vec<_>>();
     drop(a_inputs_source);
     drop(a_aux_source);
     drop(params_b_g1_opt);
+
+    debug!("get b_g2");
+    let (b_g2_inputs_source, b_g2_aux_source) = params_b_g2.unwrap()?;
+
+    debug!("multiexp b_g2");
+    let inputs_g2 = input_assignments
+        .iter()
+        .zip(aux_assignments.iter())
+        .zip(densities.iter())
+        .map(
+            |((input_assignment, aux_assignment), (_, b_input_density, b_aux_density))| {
+                let b_g2_inputs = multiexp(
+                    worker,
+                    b_g2_inputs_source.clone(),
+                    b_input_density.clone(),
+                    input_assignment.clone(),
+                    &mut multiexp_kern,
+                );
+                let b_g2_aux = multiexp(
+                    worker,
+                    b_g2_aux_source.clone(),
+                    b_aux_density.clone(),
+                    aux_assignment.clone(),
+                    &mut multiexp_kern,
+                );
+
+                (b_g2_inputs, b_g2_aux)
+            },
+        )
+        .collect::<Vec<_>>();
+    drop(multiexp_kern);
+    drop(densities);
     drop(b_g2_inputs_source);
     drop(b_g2_aux_source);
 
@@ -495,11 +528,15 @@ where
     let proofs = h_s
         .into_iter()
         .zip(l_s.into_iter())
-        .zip(inputs.into_iter())
+        .zip(inputs_g1.into_iter())
+        .zip(inputs_g2.into_iter())
         .zip(r_s.into_iter())
         .zip(s_s.into_iter())
         .map(
-            |((((h, l), (a_inputs, a_aux, b_g1_inputs_aux_opt, b_g2_inputs, b_g2_aux)), r), s)| {
+            |(
+                ((((h, l), (a_inputs, a_aux, b_g1_inputs_aux_opt)), (b_g2_inputs, b_g2_aux)), r),
+                s,
+            )| {
                 if (vk.delta_g1.is_identity() | vk.delta_g2.is_identity()).into() {
                     // If this element is zero, someone is trying to perform a
                     // subversion-CRS attack.
