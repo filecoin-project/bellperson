@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bellperson::groth16::{
-    aggregate::{aggregate_proofs, setup_fake_srs, verify_aggregate_proof},
+    aggregate::{aggregate_proofs, setup_fake_srs, verify_aggregate_proof, AggregateVersion},
     create_random_proof_batch, generate_random_parameters, prepare_verifying_key,
     verify_proofs_batch, Parameters, Proof, VerifyingKey,
 };
@@ -159,6 +159,8 @@ struct Opts {
     dummy: bool,
     #[structopt(long = "aggregate")]
     aggregate: bool,
+    #[structopt(long = "aggregate-version", default_value = "2")]
+    aggregate_version: usize,
 }
 
 fn main() {
@@ -171,6 +173,12 @@ fn main() {
     } else {
         std::env::set_var("BELLMAN_NO_GPU", "1");
     }
+
+    let version = match opts.aggregate_version {
+        1 => AggregateVersion::V1,
+        2 => AggregateVersion::V2,
+        _ => panic!("Invalid aggregate version specified"),
+    };
 
     let circuit = DummyDemo {
         public: opts.public,
@@ -215,7 +223,7 @@ fn main() {
 
             let agg_proof = srs.as_ref().map(|srs| {
                 let (agg, took) =
-                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs).unwrap());
+                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs, version).unwrap());
                 println!("Proof aggregation finished in {}ms", took);
                 agg
             });
@@ -238,7 +246,7 @@ fn main() {
 
             let agg_proof = srs.as_ref().map(|srs| {
                 let (agg, took) =
-                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs).unwrap());
+                    timer!(aggregate_proofs::<Bls12>(&srs.0, &includes, &proofs, version).unwrap());
                 println!("Proof aggregation finished in {}ms", took);
                 agg
             });
@@ -265,7 +273,7 @@ fn main() {
             if let Some(ref agg_proof) = agg_proof {
                 let srs = srs.as_ref().unwrap();
                 let (valid, took) = timer!(verify_aggregate_proof(
-                    &srs.1, &pvk, rng, &inputs, agg_proof, &includes,
+                    &srs.1, &pvk, rng, &inputs, agg_proof, &includes, version,
                 )
                 .unwrap());
                 println!(
