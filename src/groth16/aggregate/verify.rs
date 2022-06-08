@@ -2,8 +2,7 @@ use blstrs::Compress;
 use crossbeam_channel::bounded;
 use ff::{Field, PrimeField};
 use group::{prime::PrimeCurveAffine, Curve, Group};
-use log::debug;
-use log::*;
+use log::{debug, info};
 use pairing::{Engine, MultiMillerLoop};
 use rayon::prelude::*;
 use serde::Serialize;
@@ -17,6 +16,7 @@ use super::{
     AggregateProof, AggregateProofAndInstance, KZGOpening, VerifierSRS,
 };
 use crate::groth16::{
+    aggregate::AggregateVersion,
     multiscalar::{par_multiscalar, MultiscalarPrecomp, ScalarList},
     PreparedVerifyingKey,
 };
@@ -47,6 +47,7 @@ pub fn verify_aggregate_proof<E, R>(
     public_inputs: &[Vec<E::Fr>],
     proof: &AggregateProof<E>,
     transcript_include: &[u8],
+    version: AggregateVersion,
 ) -> Result<bool, SynthesisError>
 where
     E: MultiMillerLoop + std::fmt::Debug,
@@ -95,6 +96,7 @@ where
         &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
         pairing_checks_copy,
         &hcom,
+        version,
     );
     debug!("TIPP took {} ms", now.elapsed().as_millis(),);
 
@@ -405,6 +407,7 @@ fn verify_tipp_mipp<E, R>(
     r_shift: &E::Fr,
     pairing_checks: &PairingChecks<E, R>,
     hcom: &Challenge<E>,
+    version: AggregateVersion,
 ) where
     E: MultiMillerLoop,
     E::Fr: Serialize,
@@ -417,8 +420,8 @@ fn verify_tipp_mipp<E, R>(
     info!("verify with srs shift");
     let now = Instant::now();
     // (T,U), Z for TIPP and MIPP  and all challenges
-    let (final_res, final_r, challenges, challenges_inv) =
-        gipa_verify_tipp_mipp(proof, r_shift, hcom);
+    let (final_res, final_r, challenges, challenges_inv, extra_challenge) =
+        gipa_verify_tipp_mipp(proof, r_shift, hcom, version);
     debug!(
         "TIPP verify: gipa verify tipp {}ms",
         now.elapsed().as_millis()
@@ -427,14 +430,6 @@ fn verify_tipp_mipp<E, R>(
     // Verify commitment keys wellformed
     let fvkey = proof.tmipp.gipa.final_vkey;
     let fwkey = proof.tmipp.gipa.final_wkey;
-    // KZG challenge point
-    let c = Transcript::<E>::new("random-z")
-        .write(&challenges[0])
-        .write(&fvkey.0)
-        .write(&fvkey.1)
-        .write(&fwkey.0)
-        .write(&fwkey.1)
-        .into_challenge();
 
     // we take reference so they are able to be copied in the par! macro
     let final_a = &proof.tmipp.gipa.final_a;
@@ -445,6 +440,27 @@ fn verify_tipp_mipp<E, R>(
     let final_uab = &final_res.uab;
     let final_tc = &final_res.tc;
     let final_uc = &final_res.uc;
+
+    // KZG challenge point
+    let c = match version {
+        AggregateVersion::V1 => Transcript::<E>::new("random-z")
+            .write(&challenges[0])
+            .write(&fvkey.0)
+            .write(&fvkey.1)
+            .write(&fwkey.0)
+            .write(&fwkey.1)
+            .into_challenge(),
+        AggregateVersion::V2 => Transcript::<E>::new("random-z")
+            .write(&extra_challenge)
+            .write(&fvkey.0)
+            .write(&fvkey.1)
+            .write(&fwkey.0)
+            .write(&fwkey.1)
+            .write(final_a)
+            .write(final_b)
+            .write(final_c)
+            .into_challenge(),
+    };
 
     let now = Instant::now();
     par! {
@@ -523,14 +539,17 @@ fn gipa_verify_tipp_mipp<E>(
     proof: &AggregateProof<E>,
     r_shift: &E::Fr,
     hcom: &E::Fr,
-) -> (GipaTUZ<E>, E::Fr, Vec<E::Fr>, Vec<E::Fr>)
+    version: AggregateVersion,
+) -> (GipaTUZ<E>, E::Fr, Vec<E::Fr>, Vec<E::Fr>, E::Fr)
 where
     E: MultiMillerLoop,
     E::Fr: Serialize,
     <E as Engine>::Gt: Compress + Serialize,
     E::G1: Serialize,
+    E::G1Affine: Serialize,
+    E::G2Affine: Serialize,
 {
-    info!("gipa verify TIPP");
+    info!("gipa verify TIPP [version {}]", version);
     let gipa = &proof.tmipp.gipa;
     // COM(A,B) = PROD e(A,B) given by prover
     let comms_ab = &gipa.comms_ab;
@@ -566,10 +585,33 @@ where
         let (zab_l, zab_r) = z_ab;
         let (tc_l, tc_r) = comm_c;
         let (zc_l, zc_r) = z_c;
-
         // Fiat-Shamir challenge
+        // combine both TIPP and MIPP transcript
         if i == 0 {
-            // already generated c_inv and c outside of the loop
+            match version {
+                AggregateVersion::V1 => {
+                    // already generated c_inv and c outside of the loop
+                }
+                AggregateVersion::V2 => {
+                    // in this version we do fiat shamir with the first inputs
+                    c_inv = *Transcript::<E>::new("gipa-0")
+                        .write(&c_inv)
+                        .write(&zab_l)
+                        .write(&zab_r)
+                        .write(&zc_l)
+                        .write(&zc_r)
+                        .write(&tab_l.0)
+                        .write(&tab_l.1)
+                        .write(&tab_r.0)
+                        .write(&tab_r.1)
+                        .write(&tc_l.0)
+                        .write(&tc_l.1)
+                        .write(&tc_r.0)
+                        .write(&tc_r.1)
+                        .into_challenge();
+                    c = c_inv.invert().unwrap();
+                }
+            }
         } else {
             c_inv = *Transcript::<E>::new(&format!("gipa-{}", i))
                 .write(&c_inv)
@@ -590,6 +632,7 @@ where
         }
         challenges.push(c);
         challenges_inv.push(c_inv);
+        info!("verify: challenge {} -> {:?}", i, c);
     }
 
     debug!(
@@ -601,6 +644,10 @@ where
     // output of the pair commitment T and U in TIPP -> COM((v,w),A,B)
     let (t_ab, u_ab) = proof.com_ab;
     let z_ab = proof.ip_ab; // in the end must be equal to Z = A^r * B
+    let (final_zab_l, final_zab_r) = proof.tmipp.gipa.z_ab.last().unwrap();
+    let (final_zc_l, final_zc_r) = proof.tmipp.gipa.z_c.last().unwrap();
+    let (final_tab_l, final_tab_r) = proof.tmipp.gipa.comms_ab.last().unwrap();
+    let (final_tuc_l, final_tuc_r) = proof.tmipp.gipa.comms_c.last().unwrap();
 
     // COM(v,C)
     let (t_c, u_c) = proof.com_c;
@@ -614,6 +661,29 @@ where
         uc: u_c,
         zc: z_c,
     };
+
+    // This extra challenge is simply done to make the bridge between the
+    // MIPP/TIPP proofs and the KZG proofs, but is not used in TIPP/MIPP.
+    let extra_challenge = *Transcript::<E>::new(&format!("gipa-extra-link"))
+        .write(&challenges.last().unwrap())
+        .write(&proof.tmipp.gipa.final_a)
+        .write(&proof.tmipp.gipa.final_b)
+        .write(&proof.tmipp.gipa.final_c)
+        .write(&final_zab_l)
+        .write(&final_zab_r)
+        .write(&final_zc_l)
+        .write(&final_zc_r)
+        .write(&final_tab_l.0)
+        .write(&final_tab_l.1)
+        .write(&final_tab_r.0)
+        .write(&final_tab_r.1)
+        .write(&final_tuc_l.0)
+        .write(&final_tuc_l.1)
+        .write(&final_tuc_r.0)
+        .write(&final_tuc_r.1)
+        .into_challenge();
+
+    debug!("verify: extra challenge {:?}", extra_challenge);
 
     // we first multiply each entry of the Z U and L vectors by the respective
     // challenges independently
@@ -715,7 +785,13 @@ where
         "TIPP verify: gipa prep and accumulate took {}ms",
         now.elapsed().as_millis()
     );
-    (final_res, final_r, challenges, challenges_inv)
+    (
+        final_res,
+        final_r,
+        challenges,
+        challenges_inv,
+        extra_challenge,
+    )
 }
 
 /// verify_kzg_opening_g2 takes a KZG opening, the final commitment key, SRS and

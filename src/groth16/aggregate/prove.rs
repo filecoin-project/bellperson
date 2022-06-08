@@ -4,6 +4,7 @@ use std::ops::{AddAssign, MulAssign};
 use blstrs::Compress;
 use ff::{Field, PrimeField};
 use group::{prime::PrimeCurveAffine, Curve};
+use log::{debug, info};
 use rayon::prelude::*;
 use serde::Serialize;
 
@@ -17,7 +18,7 @@ use super::{
     AggregateProof, AggregateProofAndInstance, GipaProof, KZGOpening, ProverSRS,
     ProverSRSInputAggregation, TippMippProof,
 };
-use crate::groth16::{multiscalar::*, Proof};
+use crate::groth16::{aggregate::AggregateVersion, multiscalar::*, Proof};
 use crate::SynthesisError;
 use pairing::{Engine, MultiMillerLoop};
 
@@ -36,6 +37,7 @@ pub fn aggregate_proofs<E>(
     srs: &ProverSRS<E>,
     transcript_include: &[u8],
     proofs: &[Proof<E>],
+    version: AggregateVersion,
 ) -> Result<AggregateProof<E>, SynthesisError>
 where
     E: MultiMillerLoop + std::fmt::Debug,
@@ -46,6 +48,7 @@ where
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
 {
+    info!("aggregate_proofs [version {}]", version);
     if proofs.len() < 2 {
         return Err(SynthesisError::MalformedProofs(
             "aggregating less than 2 proofs is not allowed".to_string(),
@@ -125,6 +128,7 @@ where
         &ip_ab,
         &agg_c,
         &hcom,
+        version,
     )?;
     debug_assert!({
         let computed_com_ab = commit::pair::<E>(&srs.vkey, &wkey_r_inv, &a, &b_r).unwrap();
@@ -282,6 +286,7 @@ fn prove_tipp_mipp<E>(
     ip_ab: &<E as Engine>::Gt,
     agg_c: &E::G1,
     hcom: &E::Fr,
+    version: AggregateVersion,
 ) -> Result<TippMippProof<E>, SynthesisError>
 where
     E: MultiMillerLoop,
@@ -294,8 +299,8 @@ where
 {
     let r_shift = r_vec[1];
     // Run GIPA
-    let (proof, mut challenges, mut challenges_inv) =
-        gipa_tipp_mipp::<E>(a, b, c, &srs.vkey, wkey, r_vec, ip_ab, agg_c, hcom)?;
+    let (proof, mut challenges, mut challenges_inv, extra_challenge) =
+        gipa_tipp_mipp::<E>(a, b, c, &srs.vkey, wkey, r_vec, ip_ab, agg_c, hcom, version)?;
 
     // Prove final commitment keys are wellformed
     // we reverse the transcript so the polynomial in kzg opening is constructed
@@ -306,13 +311,25 @@ where
     let r_inverse = r_shift.invert().unwrap();
 
     // KZG challenge point
-    let z = Transcript::<E>::new("random-z")
-        .write(&challenges[0])
-        .write(&proof.final_vkey.0)
-        .write(&proof.final_vkey.1)
-        .write(&proof.final_wkey.0)
-        .write(&proof.final_wkey.1)
-        .into_challenge();
+    let z = match version {
+        AggregateVersion::V1 => Transcript::<E>::new("random-z")
+            .write(&challenges[0])
+            .write(&proof.final_vkey.0)
+            .write(&proof.final_vkey.1)
+            .write(&proof.final_wkey.0)
+            .write(&proof.final_wkey.1)
+            .into_challenge(),
+        AggregateVersion::V2 => Transcript::<E>::new("random-z")
+            .write(&extra_challenge)
+            .write(&proof.final_vkey.0)
+            .write(&proof.final_vkey.1)
+            .write(&proof.final_wkey.0)
+            .write(&proof.final_wkey.1)
+            .write(&proof.final_a)
+            .write(&proof.final_b)
+            .write(&proof.final_c)
+            .into_challenge(),
+    };
 
     // Complete KZG proofs
     par! {
@@ -344,6 +361,8 @@ where
 /// It returns a proof containing all intermdiate committed values, as well as
 /// the challenges generated necessary to do the polynomial commitment proof
 /// later in TIPP.
+/// The extra challenge at the end is used to bridge the two proofs mipp/tipp
+/// and the KZG checks.
 #[allow(
     clippy::many_single_char_names,
     clippy::type_complexity,
@@ -359,13 +378,16 @@ fn gipa_tipp_mipp<E>(
     ip_ab: &<E as Engine>::Gt,
     agg_c: &E::G1,
     hcom: &E::Fr,
-) -> Result<(GipaProof<E>, Vec<E::Fr>, Vec<E::Fr>), SynthesisError>
+    version: AggregateVersion,
+) -> Result<(GipaProof<E>, Vec<E::Fr>, Vec<E::Fr>, E::Fr), SynthesisError>
 where
     E: MultiMillerLoop,
     E::Fr: Serialize,
     <E::Fr as PrimeField>::Repr: Sync,
     <E as Engine>::Gt: Serialize,
     E::G1: Serialize,
+    E::G1Affine: Serialize,
+    E::G2Affine: Serialize,
 {
     // the values of vectors A and B rescaled at each step of the loop
     let (mut m_a, mut m_b) = (a.to_vec(), b.to_vec());
@@ -440,7 +462,31 @@ where
         // Fiat-Shamir challenge
         // combine both TIPP and MIPP transcript
         if i == 0 {
-            // already generated c_inv and c outside of the loop
+            match version {
+                AggregateVersion::V1 => {
+                    // already generated c_inv and c outside of the loop
+                }
+                AggregateVersion::V2 => {
+                    // in this version we do fiat shamir with the first inputs
+                    c_inv = *Transcript::<E>::new("gipa-0")
+                        .write(&c_inv)
+                        .write(&zab_l)
+                        .write(&zab_r)
+                        .write(&zc_l)
+                        .write(&zc_r)
+                        .write(&tab_l.0)
+                        .write(&tab_l.1)
+                        .write(&tab_r.0)
+                        .write(&tab_r.1)
+                        .write(&tuc_l.0)
+                        .write(&tuc_l.1)
+                        .write(&tuc_r.0)
+                        .write(&tuc_r.1)
+                        .into_challenge();
+
+                    c = c_inv.invert().unwrap();
+                }
+            };
         } else {
             c_inv = *Transcript::<E>::new(&format!("gipa-{}", i))
                 .write(&c_inv)
@@ -463,6 +509,7 @@ where
             // of c_inv
             c = c_inv.invert().unwrap();
         }
+        info!("prover: challenge {} -> {:?}", i, c);
 
         // Set up values for next step of recursion
         // A[:n'] + A[n':] ^ x
@@ -505,6 +552,31 @@ where
 
     let (final_a, final_b, final_c) = (m_a[0], m_b[0], m_c[0]);
     let (final_vkey, final_wkey) = (vkey.first(), wkey.first());
+    let (final_zab_l, final_zab_r) = z_ab.last().unwrap();
+    let (final_zc_l, final_zc_r) = z_c.last().unwrap();
+    let (final_tab_l, final_tab_r) = comms_ab.last().unwrap();
+    let (final_tuc_l, final_tuc_r) = comms_c.last().unwrap();
+    // This extra challenge is simply done to make the bridge between the
+    // MIPP/TIPP proofs and the KZG proofs, but is not used in TIPP/MIPP.
+    let extra_challenge = *Transcript::<E>::new(&format!("gipa-extra-link"))
+        .write(&challenges.last().unwrap())
+        .write(&final_a)
+        .write(&final_b)
+        .write(&final_c)
+        .write(&final_zab_l)
+        .write(&final_zab_r)
+        .write(&final_zc_l)
+        .write(&final_zc_r)
+        .write(&final_tab_l.0)
+        .write(&final_tab_l.1)
+        .write(&final_tab_r.0)
+        .write(&final_tab_r.1)
+        .write(&final_tuc_l.0)
+        .write(&final_tuc_l.1)
+        .write(&final_tuc_r.0)
+        .write(&final_tuc_r.1)
+        .into_challenge();
+    debug!("prover: extra challenge {:?}", extra_challenge);
     Ok((
         GipaProof {
             nproofs: a.len() as u32, // TODO: ensure u32
@@ -520,6 +592,7 @@ where
         },
         challenges,
         challenges_inv,
+        extra_challenge,
     ))
 }
 

@@ -1,3 +1,4 @@
+use std::fmt::{self, Display, Formatter};
 use std::ops::AddAssign;
 
 use ff::Field;
@@ -23,6 +24,21 @@ pub use self::proof::*;
 pub use self::prove::*;
 pub use self::srs::*;
 pub use self::verify::*;
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum AggregateVersion {
+    V1,
+    V2,
+}
+
+impl Display for AggregateVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            AggregateVersion::V1 => write!(f, "V1"),
+            AggregateVersion::V2 => write!(f, "V2"),
+        }
+    }
+}
 
 /// Returns the vector used for the linear combination fo the inner pairing product
 /// between A and B for the Groth16 aggregation: A^r * B. It is required as it
