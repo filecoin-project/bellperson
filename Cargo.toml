@@ -92,6 +92,6 @@ rustversion = "1.0.6"
 
 
 [patch.crates-io]
-blstrs = { git = "https://github.com/filecoin-project/blstrs", branch = "update-deps-20220524" }
+blstrs = { git = "https://github.com/filecoin-project/blstrs", branch = "blst-3-9" }
 ec-gpu = { git = "https://github.com/filecoin-project/ec-gpu", branch = "update-deps-20220613" }
 ec-gpu-gen = { git = "https://github.com/filecoin-project/ec-gpu", branch = "update-deps-20220613" }
