@@ -203,6 +203,7 @@ where
 
 /// verification of related instances i.e. when instances are given by
 /// [a1, ... , an, b1, ... , bn], [b1, ... , bn, c1, ..., cn], [c1, ..., cn, d1, ..., dn] etc
+#[allow(clippy::too_many_arguments)]
 pub fn verify_aggregate_proof_and_aggregate_instances<
     E: Engine + std::fmt::Debug,
     R: rand::RngCore + Send,
@@ -666,7 +667,7 @@ where
 
     // This extra challenge is simply done to make the bridge between the
     // MIPP/TIPP proofs and the KZG proofs, but is not used in TIPP/MIPP.
-    let extra_challenge = *Transcript::<E>::new(&format!("gipa-extra-link"))
+    let extra_challenge = *Transcript::<E>::new("gipa-extra-link")
         .write(&challenges.last().unwrap())
         .write(&proof.tmipp.gipa.final_a)
         .write(&proof.tmipp.gipa.final_b)

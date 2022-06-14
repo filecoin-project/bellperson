@@ -10,9 +10,8 @@ use blstrs::Bls12;
 use pairing::Engine;
 // We'll use these interfaces to construct our circuit.
 use bellperson::groth16::{
-    aggregate::AggregateVersion,
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-    Parameters, Proof,
+    aggregate::AggregateVersion, create_random_proof, generate_random_parameters,
+    prepare_verifying_key, verify_proof, Parameters, Proof,
 };
 use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 

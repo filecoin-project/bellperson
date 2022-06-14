@@ -559,7 +559,7 @@ where
     let (final_tuc_l, final_tuc_r) = comms_c.last().unwrap();
     // This extra challenge is simply done to make the bridge between the
     // MIPP/TIPP proofs and the KZG proofs, but is not used in TIPP/MIPP.
-    let extra_challenge = *Transcript::<E>::new(&format!("gipa-extra-link"))
+    let extra_challenge = *Transcript::<E>::new("gipa-extra-link")
         .write(&challenges.last().unwrap())
         .write(&final_a)
         .write(&final_b)
