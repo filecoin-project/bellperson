@@ -34,7 +34,7 @@ itertools = "0.10.0"
 bincode = "1.3.1"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.9"
-blstrs = "0.4.2"
+blstrs = "0.5.0"
 pairing = "0.22"
 yastl = "0.1.2"
 ec-gpu = { version = "0.1.0" }
@@ -92,6 +92,5 @@ rustversion = "1.0.6"
 
 
 [patch.crates-io]
-blstrs = { git = "https://github.com/filecoin-project/blstrs", branch = "blst-3-9" }
 ec-gpu = { git = "https://github.com/filecoin-project/ec-gpu", branch = "update-deps-20220613" }
 ec-gpu-gen = { git = "https://github.com/filecoin-project/ec-gpu", branch = "update-deps-20220613" }
