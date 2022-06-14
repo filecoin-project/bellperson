@@ -214,6 +214,7 @@ pub fn verify_aggregate_proof_and_aggregate_instances<
     public_outputs: &[E::Fr],
     aggregate_proof_and_instance: &AggregateProofAndInstance<E>,
     transcript_include: &[u8],
+    version: AggregateVersion,
 ) -> Result<bool, SynthesisError>
 where
     E: MultiMillerLoop + std::fmt::Debug,
@@ -320,6 +321,7 @@ where
             &r, // we give the extra r as it's not part of the proof itself - it is simply used on top for the groth16 aggregation
             pairing_checks_copy,
             &hcom,
+            version,
         );
 
         debug!("TIPP took {} ms", now.elapsed().as_millis(),);

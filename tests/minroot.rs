@@ -10,6 +10,7 @@ use blstrs::Bls12;
 use pairing::Engine;
 // We'll use these interfaces to construct our circuit.
 use bellperson::groth16::{
+    aggregate::AggregateVersion,
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
     Parameters, Proof,
 };
@@ -222,6 +223,11 @@ use rand_core::SeedableRng;
 
 #[test]
 fn minroot_aggregate_proof() {
+    minroot_aggregate_proof_inner(AggregateVersion::V1);
+    minroot_aggregate_proof_inner(AggregateVersion::V2);
+}
+
+fn minroot_aggregate_proof_inner(version: AggregateVersion) {
     let nb_proofs: usize = 128;
     let mut rng = rand_chacha::ChaChaRng::seed_from_u64(0u64);
 
@@ -277,6 +283,7 @@ fn minroot_aggregate_proof() {
         &inclusion,
         &statements[..nb_proofs].to_vec(),
         &proofs[..nb_proofs],
+        version,
     )
     .expect("failed to aggregate proofs");
 
@@ -288,6 +295,7 @@ fn minroot_aggregate_proof() {
         &public_outputs,
         &aggregate_proof_and_instance,
         &inclusion,
+        version,
     )
     .unwrap();
 

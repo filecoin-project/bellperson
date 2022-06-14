@@ -149,6 +149,7 @@ pub fn aggregate_proofs_and_instances<E: Engine + std::fmt::Debug>(
     transcript_include: &[u8],
     statements: &[Vec<E::Fr>],
     proofs: &[Proof<E>],
+    version: AggregateVersion,
 ) -> Result<AggregateProofAndInstance<E>, SynthesisError>
 where
     E: MultiMillerLoop + std::fmt::Debug,
@@ -225,7 +226,7 @@ where
         .write(&transcript_include)
         .into_bytes();
 
-    let pi_agg = aggregate_proofs(srs, &transcript_new, proofs).unwrap();
+    let pi_agg = aggregate_proofs(srs, &transcript_new, proofs, version).unwrap();
 
     let hcom = Transcript::<E>::new("hcom")
         .write(&pi_agg.com_ab)
