@@ -38,7 +38,7 @@ blstrs = "0.5.0"
 pairing = "0.22"
 yastl = "0.1.2"
 ec-gpu = { version = "0.1.0" }
-ec-gpu-gen = { version = "0.2.1", default-features = false, features = ["fft", "multiexp"] }
+ec-gpu-gen = { version = "0.3.0", default-features = false, features = ["fft", "multiexp"] }
 
 fs2 = { version = "0.4.3", optional = true }
 
@@ -89,8 +89,3 @@ members = [
 
 [build-dependencies]
 rustversion = "1.0.6"
-
-
-[patch.crates-io]
-ec-gpu = { git = "https://github.com/filecoin-project/ec-gpu", branch = "update-deps-20220613" }
-ec-gpu-gen = { git = "https://github.com/filecoin-project/ec-gpu", branch = "update-deps-20220613" }
