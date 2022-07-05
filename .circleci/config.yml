@@ -14,6 +14,11 @@ executors:
       image: ubuntu-2004-cuda-11.2:202103-01
     working_directory: ~/gpuci
     resource_class: gpu.nvidia.medium
+  cpu:
+    docker:
+      - image: filecoin/rust:latest
+    working_directory: ~/gpuci
+    resource_class: 2xlarge+
 
 restore-workspace: &restore-workspace
   attach_workspace:
@@ -107,7 +112,7 @@ jobs:
           command: BELLMAN_GPU_FRAMEWORK=<< parameters.framework >> cargo test << parameters.cargo-args >>
 
   test_ignored:
-    executor: default
+    executor: cpu
     environment:
       RUST_LOG: debug
     steps:
