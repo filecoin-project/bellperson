@@ -1,3 +1,6 @@
+//! This module acts like a polyfill for the case when `bellperson` is compiled without GPU
+//! support.
+
 use super::error::{GpuError, GpuResult};
 use ec_gpu_gen::threadpool::Worker;
 use ff::{Field, PrimeField};

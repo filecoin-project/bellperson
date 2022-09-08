@@ -157,6 +157,7 @@ where
     }
 }
 
+/// Wrap the kernel so that only a single one runs on the GPU at a time.
 macro_rules! locked_kernel {
     ($kernel:ty, $func:ident, $name:expr, pub struct $class:ident<$lifetime:lifetime, $generic:ident>
         where $(
@@ -212,6 +213,10 @@ macro_rules! locked_kernel {
                 }
             }
 
+            /// Execute a function with the kernel.
+            ///
+            /// This function makes sure that only one things is run on the GPU at a time. It will
+            /// block until the GPU is available.
             pub fn with<Fun, R>(&mut self, mut f: Fun) -> GpuResult<R>
             where
                 Fun: FnMut(&mut $kernel) -> GpuResult<R>,
