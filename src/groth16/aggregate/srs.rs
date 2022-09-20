@@ -8,14 +8,14 @@ use group::{
     prime::{PrimeCurve, PrimeCurveAffine},
     Curve, Group, GroupEncoding,
 };
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 use memmap::Mmap;
 use pairing::Engine;
 use rayon::prelude::*;
 use sha2::Sha256;
 use std::convert::TryFrom;
 use std::io::{self, Error, ErrorKind, Read, Write};
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 use std::mem::size_of;
 use std::ops::MulAssign;
 
@@ -273,7 +273,7 @@ where
         })
     }
 
-    #[cfg(feature = "memmap")]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn read_mmap(reader: &Mmap, max_len: usize) -> io::Result<Self> {
         fn read_length(mmap: &Mmap, offset: &mut usize) -> Result<usize, std::io::Error> {
             let u32_len = size_of::<u32>();

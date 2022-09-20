@@ -6,7 +6,7 @@ use ec_gpu_gen::multiexp_cpu::SourceBuilder;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 mod memmap_uses {
     pub use crate::groth16::MappedParameters;
     pub use memmap::{Mmap, MmapOptions};
@@ -18,7 +18,7 @@ mod memmap_uses {
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 use memmap_uses::*;
 
 use super::VerifyingKey;
@@ -103,7 +103,7 @@ where
     // Quickly iterates through the parameter file, recording all
     // parameter offsets and caches the verifying key (vk) for quick
     // access via reference.
-    #[cfg(feature = "memmap")]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn build_mapped_parameters(
         param_file_path: PathBuf,
         checked: bool,
@@ -178,7 +178,7 @@ where
     // advantageous to use (can be called by read_cached_params in
     // rust-fil-proofs repo).  It's equivalent to the existing read
     // method, in that it loads all parameters to RAM.
-    #[cfg(feature = "memmap")]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn read_mmap(mmap: &Mmap, checked: bool) -> io::Result<Self> {
         let u32_len = mem::size_of::<u32>();
         let g1_len = mem::size_of::<<E::G1Affine as UncompressedEncoding>::Uncompressed>();

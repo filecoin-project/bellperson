@@ -2,10 +2,10 @@ use group::{prime::PrimeCurveAffine, UncompressedEncoding};
 use pairing::{Engine, MultiMillerLoop};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 use memmap::Mmap;
 use std::io::{self, Read, Write};
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 use std::mem;
 
 use super::multiscalar;
@@ -120,7 +120,7 @@ impl<E: Engine + MultiMillerLoop> VerifyingKey<E> {
         })
     }
 
-    #[cfg(feature = "memmap")]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn read_mmap(mmap: &Mmap, offset: &mut usize) -> io::Result<Self> {
         let u32_len = mem::size_of::<u32>();
         let g1_len = mem::size_of::<<E::G1Affine as UncompressedEncoding>::Uncompressed>();

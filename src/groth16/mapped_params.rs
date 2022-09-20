@@ -3,7 +3,7 @@ use pairing::MultiMillerLoop;
 
 use crate::SynthesisError;
 
-#[cfg(feature = "memmap")]
+#[cfg(not(target_arch = "wasm32"))]
 use memmap::Mmap;
 use rayon::prelude::*;
 
