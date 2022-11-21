@@ -1,10 +1,9 @@
 use std::ops::{Add, Sub};
 
 use ff::PrimeField;
+use serde::{Deserialize, Serialize};
 
 use ec_gpu_gen::multiexp_cpu::DensityTracker;
-
-use serde::{Deserialize, Serialize};
 
 /// Represents a variable in our constraint system.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

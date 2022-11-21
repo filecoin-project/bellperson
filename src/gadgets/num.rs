@@ -1,14 +1,13 @@
 //! Gadgets representing numbers in the scalar field of the underlying curve.
 
 use ff::{PrimeField, PrimeFieldBits};
+use serde::{Deserialize, Serialize};
 
 use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
 use super::Assignment;
 
 use super::boolean::{self, AllocatedBit, Boolean};
-
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct AllocatedNum<Scalar: PrimeField> {
