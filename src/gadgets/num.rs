@@ -8,7 +8,7 @@ use super::Assignment;
 
 use super::boolean::{self, AllocatedBit, Boolean};
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct AllocatedNum<Scalar: PrimeField> {

@@ -4,7 +4,7 @@ use ff::PrimeField;
 
 use ec_gpu_gen::multiexp_cpu::DensityTracker;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Represents a variable in our constraint system.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
