@@ -5,9 +5,6 @@ pub enum GpuError {
     #[error("GPUError: {0}")]
     Simple(&'static str),
     #[cfg(any(feature = "cuda", feature = "opencl"))]
-    #[error("GPU taken by a high priority process!")]
-    GpuTaken,
-    #[cfg(any(feature = "cuda", feature = "opencl"))]
     #[error("No kernel is initialized!")]
     KernelUninitialized,
     #[error("EC GPU error: {0}")]

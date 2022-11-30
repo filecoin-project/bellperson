@@ -76,7 +76,7 @@ pub fn test_parallel_prover() {
     let pvk2 = prepare_verifying_key(&params2.vk);
 
     let higher_thread = thread::spawn(move || {
-        for _ in 0..10 {
+        for _ in 0..20 {
             let now = Instant::now();
 
             let rng = &mut thread_rng();
@@ -90,12 +90,12 @@ pub fn test_parallel_prover() {
             );
 
             // Sleep in between higher proofs so that LOWER thread can acquire GPU again
-            thread::sleep(Duration::from_millis(3000));
+            thread::sleep(Duration::from_millis(600));
         }
     });
 
     // Start lower proofs after a few seconds
-    thread::sleep(Duration::from_millis(10000));
+    thread::sleep(Duration::from_millis(2000));
     println!("Starting low priority proof gen...");
     {
         for _ in 0..10 {

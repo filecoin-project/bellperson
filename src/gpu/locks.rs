@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use ec_gpu_gen::fft::FftKernel;
 use ec_gpu_gen::rust_gpu_tools::Device;
+use ec_gpu_gen::EcError;
 use ff::Field;
 use fs2::FileExt;
 use group::prime::PrimeCurveAffine;
@@ -46,7 +47,7 @@ impl Drop for GPULock {
 /// signaling all other processes to release their `GPULock`s.
 /// Only one process can have the `PriorityLock` at a time.
 #[derive(Debug)]
-pub struct PriorityLock(File);
+pub(crate) struct PriorityLock(File);
 impl PriorityLock {
     pub fn lock() -> PriorityLock {
         let priority_lock_file = tmp_path(PRIORITY_LOCK_NAME);
@@ -62,7 +63,7 @@ impl PriorityLock {
         PriorityLock(f)
     }
 
-    pub fn wait(priority: bool) {
+    fn wait(priority: bool) {
         if !priority {
             if let Err(err) = File::create(tmp_path(PRIORITY_LOCK_NAME))
                 .unwrap()
@@ -73,10 +74,12 @@ impl PriorityLock {
         }
     }
 
-    pub fn should_break(priority: bool) -> bool {
-        if priority {
-            return false;
-        }
+    /// Returns true if the priority lock is currently taken.
+    ///
+    /// This is used by low priority proofs to determine whether to run on the GPU or not.
+    ///
+    /// It also returns `false` in case the state of the lock cannot be determined.
+    fn is_taken() -> bool {
         if let Err(err) = File::create(tmp_path(PRIORITY_LOCK_NAME))
             .unwrap()
             .try_lock_shared()
@@ -84,9 +87,8 @@ impl PriorityLock {
             // Check that the error is actually a locking one
             if err.raw_os_error() == fs2::lock_contended_error().raw_os_error() {
                 return true;
-            } else {
-                warn!("failed to check lock: {:?}", err);
             }
+            warn!("failed to check lock: {:?}", err);
         }
         false
     }
@@ -111,13 +113,10 @@ where
         .ok()?;
 
     let kernel = if priority {
-        FftKernel::create_with_abort(programs, &|| -> bool {
-            // We only supply a function in case it is high priority, hence always passing in
-            // `true`.
-            PriorityLock::should_break(true)
-        })
-    } else {
         FftKernel::create(programs)
+    } else {
+        // Low priority kernels may be aborted if a high priority kernel wants to run/is running.
+        FftKernel::create_with_abort(programs, &PriorityLock::is_taken)
     };
     match kernel {
         Ok(k) => {
@@ -137,13 +136,10 @@ where
 {
     let devices = Device::all();
     let kernel = if priority {
-        CpuGpuMultiexpKernel::create_with_abort(&devices, &|| -> bool {
-            // We only supply a function in case it is high priority, hence always passing in
-            // `true`.
-            PriorityLock::should_break(true)
-        })
-    } else {
         CpuGpuMultiexpKernel::create(&devices)
+    } else {
+        // Low priority kernels may be aborted if a high priority kernel wants to run/is running.
+        CpuGpuMultiexpKernel::create_with_abort(&devices, &PriorityLock::is_taken)
     };
     match kernel {
         Ok(k) => {
@@ -232,7 +228,7 @@ macro_rules! locked_kernel {
                         match f(k) {
                             // Re-trying to run on the GPU is the core of this loop, all other
                             // cases abort the loop.
-                            Err(GpuError::GpuTaken) => {
+                            Err(GpuError::EcGpu(EcError::Aborted)) => {
                                 self.free();
                             }
                             Err(e) => {
