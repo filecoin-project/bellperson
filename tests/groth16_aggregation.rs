@@ -348,9 +348,9 @@ fn test_groth16_bench_inner(version: AggregateVersion) {
             println!("\t-Batch per 10 packets verification...");
             let batches: Vec<_> = proofs
                 .iter()
-                .cloned()
                 .take(i)
-                .zip(statements.iter().cloned().take(i))
+                .cloned()
+                .zip(statements.iter().take(i).cloned())
                 .chunks(10)
                 .into_iter()
                 .map(|s| s.collect())
