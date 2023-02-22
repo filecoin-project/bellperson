@@ -58,7 +58,7 @@ where
     // A * B + inputs * (-gamma) + C * (-delta) = alpha * beta
     // which allows us to do a single final exponentiation.
 
-    // Miller Loop for alpha * beta
+    // Miller Loop for A * B
     let mut ml_a_b = Default::default();
     // Miller Loop for C * (-delta)
     let mut ml_all = <E as MultiMillerLoop>::Result::default();
@@ -67,7 +67,7 @@ where
 
     // Start the two independent miller loops
     rayon::in_place_scope(|s| {
-        // - Thread 1: Calculate ML alpha * beta
+        // - Thread 1: Calculate ML A * B
         let ml_a_b = &mut ml_a_b;
         s.spawn(move |_| {
             *ml_a_b = E::multi_miller_loop(&[(&proof.a, &proof.b.into())]);
