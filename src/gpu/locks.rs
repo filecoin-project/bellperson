@@ -25,13 +25,21 @@ fn tmp_path(filename: &str, id: Option<UniqueId>) -> PathBuf {
     p
 }
 
+
+#[derive(Debug)]
+struct LockInfo<'a> {
+    file: File,
+    path: PathBuf,
+    device: &'a Device,
+}
+
 /// `GPULock` prevents two kernel objects to be instantiated simultaneously.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
-pub struct GPULock<'a>(Vec<(File, &'a Device, PathBuf)>);
+pub struct GPULock<'a>(Vec<LockInfo<'a>>);
 
 impl GPULock<'_> {
-    pub fn lock() -> GPULock<'static> {
+    pub fn lock() -> Self {
         let devices = Device::all();
         let mut locks = Vec::new();
         let mut gpus_per_lock = devices.len();
@@ -48,22 +56,26 @@ impl GPULock<'_> {
 
         for (index, device) in devices.iter().enumerate() {
             let uid = device.unique_id();
-            let gpu_lock_file = tmp_path(GPU_LOCK_NAME, Some(uid));
+            let path = tmp_path(GPU_LOCK_NAME, Some(uid));
             debug!(
                 "Acquiring GPU lock {}/{} at {:?} ...",
-                index, gpus_per_lock, &gpu_lock_file,
+                index, gpus_per_lock, &path,
             );
-            let f = File::create(&gpu_lock_file).unwrap_or_else(|_| {
+            let file = File::create(&path).unwrap_or_else(|_| {
                 panic!(
                     "Cannot create GPU {:?} lock file at {:?}",
-                    uid, &gpu_lock_file,
+                    uid, &path,
                 )
             });
-            if f.try_lock_exclusive().is_err() {
+            if file.try_lock_exclusive().is_err() {
                 continue;
             }
-            debug!("GPU lock acquired at {:?}", gpu_lock_file);
-            locks.push((f, *device, gpu_lock_file));
+            debug!("GPU lock acquired at {:?}", path);
+            locks.push(LockInfo {
+                file,
+                path,
+                device
+            });
             if locks.len() >= gpus_per_lock {
                 break;
             }
@@ -75,9 +87,9 @@ impl GPULock<'_> {
 
 impl Drop for GPULock<'_> {
     fn drop(&mut self) {
-        for f in &self.0 {
-            f.0.unlock().unwrap();
-            debug!("GPU lock released at {:?}", f.2);
+        for lock_info in &self.0 {
+            lock_info.file.unlock().unwrap();
+            debug!("GPU lock released at {:?}", lock_info.path);
         }
     }
 }
@@ -149,7 +161,7 @@ where
     let devices = lock
         .0
         .iter()
-        .map(|(_, device, _)| *device)
+        .map(|LockInfo { device, .. }| *device)
         .collect::<Vec<&Device>>();
 
     let programs = devices
@@ -186,7 +198,7 @@ where
     let devices = lock
         .0
         .iter()
-        .map(|(_, device, _)| *device)
+        .map(|LockInfo { device, .. }| *device)
         .collect::<Vec<&Device>>();
 
     let kernel = if priority {
