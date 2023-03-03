@@ -25,12 +25,11 @@ fn tmp_path(filename: &str, id: Option<UniqueId>) -> PathBuf {
     p
 }
 
-
 #[derive(Debug)]
 struct LockInfo<'a> {
-    file: File,
-    path: PathBuf,
-    device: &'a Device,
+    file: Option<File>,
+    path: Option<PathBuf>,
+    devices: Vec<&'a Device>,
 }
 
 /// `GPULock` prevents two kernel objects to be instantiated simultaneously.
@@ -40,56 +39,81 @@ pub struct GPULock<'a>(Vec<LockInfo<'a>>);
 
 impl GPULock<'_> {
     pub fn lock() -> Self {
-        let devices = Device::all();
-        let mut locks = Vec::new();
-        let mut gpus_per_lock = devices.len();
+        if let Ok(val) = std::env::var("BELLPERSON_GPUS_PER_LOCK") {
+            match val.parse::<usize>() {
+                Ok(val) if val > 0 => {
+                    let devices = Device::all();
+                    info!(
+                        "BELLPERSON_GPUS_PER_LOCK == {}, try lock {}/{} gpus",
+                        val,
+                        val,
+                        devices.len(),
+                    );
 
-        match std::env::var("BELLPERSON_GPUS_PER_LOCK") {
-            Ok(val) => {
-                match val.parse::<usize>() {
-                    Ok(val) if val > 0 => gpus_per_lock = val,
-                    _ => warn!("BELLPERSON_GPUS_PER_LOCK is not number, use all gpus"),
-                };
-            }
-            _ => warn!("BELLPERSON_GPUS_PER_LOCK parse fail, use all gpus"),
-        };
+                    let mut locks = Vec::new();
+                    for (index, device) in devices.iter().enumerate() {
+                        let uid = device.unique_id();
+                        let path = tmp_path(GPU_LOCK_NAME, Some(uid));
+                        debug!("Acquiring GPU lock {}/{} at {:?} ...", index, val, &path);
+                        let file = File::create(&path).unwrap_or_else(|_| {
+                            panic!("Cannot create GPU {:?} lock file at {:?}", uid, &path)
+                        });
+                        if file.try_lock_exclusive().is_err() {
+                            continue;
+                        }
+                        debug!("GPU lock acquired at {:?}", path);
+                        locks.push(LockInfo {
+                            file: Some(file),
+                            path: Some(path),
+                            devices: vec![device],
+                        });
+                        if locks.len() >= val {
+                            break;
+                        }
+                    }
 
-        for (index, device) in devices.iter().enumerate() {
-            let uid = device.unique_id();
-            let path = tmp_path(GPU_LOCK_NAME, Some(uid));
-            debug!(
-                "Acquiring GPU lock {}/{} at {:?} ...",
-                index, gpus_per_lock, &path,
-            );
-            let file = File::create(&path).unwrap_or_else(|_| {
-                panic!(
-                    "Cannot create GPU {:?} lock file at {:?}",
-                    uid, &path,
-                )
-            });
-            if file.try_lock_exclusive().is_err() {
-                continue;
-            }
-            debug!("GPU lock acquired at {:?}", path);
-            locks.push(LockInfo {
-                file,
-                path,
-                device
-            });
-            if locks.len() >= gpus_per_lock {
-                break;
-            }
+                    return GPULock(locks);
+                }
+                Ok(val) if val == 0 => {
+                    info!("BELLPERSON_GPUS_PER_LOCK == 0, free to use gpus");
+                    return GPULock(vec![LockInfo {
+                        file: None,
+                        path: None,
+                        devices: Device::all(),
+                    }]);
+                }
+                _ => warn!("BELLPERSON_GPUS_PER_LOCK parse fail, use all gpus"),
+            };
         }
 
-        GPULock(locks)
+        info!("BELLPERSON_GPUS_PER_LOCK fallback to single lock mode");
+
+        // Fallback to create single lock
+        let path = tmp_path(GPU_LOCK_NAME, None);
+        debug!("Acquiring GPU lock at {:?} ...", &path);
+        let file = File::create(&path).unwrap_or_else(|_| {
+            panic!("Cannot create GPU lock file at {:?}", &path);
+        });
+        file.lock_exclusive().unwrap();
+        debug!("GPU lock acquired!");
+        GPULock(vec![LockInfo {
+            file: Some(file),
+            path: Some(path),
+            devices: Device::all(),
+        }])
     }
 }
 
 impl Drop for GPULock<'_> {
     fn drop(&mut self) {
         for lock_info in &self.0 {
-            lock_info.file.unlock().unwrap();
-            debug!("GPU lock released at {:?}", lock_info.path);
+            if let Some(file) = &lock_info.file {
+                file.unlock().unwrap();
+                debug!(
+                    "GPU lock released at {:?}",
+                    lock_info.path.as_ref().unwrap(),
+                );
+            }
         }
     }
 }
@@ -158,11 +182,20 @@ where
     F: Field + GpuName,
 {
     let lock = GPULock::lock();
+    let mut devices = Vec::new();
+    for lock_info in &lock.0 {
+        for device in &lock_info.devices {
+            devices.push(*device);
+        }
+    }
+
+    /*
     let devices = lock
         .0
         .iter()
-        .map(|LockInfo { device, .. }| *device)
+        .map(|LockInfo { devices, .. }| devices)
         .collect::<Vec<&Device>>();
+    */
 
     let programs = devices
         .iter()
@@ -195,11 +228,19 @@ where
     G: PrimeCurveAffine + GpuName,
 {
     let lock = GPULock::lock();
+    let mut devices = Vec::new();
+    for lock_info in &lock.0 {
+        for device in &lock_info.devices {
+            devices.push(*device);
+        }
+    }
+    /*
     let devices = lock
         .0
         .iter()
-        .map(|LockInfo { device, .. }| *device)
+        .map(|LockInfo { devices, .. }| devices)
         .collect::<Vec<&Device>>();
+    */
 
     let kernel = if priority {
         CpuGpuMultiexpKernel::create(&devices)
