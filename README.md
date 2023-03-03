@@ -101,7 +101,7 @@ The gpu extension contains some env vars that may be set externally to this libr
 
     Restricts the number of devices used by the FFT and multiexponentiation calculations.
     - If it's not set, a single lock will be created, and each calculation uses all devices
-    - If BELLPERSON_GPUS_PER_LOCK = 0, no lock will be created, each calculation uses all devices, and each device can run multiple calculations
+    - If BELLPERSON_GPUS_PER_LOCK = 0, no lock will be created, each calculation uses all devices, and each device can run multiple calculations. **WARNING**: this option can break things easily. Each kernel expects that it's run without anything else running on the GPU at the same time. If two kernels run at the same time, they might interfere with each other and lead to crashes or wrong results.
     - If BELLPERSON_GPUS_PER_LOCK > 0, create a lock for each device, each calculation uses BELLPERSON_GPUS_PER_LOCK (up to device number) devices
 
     ```rust
