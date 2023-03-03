@@ -27,8 +27,7 @@ fn tmp_path(filename: &str, id: Option<UniqueId>) -> PathBuf {
 
 #[derive(Debug)]
 struct LockInfo<'a> {
-    file: Option<File>,
-    path: Option<PathBuf>,
+    file_path: Option<(File, PathBuf)>,
     devices: Vec<&'a Device>,
 }
 
@@ -39,10 +38,11 @@ pub struct GPULock<'a>(Vec<LockInfo<'a>>);
 
 impl GPULock<'_> {
     pub fn lock() -> Self {
+        let devices = Device::all();
+
         if let Ok(val) = std::env::var("BELLPERSON_GPUS_PER_LOCK") {
             match val.parse::<usize>() {
                 Ok(val) if val > 0 => {
-                    let devices = Device::all();
                     info!(
                         "BELLPERSON_GPUS_PER_LOCK == {}, try lock {}/{} gpus",
                         val,
@@ -63,8 +63,7 @@ impl GPULock<'_> {
                         }
                         debug!("GPU lock acquired at {:?}", path);
                         locks.push(LockInfo {
-                            file: Some(file),
-                            path: Some(path),
+                            file_path: Some((file, path)),
                             devices: vec![device],
                         });
                         if locks.len() >= val {
@@ -75,14 +74,17 @@ impl GPULock<'_> {
                     return GPULock(locks);
                 }
                 Ok(val) if val == 0 => {
-                    info!("BELLPERSON_GPUS_PER_LOCK == 0, free to use gpus");
+                    info!("BELLPERSON_GPUS_PER_LOCK == 0, no lock acquired");
                     return GPULock(vec![LockInfo {
-                        file: None,
-                        path: None,
-                        devices: Device::all(),
+                        file_path: None,
+                        devices,
                     }]);
                 }
-                _ => warn!("BELLPERSON_GPUS_PER_LOCK parse fail, use all gpus"),
+                Ok(val) => warn!(
+                    "BELLPERSON_GPUS_PER_LOCK has invalid value {}, using all gpus",
+                    val,
+                ),
+                Err(_) => warn!("BELLPERSON_GPUS_PER_LOCK parsing failed, using all gpus"),
             };
         }
 
@@ -95,11 +97,10 @@ impl GPULock<'_> {
             panic!("Cannot create GPU lock file at {:?}", &path);
         });
         file.lock_exclusive().unwrap();
-        debug!("GPU lock acquired!");
+        debug!("GPU lock acquired at {:?}", path);
         GPULock(vec![LockInfo {
-            file: Some(file),
-            path: Some(path),
-            devices: Device::all(),
+            file_path: Some((file, path)),
+            devices,
         }])
     }
 }
@@ -107,12 +108,9 @@ impl GPULock<'_> {
 impl Drop for GPULock<'_> {
     fn drop(&mut self) {
         for lock_info in &self.0 {
-            if let Some(file) = &lock_info.file {
+            if let Some((file, path)) = &lock_info.file_path {
                 file.unlock().unwrap();
-                debug!(
-                    "GPU lock released at {:?}",
-                    lock_info.path.as_ref().unwrap(),
-                );
+                debug!("GPU lock released at {:?}", path);
             }
         }
     }
