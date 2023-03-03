@@ -63,21 +63,21 @@ The gpu extension contains some env vars that may be set externally to this libr
 
 - `RAYON_NUM_THREADS`
 
-   Restricts the number of threads used in the library to roughly that number (best effort). In the past this was done using `BELLMAN_NUM_CPUS` which is now deprecated. The default is set to the number of logical cores reported on the machine.
+    Restricts the number of threads used in the library to roughly that number (best effort). In the past this was done using `BELLMAN_NUM_CPUS` which is now deprecated. The default is set to the number of logical cores reported on the machine.
 
-   ```rust
+    ```rust
     // Example
     env::set_var("RAYON_NUM_THREADS", "6");
-   ```
+    ```
 
  - `EC_GPU_NUM_THREADS`
 
-   Restricts the number of threads used by the FFT and multiexponentiation calculations. In the past this setting was shared with `RAYON_NUM_THREADS`, now they are separate settings that can be controlled independently. The default is set to the number of logical cores reported on the machine.
+    Restricts the number of threads used by the FFT and multiexponentiation calculations. In the past this setting was shared with `RAYON_NUM_THREADS`, now they are separate settings that can be controlled independently. The default is set to the number of logical cores reported on the machine.
 
-   ```rust
+    ```rust
     // Example
     env::set_var("EC_GPU_NUM_THREADS", "6");
-   ```
+    ```
 
  - `BELLMAN_GPU_FRAMEWORK`
 
@@ -97,6 +97,18 @@ The gpu extension contains some env vars that may be set externally to this libr
     env::set_var("BELLMAN_CUDA_NVCC_ARGS", "--fatbin --gpu-architecture=sm_75 --generate-code=arch=compute_75,code=sm_75");
     ```
 
+ - `BELLPERSON_GPUS_PER_LOCK`
+
+    Restricts the number of devices used by the FFT and multiexponentiation calculations.
+    - If it's not set, single lock will be created, and each calculation use all devices
+    - If BELLPERSON_GPUS_PER_LOCK = 0, no lock will be created, each calculation use all devices, and each device can run multiple calculations
+    - If BELLPERSON_GPUS_PER_LOCK > 0, create a lock for each device, each calculation use BELLPERSON_GPUS_PER_LOCK (up to device number) devices
+
+    ```rust
+    // Example
+    env::set_var("BELLPERSON_GPUS_PER_LOCK", "0");
+    env::set_var("BELLPERSON_GPUS_PER_LOCK", "1");
+    ```
 
 #### Supported / Tested Cards
 
