@@ -16,13 +16,11 @@ const GPU_LOCK_NAME: &str = "bellman.gpu.lock";
 const PRIORITY_LOCK_NAME: &str = "bellman.priority.lock";
 
 fn tmp_path(filename: &str, id: Option<UniqueId>) -> PathBuf {
-    let mut p = std::env::temp_dir();
-    let mut tmpfile = filename.to_owned();
-    if let Some(id_str) = id {
-        tmpfile.push_str(&(".".to_owned() + &id_str.to_string()));
-    }
-    p.push(tmpfile);
-    p
+    let temp_file = match id {
+        Some(id) => format!("{}.{}", filename, id),
+        None => filename.to_string(),
+    };
+    std::env::temp_dir().join(temp_file)
 }
 
 /// Information about a lock.
