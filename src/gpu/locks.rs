@@ -25,10 +25,14 @@ fn tmp_path(filename: &str, id: Option<UniqueId>) -> PathBuf {
     p
 }
 
+/// Information about a lock.
+///
+/// If the `device` is `None`, it means that the lock spans all available devices.
 #[derive(Debug)]
 struct LockInfo<'a> {
-    file_path: Option<(File, PathBuf)>,
-    devices: Vec<&'a Device>,
+    file: File,
+    path: PathBuf,
+    device: Option<&'a Device>,
 }
 
 /// `GPULock` prevents two kernel objects to be instantiated simultaneously.
@@ -36,13 +40,12 @@ struct LockInfo<'a> {
 #[derive(Debug)]
 pub struct GPULock<'a>(Vec<LockInfo<'a>>);
 
-impl GPULock<'_> {
+impl<'a> GPULock<'a> {
     pub fn lock() -> Self {
-        let devices = Device::all();
-
         if let Ok(val) = std::env::var("BELLPERSON_GPUS_PER_LOCK") {
             match val.parse::<usize>() {
                 Ok(val) if val > 0 => {
+                    let devices = Device::all();
                     info!(
                         "BELLPERSON_GPUS_PER_LOCK == {}, try lock {}/{} gpus",
                         val,
@@ -63,8 +66,9 @@ impl GPULock<'_> {
                         }
                         debug!("GPU lock acquired at {:?}", path);
                         locks.push(LockInfo {
-                            file_path: Some((file, path)),
-                            devices: vec![device],
+                            file,
+                            path,
+                            device: Some(device),
                         });
                         if locks.len() >= val {
                             break;
@@ -75,10 +79,7 @@ impl GPULock<'_> {
                 }
                 Ok(val) if val == 0 => {
                     info!("BELLPERSON_GPUS_PER_LOCK == 0, no lock acquired");
-                    return GPULock(vec![LockInfo {
-                        file_path: None,
-                        devices,
-                    }]);
+                    return GPULock(Vec::new());
                 }
                 Ok(val) => warn!(
                     "BELLPERSON_GPUS_PER_LOCK has invalid value {}, using all gpus",
@@ -99,19 +100,34 @@ impl GPULock<'_> {
         file.lock_exclusive().unwrap();
         debug!("GPU lock acquired at {:?}", path);
         GPULock(vec![LockInfo {
-            file_path: Some((file, path)),
-            devices,
+            file,
+            path,
+            device: None,
         }])
+    }
+
+    /// Retuns the devices this lock holds.
+    ///
+    /// It returns all devices if there is no lock at all.
+    fn devices(&self) -> Vec<&'a Device> {
+        // No locks signal that there should no lock be at all. If there is only one lock, which
+        // doesn't specify a devices, it signals that it's a single lock, that spans all devices.
+        if self.0.is_empty() || (self.0.len() == 1 && self.0[0].device.is_none()) {
+            Device::all()
+        } else {
+            self.0
+                .iter()
+                .filter_map(|&LockInfo { device, .. }| device)
+                .collect()
+        }
     }
 }
 
 impl Drop for GPULock<'_> {
     fn drop(&mut self) {
         for lock_info in &self.0 {
-            if let Some((file, path)) = &lock_info.file_path {
-                file.unlock().unwrap();
-                debug!("GPU lock released at {:?}", path);
-            }
+            lock_info.file.unlock().unwrap();
+            debug!("GPU lock released at {:?}", lock_info.path);
         }
     }
 }
@@ -180,22 +196,8 @@ where
     F: Field + GpuName,
 {
     let lock = GPULock::lock();
-    let mut devices = Vec::new();
-    for lock_info in &lock.0 {
-        for device in &lock_info.devices {
-            devices.push(*device);
-        }
-    }
-
-    /*
-    let devices = lock
-        .0
-        .iter()
-        .map(|LockInfo { devices, .. }| devices)
-        .collect::<Vec<&Device>>();
-    */
-
-    let programs = devices
+    let programs = lock
+        .devices()
         .iter()
         .map(|device| ec_gpu_gen::program!(device))
         .collect::<Result<_, _>>()
@@ -226,19 +228,7 @@ where
     G: PrimeCurveAffine + GpuName,
 {
     let lock = GPULock::lock();
-    let mut devices = Vec::new();
-    for lock_info in &lock.0 {
-        for device in &lock_info.devices {
-            devices.push(*device);
-        }
-    }
-    /*
-    let devices = lock
-        .0
-        .iter()
-        .map(|LockInfo { devices, .. }| devices)
-        .collect::<Vec<&Device>>();
-    */
+    let devices = lock.devices();
 
     let kernel = if priority {
         CpuGpuMultiexpKernel::create(&devices)
