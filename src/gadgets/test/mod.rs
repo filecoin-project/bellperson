@@ -218,7 +218,7 @@ impl<Scalar: PrimeField> TestConstraintSystem<Scalar> {
 
         let mut s = String::new();
         for b in h.finalize().as_ref() {
-            s += &format!("{:02x}", b);
+            write!(s, "{:02x}", b).expect("writing to string never fails");
         }
 
         s

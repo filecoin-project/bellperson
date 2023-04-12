@@ -279,6 +279,7 @@ where
     create_proof_batch_priority_inner(circuits, params, Some((r_s, s_s)), priority)
 }
 
+#[allow(clippy::drop_non_drop)]
 #[allow(clippy::type_complexity)]
 #[allow(clippy::needless_collect)]
 fn create_proof_batch_priority_inner<E, C, P: ParameterSource<E>>(

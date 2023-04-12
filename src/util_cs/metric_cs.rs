@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write;
 
 use super::Comparable;
 use ff::PrimeField;
@@ -129,7 +130,7 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
         let mut s = String::new();
 
         for input in &self.inputs {
-            s.push_str(&format!("INPUT {}\n", &input))
+            writeln!(s, "INPUT {}", &input).expect("writing to string never fails");
         }
 
         let negone = -Scalar::one();
@@ -152,20 +153,20 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
                 if coeff != Scalar::one() && coeff != negone {
                     for (i, x) in powers_of_two.iter().enumerate() {
                         if x == &coeff {
-                            s.push_str(&format!("2^{} . ", i));
+                            write!(s, "2^{} . ", i).expect("writing to string never fails");
                             break;
                         }
                     }
 
-                    s.push_str(&format!("{:?} . ", coeff))
+                    write!(s, "{:?} . ", coeff).expect("writing to string never fails");
                 }
 
                 match var.0.get_unchecked() {
                     Index::Input(i) => {
-                        s.push_str(&format!("`I{}`", &self.inputs[i]));
+                        write!(s, "`I{}`", &self.inputs[i]).expect("writing to string never fails");
                     }
                     Index::Aux(i) => {
-                        s.push_str(&format!("`A{}`", &self.aux[i]));
+                        write!(s, "`A{}`", &self.aux[i]).expect("writing to string never fails");
                     }
                 }
             }
@@ -179,7 +180,7 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
         for &(ref a, ref b, ref c, ref name) in &self.constraints {
             s.push('\n');
 
-            s.push_str(&format!("{}: ", name));
+            write!(s, "{}: ", name).expect("writing to string never fails");
             pp(&mut s, a);
             s.push_str(" * ");
             pp(&mut s, b);
