@@ -310,8 +310,10 @@ macro_rules! locked_kernel {
             where
                 Fun: FnMut(&mut $kernel) -> GpuResult<R>,
             {
-                if std::env::var("BELLMAN_NO_GPU").is_ok() {
-                    return Err(GpuError::GpuDisabled);
+                if let Ok(bellman_no_gpu) = std::env::var("BELLMAN_NO_GPU") {
+                    if bellman_no_gpu != "0" {
+                        return Err(GpuError::GpuDisabled);
+                    }
                 }
 
                 loop {
