@@ -80,7 +80,7 @@ fn get_sha256_iv() -> Vec<UInt32> {
     IV.iter().map(|&v| UInt32::constant(v)).collect()
 }
 
-fn sha256_compression_function<Scalar, CS>(
+pub fn sha256_compression_function<Scalar, CS>(
     cs: CS,
     input: &[Boolean],
     current_hash_value: &[UInt32],
