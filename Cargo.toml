@@ -44,9 +44,9 @@ fs2 = { version = "0.4.3", optional = true }
 memmap2 = "0.5.8"
 
 [dev-dependencies]
-hex-literal = "0.3"
+hex-literal = "0.4"
 rand_xorshift = "0.3"
-env_logger = "0.9.0"
+env_logger = "0.10.0"
 criterion = "0.4.0"
 rand_chacha = "0.3"
 csv = "1.1.5"
