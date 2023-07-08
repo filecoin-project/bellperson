@@ -84,7 +84,16 @@ impl<E: Engine> Proof<E> {
     }
 
     pub fn read_many(proof_bytes: &[u8], num_proofs: usize) -> io::Result<Vec<Self>> {
-        debug_assert_eq!(proof_bytes.len(), num_proofs * Self::size());
+        if proof_bytes.len() != num_proofs * Self::size() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "expected exactly {} bytes but got {}",
+                    num_proofs * Self::size(),
+                    proof_bytes.len()
+                ),
+            ));
+        }
 
         // Decompress and group check in parallel
         #[derive(Clone, Copy)]
