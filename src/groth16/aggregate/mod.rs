@@ -25,7 +25,7 @@ pub use self::prove::*;
 pub use self::srs::*;
 pub use self::verify::*;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AggregateVersion {
     V1,
     V2,

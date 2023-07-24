@@ -233,7 +233,7 @@ impl<Scalar: PrimeField> TestConstraintSystem<Scalar> {
             a.mul_assign(&b);
 
             if a != c {
-                return Some(&*path);
+                return Some(path);
             }
         }
 

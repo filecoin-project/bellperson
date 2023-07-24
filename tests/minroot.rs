@@ -280,7 +280,7 @@ fn minroot_aggregate_proof_inner(version: AggregateVersion) {
     let aggregate_proof_and_instance = aggregate_proofs_and_instances::<Bls12>(
         &pk,
         &inclusion,
-        &statements[..nb_proofs].to_vec(),
+        &statements[..nb_proofs],
         &proofs[..nb_proofs],
         version,
     )
