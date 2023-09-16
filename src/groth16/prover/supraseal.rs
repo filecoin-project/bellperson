@@ -1,12 +1,12 @@
 //! Prover implementation implemented using SupraSeal (C++).
 
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use bellpepper_core::{Circuit, ConstraintSystem, Index, SynthesisError, Variable};
 use ff::{Field, PrimeField};
 use log::info;
 use pairing::MultiMillerLoop;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use super::{ParameterSource, Proof, ProvingAssignment};
 use crate::{gpu::GpuName, BELLMAN_VERSION};
@@ -30,62 +30,65 @@ where
         BELLMAN_VERSION
     );
 
-    let (start, provers, input_assignments_no_repr, aux_assignments_no_repr) =
-        synthesize_circuits_batch(circuits)?;
+    let provers = synthesize_circuits_batch(circuits)?;
 
-    let input_assignment_len = input_assignments_no_repr[0].len();
-    let aux_assignment_len = aux_assignments_no_repr[0].len();
-    let n = provers[0].a.len();
-    let a_aux_density_total = provers[0].a_aux_density.get_total_density();
-    let b_input_density_total = provers[0].b_input_density.get_total_density();
-    let b_aux_density_total = provers[0].b_aux_density.get_total_density();
+    // Start fft/multiexp prover timer
+    let start = Instant::now();
+    info!("starting proof timer");
+
     let num_circuits = provers.len();
-
     let (r_s, s_s) = randomization.unwrap_or((
         vec![E::Fr::ZERO; num_circuits],
         vec![E::Fr::ZERO; num_circuits],
     ));
 
     // Make sure all circuits have the same input len.
+    let n = provers[0].a.len();
     for prover in &provers {
         assert_eq!(
             prover.a.len(),
             n,
             "only equaly sized circuits are supported"
         );
-        debug_assert_eq!(
-            a_aux_density_total,
-            prover.a_aux_density.get_total_density(),
-            "only identical circuits are supported"
-        );
-        debug_assert_eq!(
-            b_input_density_total,
-            prover.b_input_density.get_total_density(),
-            "only identical circuits are supported"
-        );
-        debug_assert_eq!(
-            b_aux_density_total,
-            prover.b_aux_density.get_total_density(),
-            "only identical circuits are supported"
-        );
     }
 
-    let mut input_assignments_ref = Vec::with_capacity(num_circuits);
-    let mut aux_assignments_ref = Vec::with_capacity(num_circuits);
-    for i in 0..num_circuits {
-        input_assignments_ref.push(input_assignments_no_repr[i].as_ptr());
-        aux_assignments_ref.push(aux_assignments_no_repr[i].as_ptr());
+    impl<Scalar> Into<supraseal_c2::Assignment<Scalar>> for &ProvingAssignment<Scalar>
+    where
+        Scalar: PrimeField,
+    {
+        fn into(self) -> supraseal_c2::Assignment<Scalar> {
+            assert_eq!(self.a.len(), self.b.len());
+            assert_eq!(self.a.len(), self.c.len());
+
+            supraseal_c2::Assignment::<Scalar> {
+                a_aux_density: self.a_aux_density.bv.as_raw_slice().as_ptr(),
+                a_aux_bit_len: self.a_aux_density.bv.len(),
+                a_aux_popcount: self.a_aux_density.get_total_density(),
+
+                b_inp_density: self.b_input_density.bv.as_raw_slice().as_ptr(),
+                b_inp_bit_len: self.b_input_density.bv.len(),
+                b_inp_popcount: self.b_input_density.get_total_density(),
+
+                b_aux_density: self.b_aux_density.bv.as_raw_slice().as_ptr(),
+                b_aux_bit_len: self.b_aux_density.bv.len(),
+                b_aux_popcount: self.b_aux_density.get_total_density(),
+
+                a: self.a.as_ptr(),
+                b: self.b.as_ptr(),
+                c: self.c.as_ptr(),
+                abc_size: self.a.len(),
+
+                inp_assignment_data: self.input_assignment.as_ptr(),
+                inp_assignment_size: self.input_assignment.len(),
+
+                aux_assignment_data: self.aux_assignment.as_ptr(),
+                aux_assignment_size: self.aux_assignment.len(),
+            }
+        }
     }
 
-    let mut a_ref = Vec::with_capacity(num_circuits);
-    let mut b_ref = Vec::with_capacity(num_circuits);
-    let mut c_ref = Vec::with_capacity(num_circuits);
-
-    for prover in &provers {
-        a_ref.push(prover.a.as_ptr());
-        b_ref.push(prover.b.as_ptr());
-        c_ref.push(prover.c.as_ptr());
-    }
+    let provers_c2: Vec<supraseal_c2::Assignment<E::Fr>> =
+        provers.iter().map(|p| p.into()).collect();
 
     let mut proofs: Vec<Proof<E>> = Vec::with_capacity(num_circuits);
     // We call out to C++ code which is unsafe anyway, hence silence this warning.
@@ -98,22 +101,8 @@ where
         log::error!("SupraSeal SRS wasn't allocated correctly");
         SynthesisError::MalformedSrs
     })?;
-    supraseal_c2::generate_groth16_proof(
-        a_ref.as_slice(),
-        b_ref.as_slice(),
-        c_ref.as_slice(),
-        provers[0].a.len(),
-        input_assignments_ref.as_mut_slice(),
-        aux_assignments_ref.as_mut_slice(),
-        input_assignment_len,
-        aux_assignment_len,
-        provers[0].a_aux_density.bv.as_raw_slice(),
-        provers[0].b_input_density.bv.as_raw_slice(),
-        provers[0].b_aux_density.bv.as_raw_slice(),
-        a_aux_density_total,
-        b_input_density_total,
-        b_aux_density_total,
-        num_circuits,
+    supraseal_c2::generate_groth16_proofs(
+        provers_c2.as_slice(),
         r_s.as_slice(),
         s_s.as_slice(),
         proofs.as_mut_slice(),
@@ -129,22 +118,14 @@ where
 #[allow(clippy::type_complexity)]
 fn synthesize_circuits_batch<Scalar, C>(
     circuits: Vec<C>,
-) -> Result<
-    (
-        Instant,
-        std::vec::Vec<ProvingAssignment<Scalar>>,
-        std::vec::Vec<std::sync::Arc<std::vec::Vec<Scalar>>>,
-        std::vec::Vec<std::sync::Arc<std::vec::Vec<Scalar>>>,
-    ),
-    SynthesisError,
->
+) -> Result<std::vec::Vec<ProvingAssignment<Scalar>>, SynthesisError>
 where
     Scalar: PrimeField,
     C: Circuit<Scalar> + Send,
 {
     let start = Instant::now();
 
-    let mut provers = circuits
+    let provers = circuits
         .into_par_iter()
         .map(|circuit| -> Result<_, SynthesisError> {
             let mut prover = ProvingAssignment::new();
@@ -163,30 +144,5 @@ where
 
     info!("synthesis time: {:?}", start.elapsed());
 
-    // Start fft/multiexp prover timer
-    let start = Instant::now();
-    info!("starting proof timer");
-
-    let input_assignments_no_repr = provers
-        .par_iter_mut()
-        .map(|prover| {
-            let input_assignment = std::mem::take(&mut prover.input_assignment);
-            Arc::new(input_assignment)
-        })
-        .collect::<Vec<_>>();
-
-    let aux_assignments_no_repr = provers
-        .par_iter_mut()
-        .map(|prover| {
-            let aux_assignment = std::mem::take(&mut prover.aux_assignment);
-            Arc::new(aux_assignment)
-        })
-        .collect::<Vec<_>>();
-
-    Ok((
-        start,
-        provers,
-        input_assignments_no_repr,
-        aux_assignments_no_repr,
-    ))
+    Ok(provers)
 }
