@@ -10,15 +10,15 @@ parameters:
 
 executors:
   default:
+    docker:
+      - image: cimg/rust:1.70
+    working_directory: ~/gpuci
+    resource_class: small
+  gpu:
     machine:
       image: linux-cuda-12:2023.05.1
     working_directory: ~/gpuci
     resource_class: gpu.nvidia.medium
-  cpu:
-    docker:
-      - image: filecoin/rust:latest
-    working_directory: ~/gpuci
-    resource_class: 2xlarge+
 
 restore-workspace: &restore-workspace
   attach_workspace:
@@ -48,12 +48,22 @@ commands:
             sudo apt update
             sudo apt install -y ocl-icd-opencl-dev
 
+  install-rust-toolchain:
+    steps:
+      - run:
+          name: Install the toolchain given by `rust-tolchain`
+          command: curl https://sh.rustup.rs -sSf | sh -s -- --profile minimal --component clippy --default-toolchain $(cat rust-toolchain) -y
+
 jobs:
+  # The cache is only available on the same kind of machines. We cannot create
+  # a cache on a GPU machine and use it on a Docker machine. Hence only use
+  # this for the GPU machine jobs.
   cargo_fetch:
-    executor: default
+    executor: gpu
+    resource_class: gpu.nvidia.small
     steps:
       - checkout
-      - run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - install-rust-toolchain
       - set-env-path
       - run: echo $HOME
       - run: cargo --version
@@ -69,8 +79,6 @@ jobs:
             - cargo-v2-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
       - run: cargo update
       - run: cargo fetch
-      - run: rustup install $(cat rust-toolchain)
-      - run: rustup default $(cat rust-toolchain)
       # A nightly build is needed for code coverage reporting
       - run: rustup toolchain install --profile minimal << pipeline.parameters.nightly-version >>
       - run: rustup component add --toolchain << pipeline.parameters.nightly-version >> llvm-tools-preview
@@ -87,7 +95,7 @@ jobs:
             - "~/.rustup"
 
   test:
-    executor: default
+    executor: gpu
     parameters:
       cargo-args:
         description: Addtional arguments for the cargo command
@@ -111,34 +119,42 @@ jobs:
           name: Test << parameters.framework>> with << parameters.cargo-args >>
           command: BELLMAN_GPU_FRAMEWORK=<< parameters.framework >> cargo test << parameters.cargo-args >>
 
-  test_ignored:
-    executor: cpu
+  test_cpu:
+    executor: default
+    parameters:
+      cargo-args:
+        description: Addtional arguments for the cargo command
+        type: string
+        default: ""
+      resource-class:
+        description: The resource class to run on
+        type: string
+        default: small
+    resource_class: << parameters.resource-class >>
     environment:
       RUST_LOG: debug
     steps:
       - set-env-path
-      - *restore-workspace
-      - *restore-cache
+      - checkout
       - run:
-          name: Test ignored
-          command: cargo test --release -- --ignored
+          name: Test with << parameters.cargo-args >>
+          command: cargo test << parameters.cargo-args >>
           no_output_timeout: 30m
       - run:
-          name: Show results
-          command: cat aggregation.csv
+          name: Show results (only for ignored tests)
+          command: test -f aggregation.csv && cat aggregation.csv || true
 
   rustfmt:
     executor: default
     steps:
-      - *restore-workspace
-      - *restore-cache
       - set-env-path
+      - checkout
       - run:
           name: Run cargo fmt
           command: cargo fmt --all -- --check
 
   clippy:
-    executor: default
+    executor: gpu
     environment:
       RUST_LOG: debug
       # Build the kernel only for the single architecture that is used on CI. This should reduce
@@ -217,22 +233,20 @@ workflows:
   test:
     jobs:
       - cargo_fetch
-      - rustfmt:
-          requires:
-            - cargo_fetch
+      - rustfmt
       - clippy:
           requires:
             - cargo_fetch
-      - test:
+      - test_cpu:
           name: "Test CPU"
           cargo-args: "--workspace"
-          requires:
-            - cargo_fetch
-      - test:
+      - test_cpu:
           name: "Test CPU (no default features)"
           cargo-args: "--workspace --no-default-features"
-          requires:
-            - cargo_fetch
+      - test_cpu:
+          name: "Test CPU (ignored)"
+          cargo-args: "--release -- --ignored"
+          resource-class: xlarge
       - test:
           name: "Test OpenCL only"
           cargo-args: "--workspace --release --features opencl"
@@ -258,9 +272,6 @@ workflows:
       - test:
           name: "Test SupraSeal"
           cargo-args: "--release --features cuda-supraseal"
-          requires:
-            - cargo_fetch
-      - test_ignored:
           requires:
             - cargo_fetch
       #- coverage_run:
