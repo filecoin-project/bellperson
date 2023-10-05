@@ -11,6 +11,41 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use super::{ParameterSource, Proof, ProvingAssignment};
 use crate::{gpu::GpuName, BELLMAN_VERSION};
 
+impl<Scalar> From<&ProvingAssignment<Scalar>> for supraseal_c2::Assignment<Scalar>
+where
+    Scalar: PrimeField,
+{
+    fn from(assignment: &ProvingAssignment<Scalar>) -> Self {
+        assert_eq!(assignment.a.len(), assignment.b.len());
+        assert_eq!(assignment.a.len(), assignment.c.len());
+
+        Self {
+            a_aux_density: assignment.a_aux_density.bv.as_raw_slice().as_ptr(),
+            a_aux_bit_len: assignment.a_aux_density.bv.len(),
+            a_aux_popcount: assignment.a_aux_density.get_total_density(),
+
+            b_inp_density: assignment.b_input_density.bv.as_raw_slice().as_ptr(),
+            b_inp_bit_len: assignment.b_input_density.bv.len(),
+            b_inp_popcount: assignment.b_input_density.get_total_density(),
+
+            b_aux_density: assignment.b_aux_density.bv.as_raw_slice().as_ptr(),
+            b_aux_bit_len: assignment.b_aux_density.bv.len(),
+            b_aux_popcount: assignment.b_aux_density.get_total_density(),
+
+            a: assignment.a.as_ptr(),
+            b: assignment.b.as_ptr(),
+            c: assignment.c.as_ptr(),
+            abc_size: assignment.a.len(),
+
+            inp_assignment_data: assignment.input_assignment.as_ptr(),
+            inp_assignment_size: assignment.input_assignment.len(),
+
+            aux_assignment_data: assignment.aux_assignment.as_ptr(),
+            aux_assignment_size: assignment.aux_assignment.len(),
+        }
+    }
+}
+
 #[allow(clippy::type_complexity)]
 pub(super) fn create_proof_batch_priority_inner<E, C, P: ParameterSource<E>>(
     circuits: Vec<C>,
@@ -50,41 +85,6 @@ where
             n,
             "only equaly sized circuits are supported"
         );
-    }
-
-    impl<Scalar> Into<supraseal_c2::Assignment<Scalar>> for &ProvingAssignment<Scalar>
-    where
-        Scalar: PrimeField,
-    {
-        fn into(self) -> supraseal_c2::Assignment<Scalar> {
-            assert_eq!(self.a.len(), self.b.len());
-            assert_eq!(self.a.len(), self.c.len());
-
-            supraseal_c2::Assignment::<Scalar> {
-                a_aux_density: self.a_aux_density.bv.as_raw_slice().as_ptr(),
-                a_aux_bit_len: self.a_aux_density.bv.len(),
-                a_aux_popcount: self.a_aux_density.get_total_density(),
-
-                b_inp_density: self.b_input_density.bv.as_raw_slice().as_ptr(),
-                b_inp_bit_len: self.b_input_density.bv.len(),
-                b_inp_popcount: self.b_input_density.get_total_density(),
-
-                b_aux_density: self.b_aux_density.bv.as_raw_slice().as_ptr(),
-                b_aux_bit_len: self.b_aux_density.bv.len(),
-                b_aux_popcount: self.b_aux_density.get_total_density(),
-
-                a: self.a.as_ptr(),
-                b: self.b.as_ptr(),
-                c: self.c.as_ptr(),
-                abc_size: self.a.len(),
-
-                inp_assignment_data: self.input_assignment.as_ptr(),
-                inp_assignment_size: self.input_assignment.len(),
-
-                aux_assignment_data: self.aux_assignment.as_ptr(),
-                aux_assignment_size: self.aux_assignment.len(),
-            }
-        }
     }
 
     let provers_c2: Vec<supraseal_c2::Assignment<E::Fr>> =
