@@ -43,11 +43,10 @@ where
     ));
 
     // Make sure all circuits have the same input len.
-    let n = provers[0].a.len();
     for prover in &provers {
         assert_eq!(
             prover.a.len(),
-            n,
+            provers[0].a.len(),
             "only equaly sized circuits are supported"
         );
     }
