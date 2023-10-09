@@ -16,8 +16,8 @@ There is currently one backend available for the implementation of Bls12 381:
 This fork contains GPU parallel acceleration to the FFT and Multiexponentation algorithms in the groth16 prover codebase under the compilation features `cuda` and `opencl`.
 
 ### Requirements
-- NVIDIA or AMD GPU Graphics Driver
-- OpenCL
+- NVIDIA (Turing or newer) or 
+- AMD GPU Graphics Driver (OpenCL)
 
 ( For AMD devices we recommend [ROCm](https://rocm-documentation.readthedocs.io/en/latest/Installation_Guide/Installation-Guide.html) )
 
