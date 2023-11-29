@@ -47,8 +47,53 @@ where
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
-    let (start, mut provers, input_assignments, aux_assignments) =
-        synthesize_circuits_batch(circuits)?;
+    let provers = synthesize_circuits_batch(circuits)?;
+    proof_circuits_batch(provers, params, randomization, priority)
+}
+
+#[allow(clippy::type_complexity)]
+fn proof_circuits_batch<E, P>(
+    mut provers: std::vec::Vec<ProvingAssignment<E::Fr>>,
+    params: P,
+    randomization: Option<(Vec<E::Fr>, Vec<E::Fr>)>,
+    priority: bool,
+) -> Result<Vec<Proof<E>>, SynthesisError>
+where
+    E: MultiMillerLoop,
+    E::Fr: GpuName,
+    E::G1Affine: GpuName,
+    E::G2Affine: GpuName,
+    P: ParameterSource<E>,
+{
+    // Start fft/multiexp prover timer
+    let start = Instant::now();
+    info!("starting proof timer");
+
+    let input_assignments = provers
+        .par_iter_mut()
+        .map(|prover| {
+            let input_assignment = std::mem::take(&mut prover.input_assignment);
+            Arc::new(
+                input_assignment
+                    .into_iter()
+                    .map(|s| s.to_repr())
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let aux_assignments = provers
+        .par_iter_mut()
+        .map(|prover| {
+            let aux_assignment = std::mem::take(&mut prover.aux_assignment);
+            Arc::new(
+                aux_assignment
+                    .into_iter()
+                    .map(|s| s.to_repr())
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
 
     let worker = Worker::new();
     let input_len = input_assignments[0].len();
@@ -401,24 +446,15 @@ where
     Ok(Arc::new(a))
 }
 
-#[allow(clippy::type_complexity)]
 fn synthesize_circuits_batch<Scalar, C>(
     circuits: Vec<C>,
-) -> Result<
-    (
-        Instant,
-        std::vec::Vec<ProvingAssignment<Scalar>>,
-        std::vec::Vec<std::sync::Arc<std::vec::Vec<<Scalar as PrimeField>::Repr>>>,
-        std::vec::Vec<std::sync::Arc<std::vec::Vec<<Scalar as PrimeField>::Repr>>>,
-    ),
-    SynthesisError,
->
+) -> Result<std::vec::Vec<ProvingAssignment<Scalar>>, SynthesisError>
 where
     Scalar: PrimeField,
     C: Circuit<Scalar> + Send,
 {
     let start = Instant::now();
-    let mut provers = circuits
+    let provers = circuits
         .into_par_iter()
         .map(|circuit| -> Result<_, SynthesisError> {
             let mut prover = ProvingAssignment::new();
@@ -437,35 +473,5 @@ where
 
     info!("synthesis time: {:?}", start.elapsed());
 
-    // Start fft/multiexp prover timer
-    let start = Instant::now();
-    info!("starting proof timer");
-
-    let input_assignments = provers
-        .par_iter_mut()
-        .map(|prover| {
-            let input_assignment = std::mem::take(&mut prover.input_assignment);
-            Arc::new(
-                input_assignment
-                    .into_iter()
-                    .map(|s| s.to_repr())
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let aux_assignments = provers
-        .par_iter_mut()
-        .map(|prover| {
-            let aux_assignment = std::mem::take(&mut prover.aux_assignment);
-            Arc::new(
-                aux_assignment
-                    .into_iter()
-                    .map(|s| s.to_repr())
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    Ok((start, provers, input_assignments, aux_assignments))
+    Ok(provers)
 }
