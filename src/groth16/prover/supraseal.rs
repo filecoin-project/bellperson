@@ -66,7 +66,22 @@ where
     );
 
     let provers = synthesize_circuits_batch(circuits)?;
+    proof_circuits_batch(provers, params, randomization)
+}
 
+#[allow(clippy::type_complexity)]
+fn proof_circuits_batch<E, P>(
+    provers: std::vec::Vec<ProvingAssignment<E::Fr>>,
+    params: P,
+    randomization: Option<(Vec<E::Fr>, Vec<E::Fr>)>,
+) -> Result<Vec<Proof<E>>, SynthesisError>
+where
+    E: MultiMillerLoop,
+    E::Fr: GpuName,
+    E::G1Affine: GpuName,
+    E::G2Affine: GpuName,
+    P: ParameterSource<E>,
+{
     // Start fft/multiexp prover timer
     let start = Instant::now();
     info!("starting proof timer");
