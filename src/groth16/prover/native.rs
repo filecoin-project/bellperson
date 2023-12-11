@@ -6,7 +6,7 @@ use std::{
     time::Instant,
 };
 
-use bellpepper_core::{Circuit, ConstraintSystem, Index, SynthesisError, Variable};
+use bellpepper_core::{Circuit, SynthesisError};
 use ec_gpu_gen::{
     multiexp_cpu::FullDensity,
     threadpool::{Worker, THREAD_POOL},
@@ -47,7 +47,7 @@ where
 {
     info!("Bellperson {} is being used!", BELLMAN_VERSION);
 
-    let provers = synthesize_circuits_batch(circuits)?;
+    let provers = super::synthesize_circuits_batch(circuits)?;
     proof_circuits_batch(provers, params, randomization, priority)
 }
 
@@ -444,34 +444,4 @@ where
         .map(|s| s.to_repr())
         .collect::<Vec<_>>();
     Ok(Arc::new(a))
-}
-
-fn synthesize_circuits_batch<Scalar, C>(
-    circuits: Vec<C>,
-) -> Result<std::vec::Vec<ProvingAssignment<Scalar>>, SynthesisError>
-where
-    Scalar: PrimeField,
-    C: Circuit<Scalar> + Send,
-{
-    let start = Instant::now();
-    let provers = circuits
-        .into_par_iter()
-        .map(|circuit| -> Result<_, SynthesisError> {
-            let mut prover = ProvingAssignment::new();
-
-            prover.alloc_input(|| "", || Ok(Scalar::ONE))?;
-
-            circuit.synthesize(&mut prover)?;
-
-            for i in 0..prover.input_assignment.len() {
-                prover.enforce(|| "", |lc| lc + Variable(Index::Input(i)), |lc| lc, |lc| lc);
-            }
-
-            Ok(prover)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    info!("synthesis time: {:?}", start.elapsed());
-
-    Ok(provers)
 }
