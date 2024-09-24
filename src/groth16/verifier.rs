@@ -35,8 +35,8 @@ where
 }
 
 /// Verify a single Proof.
-pub fn verify_proof<'a, E>(
-    pvk: &'a PreparedVerifyingKey<E>,
+pub fn verify_proof<E>(
+    pvk: &PreparedVerifyingKey<E>,
     proof: &Proof<E>,
     public_inputs: &[E::Fr],
 ) -> Result<bool, SynthesisError>
@@ -106,8 +106,8 @@ where
 }
 
 /// Randomized batch verification - see Appendix B.2 in Zcash spec
-pub fn verify_proofs_batch<'a, E, R>(
-    pvk: &'a PreparedVerifyingKey<E>,
+pub fn verify_proofs_batch<E, R>(
+    pvk: &PreparedVerifyingKey<E>,
     rng: &mut R,
     proofs: &[&Proof<E>],
     public_inputs: &[Vec<E::Fr>],

@@ -119,7 +119,7 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
             result.push(format!("AUX {}", aux));
         }
 
-        for &(ref _a, ref _b, ref _c, ref name) in &self.constraints {
+        for (_a, _b, _c, name) in &self.constraints {
             result.push(name.to_string());
         }
 
@@ -177,7 +177,7 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
             s.push(')');
         };
 
-        for &(ref a, ref b, ref c, ref name) in &self.constraints {
+        for (a, b, c, name) in &self.constraints {
             s.push('\n');
 
             write!(s, "{}: ", name).expect("writing to string never fails");
