@@ -17,7 +17,8 @@ env:
 
 jobs:
   check_clippy:
-    runs-on: ubuntu-24.04
+#    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     name: Clippy
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +28,7 @@ jobs:
         run: cargo clippy --all-targets --workspace -- -D warnings
 
   check_fmt:
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     name: Checking fmt
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +36,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   test_cpu:
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     name: Test with CPU
     strategy:
       matrix:
@@ -47,40 +48,39 @@ jobs:
       - name: Show results (only for ignored tests)
         run: test -f aggregation.csv && cat aggregation.csv || true
 
-  # Enable these tests once there's a runner with a GPU.
-  #test_gpu:
-  #  runs-on: ubuntu-24.04
-  #  name: Test
-  #  env:
-  #    # Build the kernel only for the single architecture that is used on CI.
-  #    # This should reduce the overall compile-time significantly.
-  #    BELLMAN_CUDA_NVCC_ARGS: --fatbin --gpu-architecture=sm_75 --generate-code=arch=compute_75,code=sm_75
-  #    # These are needed for SupraSeal only, but it shouldn't do any harm for
-  #    # the other cases.
-  #    CC: gcc-12
-  #    CXX: g++-12
-  #    NVCC_PREPEND_FLAGS: "-ccbin /usr/bin/g++-12"
-  #  strategy:
-  #    matrix:
-  #      include:
-  #        - name: "Test OpenCL only"
-  #          cargo-args: "--workspace --release --features opencl"
-  #          framework: ""
-  #        - name: "Test CUDA only"
-  #        - cargo-args: "--release --features cuda"
-  #          framework: ""
-  #        - name: "Test CUDA/OpenCL (CUDA at run-time)"
-  #          cargo-args: "--release --features cuda,opencl"
-  #          framework: cuda
-  #        - name: "Test CUDA/OpenCL (OpenCL at run-time)"
-  #          cargo-args: "--release --features cuda,opencl"
-  #          framework: cuda
-  #        - name: "Test SupraSeal"
-  #          cargo-args: "--release --features cuda-supraseal"
-  #          framework: ""
-  #  steps:
-  #    - uses: actions/checkout@v4
-  #    - name: Install required packages
-  #      run: sudo apt install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
-  #    - name: Test ${{ matrix.framework }} with ${{ matrix.cargo-args }}
-  #      run: BELLMAN_GPU_FRAMEWORK=${{ matrix.framework }} cargo test ${{ matrix.cargo-args }}
+  test_gpu:
+    runs-on: self-hosted
+    name: Test
+    env:
+      # Build the kernel only for the single architecture that is used on CI.
+      # This should reduce the overall compile-time significantly.
+      BELLMAN_CUDA_NVCC_ARGS: --fatbin --gpu-architecture=sm_75 --generate-code=arch=compute_75,code=sm_75
+      # These are needed for SupraSeal only, but it shouldn't do any harm for
+      # the other cases.
+      CC: gcc-12
+      CXX: g++-12
+      NVCC_PREPEND_FLAGS: "-ccbin /usr/bin/g++-12"
+    strategy:
+      matrix:
+        include:
+          - name: "Test OpenCL only"
+            cargo-args: "--workspace --release --features opencl"
+            framework: ""
+          - name: "Test CUDA only"
+          - cargo-args: "--release --features cuda"
+            framework: ""
+          - name: "Test CUDA/OpenCL (CUDA at run-time)"
+            cargo-args: "--release --features cuda,opencl"
+            framework: cuda
+          - name: "Test CUDA/OpenCL (OpenCL at run-time)"
+            cargo-args: "--release --features cuda,opencl"
+            framework: cuda
+          - name: "Test SupraSeal"
+            cargo-args: "--release --features cuda-supraseal"
+            framework: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install required packages
+        run: sudo apt install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
+      - name: Test ${{ matrix.framework }} with ${{ matrix.cargo-args }}
+        run: BELLMAN_GPU_FRAMEWORK=${{ matrix.framework }} cargo test ${{ matrix.cargo-args }}
