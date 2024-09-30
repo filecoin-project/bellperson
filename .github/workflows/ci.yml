@@ -22,8 +22,8 @@ jobs:
     name: Clippy
     steps:
       - uses: actions/checkout@v4
-      - name: Install required packages
-        run: sudo apt install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
+#      - name: Install required packages
+#        run: sudo apt install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
       - name: Run cargo clippy
         run: cargo clippy --all-targets --workspace -- -D warnings
 
@@ -80,7 +80,7 @@ jobs:
             framework: ""
     steps:
       - uses: actions/checkout@v4
-      - name: Install required packages
-        run: sudo apt install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
+#      - name: Install required packages
+#        run: sudo apt install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
       - name: Test ${{ matrix.framework }} with ${{ matrix.cargo-args }}
         run: BELLMAN_GPU_FRAMEWORK=${{ matrix.framework }} cargo test ${{ matrix.cargo-args }}
