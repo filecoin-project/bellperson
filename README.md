@@ -19,7 +19,7 @@ This fork contains GPU parallel acceleration to the FFT and Multiexponentation a
 - NVIDIA (Turing or newer) or 
 - AMD GPU Graphics Driver (OpenCL)
 
-( For AMD devices we recommend [ROCm](https://rocm-documentation.readthedocs.io/en/latest/Installation_Guide/Installation-Guide.html) )
+( For AMD devices we recommend [ROCm](https://www.amd.com/en/products/software/rocm.html) )
 
 ### Environment variables
 
