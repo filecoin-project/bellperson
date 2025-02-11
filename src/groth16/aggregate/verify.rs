@@ -691,7 +691,7 @@ where
     // we first multiply each entry of the Z U and L vectors by the respective
     // challenges independently
     // Since at the end we want to multiple all "t" values together, we do
-    // multiply all of them in parrallel and then merge then back at the end.
+    // multiply all of them in parallel and then merge then back at the end.
     // same for u and z.
     #[allow(clippy::upper_case_acronyms)]
     enum Op<'a, E>
