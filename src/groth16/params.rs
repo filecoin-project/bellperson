@@ -405,7 +405,7 @@ where
     }
 }
 
-pub trait ParameterSource<E>: Send + Sync
+pub trait ParameterSource<E>: Clone + Send + Sync
 where
     E: MultiMillerLoop,
 {
