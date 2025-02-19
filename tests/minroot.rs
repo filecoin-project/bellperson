@@ -245,7 +245,7 @@ fn minroot_aggregate_proof_inner(version: AggregateVersion) {
         generate_random_parameters(c, &mut rng).unwrap()
     };
 
-    // verification key for indivdual verification of proof
+    // verification key for individual verification of proof
     let pvk = prepare_verifying_key(&params.vk);
 
     #[cfg(feature = "cuda-supraseal")]
