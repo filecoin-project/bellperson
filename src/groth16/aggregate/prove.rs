@@ -358,7 +358,7 @@ where
     })
 }
 
-/// gipa_tipp_mipp peforms the recursion of the GIPA protocol for TIPP and MIPP.
+/// gipa_tipp_mipp performs the recursion of the GIPA protocol for TIPP and MIPP.
 /// It returns a proof containing all intermdiate committed values, as well as
 /// the challenges generated necessary to do the polynomial commitment proof
 /// later in TIPP.
