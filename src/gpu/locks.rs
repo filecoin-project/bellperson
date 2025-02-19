@@ -276,7 +276,7 @@ macro_rules! locked_kernel {
                 }
             }
 
-            /// Intialize a kernel.
+            /// Initialize a kernel.
             ///
             /// On OpenCL that also means that the kernel source is compiled.
             fn init(&mut self) {
