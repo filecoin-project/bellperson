@@ -25,7 +25,7 @@ pub fn get_cpu_utilization() -> f64 {
         .clamp(0f64, 1f64)
 }
 
-/// Set the correct enviornment variables for a custom GPU.
+/// Set the correct environment variables for a custom GPU.
 ///
 /// Determining the number of cores was moved to rust-gpu-tools, which uses the
 /// `RUST_GPU_TOOLS_CUSTOM_GPU` environment variable to set custom GPUs. Users should upgrade
