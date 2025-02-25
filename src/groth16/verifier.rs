@@ -9,11 +9,9 @@ use super::{multiscalar, PreparedVerifyingKey, Proof, VerifyingKey};
 use crate::{le_bytes_to_u64s, SynthesisError};
 
 /// Generate a prepared verifying key, required to verify a proofs.
-pub fn prepare_verifying_key<E: Engine + MultiMillerLoop>(
-    vk: &VerifyingKey<E>,
-) -> PreparedVerifyingKey<E>
+pub fn prepare_verifying_key<E>(vk: &VerifyingKey<E>) -> PreparedVerifyingKey<E>
 where
-    E: MultiMillerLoop,
+    E: Engine + MultiMillerLoop,
 {
     let neg_gamma = -vk.gamma_g2;
     let neg_delta = -vk.delta_g2;

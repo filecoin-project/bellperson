@@ -78,7 +78,7 @@ impl<F: Field> DensePolynomial<F> {
     }
 }
 
-impl<'a, 'b, F: Field> Sub<&'a DensePolynomial<F>> for &'b DensePolynomial<F> {
+impl<'a, F: Field> Sub<&'a DensePolynomial<F>> for &DensePolynomial<F> {
     type Output = DensePolynomial<F>;
 
     fn sub(self, other: &'a DensePolynomial<F>) -> DensePolynomial<F> {
@@ -109,7 +109,7 @@ impl<'a, 'b, F: Field> Sub<&'a DensePolynomial<F>> for &'b DensePolynomial<F> {
     }
 }
 
-impl<'a, 'b, F: Field> Div<&'a DensePolynomial<F>> for &'b DensePolynomial<F> {
+impl<'a, F: Field> Div<&'a DensePolynomial<F>> for &DensePolynomial<F> {
     type Output = DensePolynomial<F>;
 
     fn div(self, divisor: &'a DensePolynomial<F>) -> DensePolynomial<F> {

@@ -144,7 +144,7 @@ where
     })
 }
 
-pub fn aggregate_proofs_and_instances<E: Engine + std::fmt::Debug>(
+pub fn aggregate_proofs_and_instances<E>(
     srs: &ProverSRSInputAggregation<E>,
     transcript_include: &[u8],
     statements: &[Vec<E::Fr>],
@@ -152,6 +152,7 @@ pub fn aggregate_proofs_and_instances<E: Engine + std::fmt::Debug>(
     version: AggregateVersion,
 ) -> Result<AggregateProofAndInstance<E>, SynthesisError>
 where
+    E: Engine + std::fmt::Debug,
     E: MultiMillerLoop + std::fmt::Debug,
     E::Fr: Serialize,
     <E::Fr as PrimeField>::Repr: Send + Sync,

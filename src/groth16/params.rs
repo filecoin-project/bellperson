@@ -441,7 +441,7 @@ where
     }
 }
 
-impl<'a, E> ParameterSource<E> for &'a Parameters<E>
+impl<E> ParameterSource<E> for &Parameters<E>
 where
     E: MultiMillerLoop,
 {

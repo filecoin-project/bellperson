@@ -70,7 +70,7 @@ struct MimcDemo<'a, Scalar: PrimeField> {
 /// Our demo circuit implements this `Circuit` trait which
 /// is used during paramgen and proving in order to
 /// synthesize the constraint system.
-impl<'a, Scalar: PrimeField> Circuit<Scalar> for MimcDemo<'a, Scalar> {
+impl<Scalar: PrimeField> Circuit<Scalar> for MimcDemo<'_, Scalar> {
     fn synthesize<CS: ConstraintSystem<Scalar>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         assert_eq!(self.constants.len(), MIMC_ROUNDS);
 

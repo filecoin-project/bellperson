@@ -61,7 +61,7 @@ struct MimcDemo<'a, Scalar: PrimeField> {
     constants: &'a [Scalar],
 }
 
-impl<'a, Scalar: PrimeField> Circuit<Scalar> for MimcDemo<'a, Scalar> {
+impl<Scalar: PrimeField> Circuit<Scalar> for MimcDemo<'_, Scalar> {
     fn synthesize<CS: ConstraintSystem<Scalar>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         assert_eq!(self.constants.len(), MIMC_ROUNDS);
 
@@ -158,8 +158,7 @@ impl<Scalar: PrimeField> Circuit<Scalar> for TestCircuit<Scalar> {
         let input_variables: Vec<_> = self
             .public_inputs
             .iter()
-            .enumerate()
-            .map(|(_i, input)| -> Result<AllocatedNum<_>, SynthesisError> {
+            .map(|input| -> Result<AllocatedNum<_>, SynthesisError> {
                 let num = AllocatedNum::alloc(&mut cs, || {
                     input.ok_or(SynthesisError::AssignmentMissing)
                 })?;

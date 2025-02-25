@@ -12,7 +12,9 @@ struct OrderedVariable(Variable);
 
 #[derive(Debug)]
 enum NamedObject {
+    #[allow(dead_code)]
     Constraint(usize),
+    #[allow(dead_code)]
     Var(Variable),
     Namespace,
 }
