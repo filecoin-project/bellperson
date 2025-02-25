@@ -30,7 +30,7 @@ fn deserialize_proof<'de, D: Deserializer<'de>, E: Engine>(d: D) -> Result<Proof
         _ph: PhantomData<E>,
     }
 
-    impl<'de, E: Engine> Visitor<'de> for BytesVisitor<E> {
+    impl<E: Engine> Visitor<'_> for BytesVisitor<E> {
         type Value = Proof<E>;
 
         fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {

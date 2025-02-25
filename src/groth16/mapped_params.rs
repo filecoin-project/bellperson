@@ -53,7 +53,7 @@ where
     pub checked: bool,
 }
 
-impl<'a, E> ParameterSource<E> for &'a MappedParameters<E>
+impl<E> ParameterSource<E> for &MappedParameters<E>
 where
     E: MultiMillerLoop,
 {

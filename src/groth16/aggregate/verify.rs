@@ -204,10 +204,7 @@ where
 /// verification of related instances i.e. when instances are given by
 /// [a1, ... , an, b1, ... , bn], [b1, ... , bn, c1, ..., cn], [c1, ..., cn, d1, ..., dn] etc
 #[allow(clippy::too_many_arguments)]
-pub fn verify_aggregate_proof_and_aggregate_instances<
-    E: Engine + std::fmt::Debug,
-    R: rand::RngCore + Send,
->(
+pub fn verify_aggregate_proof_and_aggregate_instances<E, R>(
     ip_verifier_srs: &VerifierSRS<E>,
     pvk: &PreparedVerifyingKey<E>,
     rng: R,
@@ -218,6 +215,7 @@ pub fn verify_aggregate_proof_and_aggregate_instances<
     version: AggregateVersion,
 ) -> Result<bool, SynthesisError>
 where
+    E: Engine + std::fmt::Debug,
     E: MultiMillerLoop + std::fmt::Debug,
     E::Fr: Serialize,
     <E as Engine>::Gt: Compress + Serialize,
@@ -533,10 +531,10 @@ fn verify_tipp_mipp<E, R>(
 /// * T,U: the final commitment values of A and B
 /// * Z the final product between A and B.
 /// * Challenges are returned in inverse order as well to avoid
-/// repeating the operation multiple times later on.
+///   repeating the operation multiple times later on.
 /// * There are T,U,Z vectors as well for the MIPP relationship. Both TIPP and
-/// MIPP share the same challenges however, enabling to re-use common operations
-/// between them, such as the KZG proof for commitment keys.
+///   MIPP share the same challenges however, enabling to re-use common operations
+///   between them, such as the KZG proof for commitment keys.
 #[allow(clippy::type_complexity)]
 fn gipa_verify_tipp_mipp<E>(
     proof: &AggregateProof<E>,

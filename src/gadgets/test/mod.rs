@@ -13,6 +13,7 @@ use crate::{ConstraintSystem, Index, LinearCombination, SynthesisError, Variable
 
 #[derive(Debug)]
 enum NamedObject {
+    #[allow(dead_code)]
     Constraint(usize),
     Var(Variable),
     Namespace,
