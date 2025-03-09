@@ -112,7 +112,7 @@ The gpu extension contains some env vars that may be set externally to this libr
 
 #### Supported / Tested Cards
 
-Depending on the size of the proof being passed to the gpu for work, certain cards will not be able to allocate enough memory to either the FFT or Multiexp kernel. Below are a list of devices that work for small sets. In the future we will add the cuttoff point at which a given card will not be able to allocate enough memory to utilize the GPU.
+Depending on the size of the proof being passed to the gpu for work, certain cards will not be able to allocate enough memory to either the FFT or Multiexp kernel. Below is a list of devices that work for small sets. In the future we will add the cutoff point at which a given card will not be able to allocate enough memory to utilize the GPU.
 
 | Device Name            | Cores | Comments       |
 |------------------------|-------|----------------|
