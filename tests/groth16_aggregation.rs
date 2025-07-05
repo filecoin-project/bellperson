@@ -247,7 +247,7 @@ struct Record {
     aggregate_create_ms: u32,  // time to create the aggregated proof
     aggregate_verify_ms: u32,  // time to verify the aggregate proof
     batch_verify_ms: u32,      // time to verify all proofs via batching of 10
-    batch_all_ms: u32,         // time ot verify all proofs via batching at once
+    batch_all_ms: u32,         // time to verify all proofs via batching at once
     aggregate_size_bytes: u32, // size of the aggregated proof
     batch_size_bytes: u32,     // size of the batch of proof
 }
@@ -300,7 +300,7 @@ fn test_groth16_bench_inner(version: AggregateVersion) {
         };
         generate_random_parameters(c, &mut rng).unwrap()
     };
-    // verification key for indivdual verification of proof
+    // verification key for individual verification of proof
     let pvk = prepare_verifying_key(&params.vk);
 
     let (proofs, statements): (Vec<Proof<Bls12>>, Vec<Vec<Fr>>) = (0..max)
