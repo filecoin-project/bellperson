@@ -154,7 +154,7 @@ where
         }
         Ok(())
     }
-    /// Writes the agggregated proof into the provided buffer.
+    /// Writes the aggregated proof into the provided buffer.
     pub fn write(&self, mut out: impl Write) -> std::io::Result<()> {
         // com_ab
         self.com_ab.0.write_compressed(&mut out)?;
