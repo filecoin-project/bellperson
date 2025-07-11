@@ -36,7 +36,7 @@ use crate::groth16::aggregate::inner_product;
 use bellpepper_core::SynthesisError;
 use pairing::{Engine, MultiMillerLoop};
 
-/// Key is a generic commitment key that is instanciated with g and h as basis,
+/// Key is a generic commitment key that is instantiated with g and h as basis,
 /// and a and b as powers.
 #[derive(Clone, Debug)]
 pub struct Key<G: PrimeCurveAffine> {
