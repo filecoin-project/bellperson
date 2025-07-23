@@ -71,7 +71,7 @@ where
         assert_eq!(
             prover.a.len(),
             n,
-            "only equaly sized circuits are supported"
+            "only equally sized circuits are supported"
         );
         debug_assert_eq!(
             a_aux_density_total,

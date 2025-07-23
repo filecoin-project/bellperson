@@ -104,7 +104,7 @@ impl<'a> GPULock<'a> {
         }])
     }
 
-    /// Retuns the devices this lock holds.
+    /// Returns the devices this lock holds.
     ///
     /// It returns all devices if there is no lock at all.
     fn devices(&self) -> Vec<&'a Device> {

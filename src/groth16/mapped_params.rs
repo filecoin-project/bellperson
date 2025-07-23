@@ -21,7 +21,7 @@ where
 {
     /// The parameter file we're reading from.  
     pub param_file_path: PathBuf,
-    /// The file descriptor we have mmaped.
+    /// The file descriptor we have mapped.
     pub param_file: File,
     /// The actual mmap.
     pub params: Mmap,
