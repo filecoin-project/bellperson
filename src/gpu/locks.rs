@@ -130,7 +130,7 @@ impl Drop for GPULock<'_> {
     }
 }
 
-/// `PrioriyLock` is like a flag. When acquired, it means a high-priority process
+/// `PriorityLock` is like a flag. When acquired, it means a high-priority process
 /// needs to acquire the GPU really soon. Acquiring the `PriorityLock` is like
 /// signaling all other processes to release their `GPULock`s.
 /// Only one process can have the `PriorityLock` at a time.
