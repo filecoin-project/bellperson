@@ -13,7 +13,7 @@ There is currently one backend available for the implementation of Bls12 381:
 
 ## GPU
 
-This fork contains GPU parallel acceleration to the FFT and Multiexponentation algorithms in the groth16 prover codebase under the compilation features `cuda` and `opencl`.
+This fork contains GPU parallel acceleration to the FFT and Multiexponentiation algorithms in the groth16 prover codebase under the compilation features `cuda` and `opencl`.
 
 ### Requirements
 - NVIDIA (Turing or newer) or 
@@ -54,7 +54,7 @@ The gpu extension contains some env vars that may be set externally to this libr
 
 - `BELLMAN_CPU_UTILIZATION`
 
-    Can be set in the interval [0,1] to designate a proportion of the multiexponenation calculation to be moved to cpu in parallel to the GPU to keep all hardware occupied.
+    Can be set in the interval [0,1] to designate a proportion of the multiexponential calculation to be moved to cpu in parallel to the GPU to keep all hardware occupied.
 
     ```rust
     // Example
