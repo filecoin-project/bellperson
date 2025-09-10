@@ -82,7 +82,7 @@ where
         assert_eq!(
             prover.a.len(),
             provers[0].a.len(),
-            "only equaly sized circuits are supported"
+            "only equally sized circuits are supported"
         );
     }
 
