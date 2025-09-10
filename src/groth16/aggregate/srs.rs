@@ -471,7 +471,7 @@ mod test {
         let read_size = Cursor::new(&buffer).read_u32::<BigEndian>().unwrap() as usize;
         assert_eq!(vec_len, read_size);
 
-        // remove the previous size from the bufer - u32 = 4 bytes
+        // remove the previous size from the buffer - u32 = 4 bytes
         // and replace the size by appending the rest
         let mut new_buffer = Vec::new();
         let invalid_size = MAX_SRS_SIZE + 1;
