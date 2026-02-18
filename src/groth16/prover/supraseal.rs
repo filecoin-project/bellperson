@@ -9,7 +9,7 @@ use pairing::MultiMillerLoop;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use super::{ParameterSource, Proof, ProvingAssignment};
-use crate::{gpu::GpuName, BELLMAN_VERSION};
+use crate::{BELLMAN_VERSION, gpu::GpuName};
 
 impl<Scalar> From<&ProvingAssignment<Scalar>> for supraseal_c2::Assignment<Scalar>
 where

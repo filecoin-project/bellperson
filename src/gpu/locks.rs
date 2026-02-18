@@ -1,9 +1,9 @@
 use std::fs::File;
 use std::path::PathBuf;
 
+use ec_gpu_gen::EcError;
 use ec_gpu_gen::fft::FftKernel;
 use ec_gpu_gen::rust_gpu_tools::{Device, UniqueId};
-use ec_gpu_gen::EcError;
 use ff::Field;
 use fs2::FileExt;
 use group::prime::PrimeCurveAffine;
@@ -75,7 +75,7 @@ impl<'a> GPULock<'a> {
 
                     return GPULock(locks);
                 }
-                Ok(val) if val == 0 => {
+                Ok(0) => {
                     info!("BELLPERSON_GPUS_PER_LOCK == 0, no lock acquired");
                     return GPULock(Vec::new());
                 }
@@ -152,13 +152,12 @@ impl PriorityLock {
     }
 
     fn wait(priority: bool) {
-        if !priority {
-            if let Err(err) = File::create(tmp_path(PRIORITY_LOCK_NAME, None))
+        if !priority
+            && let Err(err) = File::create(tmp_path(PRIORITY_LOCK_NAME, None))
                 .unwrap()
                 .lock_exclusive()
-            {
-                warn!("failed to create priority log: {:?}", err);
-            }
+        {
+            warn!("failed to create priority log: {:?}", err);
         }
     }
 
@@ -173,7 +172,7 @@ impl PriorityLock {
             .try_lock_shared()
         {
             // Check that the error is actually a locking one
-            if err.raw_os_error() == fs2::lock_contended_error().raw_os_error() {
+            if matches!(err, std::fs::TryLockError::WouldBlock) {
                 return true;
             }
             warn!("failed to check lock: {:?}", err);

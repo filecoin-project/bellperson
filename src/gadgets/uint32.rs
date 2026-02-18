@@ -128,10 +128,8 @@ impl UInt32 {
 
             match *b {
                 Boolean::Constant(b) => {
-                    if b {
-                        if let Some(v) = value.as_mut() {
-                            *v |= 1;
-                        }
+                    if b && let Some(v) = value.as_mut() {
+                        *v |= 1;
                     }
                 }
                 Boolean::Is(ref b) => match b.get_value() {
@@ -410,10 +408,10 @@ impl UInt32 {
 #[cfg(test)]
 mod test {
     use super::UInt32;
+    use crate::ConstraintSystem;
     use crate::gadgets::boolean::Boolean;
     use crate::gadgets::multieq::MultiEq;
     use crate::gadgets::test::*;
-    use crate::ConstraintSystem;
     use blstrs::Scalar as Fr;
     use ff::Field;
     use rand_core::{RngCore, SeedableRng};
@@ -428,7 +426,7 @@ mod test {
 
         for _ in 0..1000 {
             let v = (0..32)
-                .map(|_| Boolean::constant(rng.next_u32() % 2 != 0))
+                .map(|_| Boolean::constant(!rng.next_u32().is_multiple_of(2)))
                 .collect::<Vec<_>>();
 
             let b = UInt32::from_bits_be(&v);
@@ -463,7 +461,7 @@ mod test {
 
         for _ in 0..1000 {
             let v = (0..32)
-                .map(|_| Boolean::constant(rng.next_u32() % 2 != 0))
+                .map(|_| Boolean::constant(!rng.next_u32().is_multiple_of(2)))
                 .collect::<Vec<_>>();
 
             let b = UInt32::from_bits(&v);
@@ -556,9 +554,8 @@ mod test {
 
             let r = {
                 let mut cs = MultiEq::new(&mut cs);
-                let r =
-                    UInt32::addmany(cs.namespace(|| "addition"), &[a_bit, b_bit, c_bit]).unwrap();
-                r
+
+                UInt32::addmany(cs.namespace(|| "addition"), &[a_bit, b_bit, c_bit]).unwrap()
             };
 
             assert!(r.value == Some(expected));

@@ -2,7 +2,7 @@ use std::fmt::{self, Display, Formatter};
 use std::ops::AddAssign;
 
 use ff::Field;
-use group::{prime::PrimeCurveAffine, Curve};
+use group::{Curve, prime::PrimeCurveAffine};
 use rayon::prelude::*;
 
 #[macro_use]

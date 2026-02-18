@@ -346,7 +346,7 @@ pub fn blake2s<Scalar: PrimeField, CS: ConstraintSystem<Scalar>>(
     use byteorder::{ByteOrder, LittleEndian};
 
     assert_eq!(personalization.len(), 8);
-    assert!(input.len() % 8 == 0);
+    assert!(input.len().is_multiple_of(8));
 
     let mut h = vec![
         UInt32::constant(0x6A09_E667 ^ 0x0101_0000 ^ 32),
@@ -410,9 +410,9 @@ mod test {
     use rand_xorshift::XorShiftRng;
 
     use super::blake2s;
+    use crate::ConstraintSystem;
     use crate::gadgets::boolean::{AllocatedBit, Boolean};
     use crate::gadgets::test::TestConstraintSystem;
-    use crate::ConstraintSystem;
 
     #[test]
     fn test_blank_hash() {
@@ -463,7 +463,7 @@ mod test {
             0xbc, 0xe5,
         ]);
         let input_bits: Vec<_> = (0..512)
-            .map(|_| Boolean::constant(rng.next_u32() % 2 != 0))
+            .map(|_| Boolean::constant(!rng.next_u32().is_multiple_of(2)))
             .chain((0..512).map(|i| {
                 AllocatedBit::alloc(cs.namespace(|| format!("input bit {}", i)), Some(true))
                     .unwrap()
@@ -483,7 +483,7 @@ mod test {
             0xbc, 0xe5,
         ]);
         let input_bits: Vec<_> = (0..512)
-            .map(|_| Boolean::constant(rng.next_u32() % 2 != 0))
+            .map(|_| Boolean::constant(!rng.next_u32().is_multiple_of(2)))
             .collect();
         blake2s(&mut cs, &input_bits, b"12345678").unwrap();
         assert_eq!(cs.num_constraints(), 0);

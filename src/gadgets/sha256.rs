@@ -52,21 +52,21 @@ where
     Scalar: PrimeField,
     CS: ConstraintSystem<Scalar>,
 {
-    assert!(input.len() % 8 == 0);
+    assert!(input.len().is_multiple_of(8));
 
     let mut padded = input.to_vec();
     let plen = padded.len() as u64;
     // append a single '1' bit
     padded.push(Boolean::constant(true));
     // append K '0' bits, where K is the minimum number >= 0 such that L + 1 + K + 64 is a multiple of 512
-    while (padded.len() + 64) % 512 != 0 {
+    while !(padded.len() + 64).is_multiple_of(512) {
         padded.push(Boolean::constant(false));
     }
     // append L as a 64-bit big-endian integer, making the total post-processed length a multiple of 512 bits
     for b in (0..64).rev().map(|i| (plen >> i) & 1 == 1) {
         padded.push(Boolean::constant(b));
     }
-    assert!(padded.len() % 512 == 0);
+    assert!(padded.len().is_multiple_of(512));
 
     let mut cur = get_sha256_iv();
     for (i, block) in padded.chunks(512).enumerate() {
@@ -321,7 +321,7 @@ mod test {
                 Boolean::from(
                     AllocatedBit::alloc(
                         cs.namespace(|| format!("input bit {}", i)),
-                        Some(rng.next_u32() % 2 != 0),
+                        Some(!rng.next_u32().is_multiple_of(2)),
                     )
                     .unwrap(),
                 )
@@ -347,7 +347,7 @@ mod test {
                 Boolean::from(
                     AllocatedBit::alloc(
                         cs.namespace(|| format!("input bit {}", i)),
-                        Some(rng.next_u32() % 2 != 0),
+                        Some(!rng.next_u32().is_multiple_of(2)),
                     )
                     .unwrap(),
                 )

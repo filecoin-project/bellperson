@@ -29,7 +29,7 @@
 /// one commitment.
 use std::ops::AddAssign;
 
-use group::{prime::PrimeCurveAffine, Curve};
+use group::{Curve, prime::PrimeCurveAffine};
 use rayon::prelude::*;
 
 use crate::groth16::aggregate::inner_product;

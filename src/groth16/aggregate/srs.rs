@@ -1,12 +1,12 @@
 use super::msm;
 use crate::groth16::aggregate::commit::*;
-use crate::groth16::multiscalar::{precompute_fixed_window, MultiscalarPrecompOwned, WINDOW_SIZE};
+use crate::groth16::multiscalar::{MultiscalarPrecompOwned, WINDOW_SIZE, precompute_fixed_window};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use digest::Digest;
 use ff::{Field, PrimeField, PrimeFieldBits};
 use group::{
-    prime::{PrimeCurve, PrimeCurveAffine},
     Curve, Group, GroupEncoding,
+    prime::{PrimeCurve, PrimeCurveAffine},
 };
 #[cfg(not(target_arch = "wasm32"))]
 use memmap2::Mmap;

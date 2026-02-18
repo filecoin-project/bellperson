@@ -2,9 +2,9 @@
 
 use ff::PrimeField;
 
+use super::Assignment;
 use super::boolean::Boolean;
 use super::num::{AllocatedNum, Num};
-use super::Assignment;
 use bellpepper_core::{ConstraintSystem, SynthesisError};
 
 /// Takes a sequence of booleans and exposes them as compact
@@ -122,7 +122,9 @@ fn test_multipacking() {
     for num_bits in 0..1500 {
         let mut cs = TestConstraintSystem::<Fr>::new();
 
-        let bits: Vec<bool> = (0..num_bits).map(|_| rng.next_u32() % 2 != 0).collect();
+        let bits: Vec<bool> = (0..num_bits)
+            .map(|_| !rng.next_u32().is_multiple_of(2))
+            .collect();
 
         let circuit_bits = bits
             .iter()

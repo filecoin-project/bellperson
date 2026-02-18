@@ -2,13 +2,13 @@ use std::env;
 use std::ops::AddAssign;
 use std::sync::{Arc, RwLock};
 
+use ec_gpu_gen::EcResult;
 use ec_gpu_gen::multiexp::MultiexpKernel;
-use ec_gpu_gen::multiexp_cpu::{multiexp_cpu, FullDensity};
+use ec_gpu_gen::multiexp_cpu::{FullDensity, multiexp_cpu};
 use ec_gpu_gen::rust_gpu_tools::Device;
 use ec_gpu_gen::threadpool::Worker;
-use ec_gpu_gen::EcResult;
 use ff::PrimeField;
-use group::{prime::PrimeCurveAffine, Group};
+use group::{Group, prime::PrimeCurveAffine};
 use log::{error, info};
 
 use crate::gpu::GpuName;
@@ -45,7 +45,8 @@ fn set_custom_gpu_env_var() {
                     "Please use `RUST_GPU_TOOLS_CUSTOM_GPU` instead of `BELLMAN_CUSTOM_GPU`, \
                      their values are fully compatible."
                 );
-                env::set_var("RUST_GPU_TOOLS_CUSTOM_GPU", custom_gpu)
+                // Can't enforce safety with this approach. <https://doc.rust-lang.org/std/env/fn.set_var.html#safety>
+                unsafe { env::set_var("RUST_GPU_TOOLS_CUSTOM_GPU", custom_gpu) }
             }
         }
     }
@@ -179,7 +180,10 @@ mod tests {
                 let rust_gpu_tools_custom_gpu = env::var("RUST_GPU_TOOLS_CUSTOM_GPU").expect(
                     "RUST_GPU_TOOLS_CUSTOM_GPU is set after `set_custom_gpu_env_var` was called.",
                 );
-                assert_eq!(rust_gpu_tools_custom_gpu, "My custom GPU:444", "`RUST_GPU_TOOLS_CUSTOM_GPU` has its original value, as the value of `BELLMAN_CUSTOM_GPU` was correctly ignored,");
+                assert_eq!(
+                    rust_gpu_tools_custom_gpu, "My custom GPU:444",
+                    "`RUST_GPU_TOOLS_CUSTOM_GPU` has its original value, as the value of `BELLMAN_CUSTOM_GPU` was correctly ignored,"
+                );
             },
         )
     }

@@ -206,13 +206,13 @@ mod test {
         for _ in 0..100 {
             let mut cs = TestConstraintSystem::<Fr>::new();
 
-            let a_val = rng.next_u32() % 2 != 0;
+            let a_val = !rng.next_u32().is_multiple_of(2);
             let a = Boolean::from(AllocatedBit::alloc(cs.namespace(|| "a"), Some(a_val)).unwrap());
 
-            let b_val = rng.next_u32() % 2 != 0;
+            let b_val = !rng.next_u32().is_multiple_of(2);
             let b = Boolean::from(AllocatedBit::alloc(cs.namespace(|| "b"), Some(b_val)).unwrap());
 
-            let c_val = rng.next_u32() % 2 != 0;
+            let c_val = !rng.next_u32().is_multiple_of(2);
             let c = Boolean::from(AllocatedBit::alloc(cs.namespace(|| "c"), Some(c_val)).unwrap());
 
             let bits = vec![a, b, c];
@@ -251,13 +251,13 @@ mod test {
         for _ in 0..100 {
             let mut cs = TestConstraintSystem::<Fr>::new();
 
-            let a_val = rng.next_u32() % 2 != 0;
+            let a_val = !rng.next_u32().is_multiple_of(2);
             let a = Boolean::from(AllocatedBit::alloc(cs.namespace(|| "a"), Some(a_val)).unwrap());
 
-            let b_val = rng.next_u32() % 2 != 0;
+            let b_val = !rng.next_u32().is_multiple_of(2);
             let b = Boolean::from(AllocatedBit::alloc(cs.namespace(|| "b"), Some(b_val)).unwrap());
 
-            let c_val = rng.next_u32() % 2 != 0;
+            let c_val = !rng.next_u32().is_multiple_of(2);
             let c = Boolean::from(AllocatedBit::alloc(cs.namespace(|| "c"), Some(c_val)).unwrap());
 
             let bits = vec![a, b, c];

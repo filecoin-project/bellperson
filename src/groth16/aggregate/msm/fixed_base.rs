@@ -1,7 +1,7 @@
 use ff::{PrimeField, PrimeFieldBits};
 use group::{
-    prime::{PrimeCurve, PrimeCurveAffine},
     Curve,
+    prime::{PrimeCurve, PrimeCurveAffine},
 };
 
 use rayon::prelude::*;

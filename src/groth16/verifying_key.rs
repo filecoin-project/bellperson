@@ -1,4 +1,4 @@
-use group::{prime::PrimeCurveAffine, UncompressedEncoding};
+use group::{UncompressedEncoding, prime::PrimeCurveAffine};
 use pairing::{Engine, MultiMillerLoop};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
