@@ -1,4 +1,4 @@
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use ff::Field;
 use group::{Curve, Group};
 use pairing::{Engine, MillerLoopResult, MultiMillerLoop};
@@ -8,8 +8,8 @@ use rayon::prelude::*;
 use bellpepper_core::SynthesisError;
 use std::ops::Mul;
 use std::sync::{
-    atomic::{AtomicBool, Ordering::SeqCst},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering::SeqCst},
 };
 use std::thread;
 

@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 
 use blstrs::Compress;
 use ff::PrimeField;
-use group::{prime::PrimeCurveAffine, Curve, GroupEncoding};
+use group::{Curve, GroupEncoding, prime::PrimeCurveAffine};
 use pairing::{Engine, MultiMillerLoop};
 use serde::{Deserialize, Serialize};
 

@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::ops::AddAssign;
 
 use ff::PrimeField;
-use group::{prime::PrimeCurveAffine, Curve, Group};
+use group::{Curve, Group, prime::PrimeCurveAffine};
 use rayon::prelude::*;
 
 pub const WINDOW_SIZE: usize = 8;
@@ -163,7 +163,8 @@ pub fn multiscalar<G: PrimeCurveAffine>(
     );
     const BITS_PER_LIMB: usize = std::mem::size_of::<u64>() * 8;
     // TODO: support more bit sizes
-    if nbits % precomp_table.window_size() != 0 || BITS_PER_LIMB % precomp_table.window_size() != 0
+    if !nbits.is_multiple_of(precomp_table.window_size())
+        || !BITS_PER_LIMB.is_multiple_of(precomp_table.window_size())
     {
         panic!("Unsupported multiscalar window size!");
     }
@@ -257,7 +258,7 @@ where
             let subset = precomp_table.at_point(start_idx);
             let scalars = match points {
                 ScalarList::Slice(s) => &s[start_idx..end_idx],
-                ScalarList::Getter(ref getter, _) => {
+                ScalarList::Getter(getter, _) => {
                     for i in start_idx..end_idx {
                         scalar_storage[i - start_idx] = getter(i);
                     }

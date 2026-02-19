@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use ec_gpu_gen::multiexp_cpu::{multiexp_cpu, QueryDensity, SourceBuilder};
-use ec_gpu_gen::threadpool::{Waiter, Worker};
 use ec_gpu_gen::EcError;
+use ec_gpu_gen::multiexp_cpu::{QueryDensity, SourceBuilder, multiexp_cpu};
+use ec_gpu_gen::threadpool::{Waiter, Worker};
 use ff::PrimeField;
 use group::prime::PrimeCurveAffine;
 

@@ -1,12 +1,12 @@
 use std::ops::{AddAssign, Mul, MulAssign};
 
 use ff::{Field, PrimeField};
-use group::{prime::PrimeCurveAffine, Curve, Group};
+use group::{Curve, Group, prime::PrimeCurveAffine};
 use pairing::{Engine, MillerLoopResult, MultiMillerLoop};
 use rayon::prelude::*;
 
-use super::{multiscalar, PreparedVerifyingKey, Proof, VerifyingKey};
-use crate::{le_bytes_to_u64s, SynthesisError};
+use super::{PreparedVerifyingKey, Proof, VerifyingKey, multiscalar};
+use crate::{SynthesisError, le_bytes_to_u64s};
 
 /// Generate a prepared verifying key, required to verify a proofs.
 pub fn prepare_verifying_key<E>(vk: &VerifyingKey<E>) -> PreparedVerifyingKey<E>
@@ -140,7 +140,7 @@ where
     for _ in 0..proof_num {
         use rand::Rng;
 
-        let t: u128 = rng.gen();
+        let t: u128 = rng.r#gen();
 
         let mut repr = E::Fr::ZERO.to_repr();
         let mut repr_u64s = le_bytes_to_u64s(repr.as_ref());

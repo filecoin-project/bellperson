@@ -9,10 +9,10 @@ use std::{
 use bellpepper_core::{Circuit, ConstraintSystem, Index, SynthesisError, Variable};
 use ec_gpu_gen::{
     multiexp_cpu::FullDensity,
-    threadpool::{Worker, THREAD_POOL},
+    threadpool::{THREAD_POOL, Worker},
 };
 use ff::{Field, PrimeField};
-use group::{prime::PrimeCurveAffine, Curve};
+use group::{Curve, prime::PrimeCurveAffine};
 #[cfg(any(feature = "cuda", feature = "opencl"))]
 use log::trace;
 use log::{debug, info};
@@ -25,10 +25,10 @@ use super::{ParameterSource, Proof, ProvingAssignment};
 #[cfg(any(feature = "cuda", feature = "opencl"))]
 use crate::gpu::PriorityLock;
 use crate::{
+    BELLMAN_VERSION,
     domain::EvaluationDomain,
     gpu::{GpuError, GpuName, LockedFftKernel, LockedMultiexpKernel},
     multiexp::multiexp,
-    BELLMAN_VERSION,
 };
 
 #[allow(clippy::type_complexity)]

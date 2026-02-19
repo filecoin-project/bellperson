@@ -25,7 +25,7 @@ impl<E> SuprasealParameters<E> {
     }
 }
 
-impl<'a, E> ParameterSource<E> for &'a SuprasealParameters<E>
+impl<E> ParameterSource<E> for &SuprasealParameters<E>
 where
     E: MultiMillerLoop,
 {

@@ -34,10 +34,12 @@ impl<F: Field> DensePolynomial<F> {
         result.truncate_leading_zeros();
         // Check that either the coefficients vec is empty or that the last coeff is
         // non-zero.
-        assert!(result
-            .coeffs
-            .last()
-            .map_or(true, |coeff| !bool::from(coeff.is_zero())));
+        assert!(
+            result
+                .coeffs
+                .last()
+                .is_none_or(|coeff| !bool::from(coeff.is_zero()))
+        );
         result
     }
 
@@ -54,10 +56,11 @@ impl<F: Field> DensePolynomial<F> {
         if self.is_zero() {
             0
         } else {
-            assert!(self
-                .coeffs
-                .last()
-                .map_or(false, |coeff| !bool::from(coeff.is_zero())));
+            assert!(
+                self.coeffs
+                    .last()
+                    .is_some_and(|coeff| !bool::from(coeff.is_zero()))
+            );
             self.coeffs.len() - 1
         }
     }
@@ -72,7 +75,7 @@ impl<F: Field> DensePolynomial<F> {
     }
 
     fn truncate_leading_zeros(&mut self) {
-        while self.coeffs.last().map_or(false, |c| c.is_zero().into()) {
+        while self.coeffs.last().is_some_and(|c| c.is_zero().into()) {
             self.coeffs.pop();
         }
     }

@@ -13,9 +13,9 @@ use rand_core::RngCore;
 use crate::{
     gpu,
     groth16::{
+        Proof, SuprasealParameters,
         params::ParameterSource,
         prover::{create_proof_batch_priority, create_random_proof_batch_priority},
-        Proof, SuprasealParameters,
     },
 };
 

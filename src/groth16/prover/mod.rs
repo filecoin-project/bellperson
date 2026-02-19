@@ -289,7 +289,7 @@ mod tests {
                     let index: usize = i / k;
                     let partial_assignment = &mut partial_assignments[index];
 
-                    if rng.gen() {
+                    if rng.r#gen() {
                         let el = Fr::random(&mut rng);
                         full_assignment
                             .alloc(|| format!("alloc:{},{}", i, k), || Ok(el))
@@ -299,7 +299,7 @@ mod tests {
                             .unwrap();
                     }
 
-                    if rng.gen() {
+                    if rng.r#gen() {
                         let el = Fr::random(&mut rng);
                         full_assignment
                             .alloc_input(|| format!("alloc_input:{},{}", i, k), || Ok(el))

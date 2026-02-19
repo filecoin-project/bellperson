@@ -3,12 +3,13 @@ mod util;
 use bellpepper_core::num::AllocatedNum;
 use bellpepper_core::{Circuit, ConstraintSystem, SynthesisError};
 use bellperson::groth16::{
+    Parameters, Proof,
     aggregate::{
-        aggregate_proofs, setup_fake_srs, verify_aggregate_proof, AggregateProof, AggregateVersion,
-        GenericSRS,
+        AggregateProof, AggregateVersion, GenericSRS, aggregate_proofs, setup_fake_srs,
+        verify_aggregate_proof,
     },
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-    verify_proofs_batch, Parameters, Proof,
+    verify_proofs_batch,
 };
 use blstrs::{Bls12, Scalar as Fr};
 use ff::{Field, PrimeField};
@@ -537,16 +538,18 @@ fn test_groth16_aggregation_inner(version: AggregateVersion) {
     assert!(result);
 
     // Invalid transcript inclusion
-    assert!(!verify_aggregate_proof(
-        &vk,
-        &pvk,
-        &mut rng,
-        &statements,
-        &aggregate_proof,
-        &[4, 5, 6],
-        version,
-    )
-    .unwrap());
+    assert!(
+        !verify_aggregate_proof(
+            &vk,
+            &pvk,
+            &mut rng,
+            &statements,
+            &aggregate_proof,
+            &[4, 5, 6],
+            version,
+        )
+        .unwrap()
+    );
 
     // 2. Non power of two
     let err = aggregate_proofs::<Bls12>(&pk, &to_include, &proofs[0..NUM_PROOFS - 1], version)
@@ -835,48 +838,56 @@ fn test_groth16_aggregate_versions() {
     let aggregate_proof =
         aggregate_proofs::<Bls12>(&pk, &to_include, &proofs, AggregateVersion::V1)
             .expect("failed to aggregate proofs");
-    assert!(verify_aggregate_proof(
-        &vk,
-        &pvk,
-        &mut rng,
-        &statements,
-        &aggregate_proof,
-        &to_include,
-        AggregateVersion::V1,
-    )
-    .expect("these proofs should have been valid"));
-    assert!(!verify_aggregate_proof(
-        &vk,
-        &pvk,
-        &mut rng,
-        &statements,
-        &aggregate_proof,
-        &to_include,
-        AggregateVersion::V2,
-    )
-    .expect("these proofs should have been invalid"));
+    assert!(
+        verify_aggregate_proof(
+            &vk,
+            &pvk,
+            &mut rng,
+            &statements,
+            &aggregate_proof,
+            &to_include,
+            AggregateVersion::V1,
+        )
+        .expect("these proofs should have been valid")
+    );
+    assert!(
+        !verify_aggregate_proof(
+            &vk,
+            &pvk,
+            &mut rng,
+            &statements,
+            &aggregate_proof,
+            &to_include,
+            AggregateVersion::V2,
+        )
+        .expect("these proofs should have been invalid")
+    );
 
     let aggregate_proof =
         aggregate_proofs::<Bls12>(&pk, &to_include, &proofs, AggregateVersion::V2)
             .expect("failed to aggregate proofs");
-    assert!(verify_aggregate_proof(
-        &vk,
-        &pvk,
-        &mut rng,
-        &statements,
-        &aggregate_proof,
-        &to_include,
-        AggregateVersion::V2,
-    )
-    .expect("these proofs should have been valid"));
-    assert!(!verify_aggregate_proof(
-        &vk,
-        &pvk,
-        &mut rng,
-        &statements,
-        &aggregate_proof,
-        &to_include,
-        AggregateVersion::V1,
-    )
-    .expect("these proofs should have been invalid"));
+    assert!(
+        verify_aggregate_proof(
+            &vk,
+            &pvk,
+            &mut rng,
+            &statements,
+            &aggregate_proof,
+            &to_include,
+            AggregateVersion::V2,
+        )
+        .expect("these proofs should have been valid")
+    );
+    assert!(
+        !verify_aggregate_proof(
+            &vk,
+            &pvk,
+            &mut rng,
+            &statements,
+            &aggregate_proof,
+            &to_include,
+            AggregateVersion::V1,
+        )
+        .expect("these proofs should have been invalid")
+    );
 }

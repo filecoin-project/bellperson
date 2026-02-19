@@ -2,7 +2,7 @@ use std::fmt;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 
-use group::{prime::PrimeCurveAffine, GroupEncoding};
+use group::{GroupEncoding, prime::PrimeCurveAffine};
 use pairing::Engine;
 use rayon::prelude::*;
 
@@ -239,8 +239,8 @@ mod test_with_bls12_381 {
 
     use super::*;
     use crate::groth16::{
-        create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-        Parameters,
+        Parameters, create_random_proof, generate_random_parameters, prepare_verifying_key,
+        verify_proof,
     };
     use crate::{Circuit, ConstraintSystem, SynthesisError};
     use bincode::{deserialize, serialize};

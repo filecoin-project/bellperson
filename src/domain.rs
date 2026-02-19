@@ -268,13 +268,12 @@ fn best_fft<F: PrimeField + gpu::GpuName>(
     log_ns: &[u32],
 ) {
     #[cfg(any(feature = "cuda", feature = "opencl"))]
-    if let Some(ref mut kern) = kern {
-        if kern
+    if let Some(kern) = kern
+        && kern
             .with(|k: &mut FftKernel<F>| gpu_fft(k, coeffs, omegas, log_ns))
             .is_ok()
-        {
-            return;
-        }
+    {
+        return;
     }
 
     let log_cpus = worker.log_num_threads();

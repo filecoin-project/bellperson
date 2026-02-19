@@ -1,24 +1,24 @@
 use blstrs::Compress;
 use crossbeam_channel::bounded;
 use ff::{Field, PrimeField};
-use group::{prime::PrimeCurveAffine, Curve, Group};
+use group::{Curve, Group, prime::PrimeCurveAffine};
 use log::{debug, info};
 use pairing::{Engine, MultiMillerLoop};
 use rayon::prelude::*;
 use serde::Serialize;
 
 use super::{
+    AggregateProof, AggregateProofAndInstance, KZGOpening, VerifierSRS,
     accumulator::PairingChecks,
     inner_product,
     prove::polynomial_evaluation_product_form_from_transcript,
     structured_scalar_power,
     transcript::{Challenge, Transcript},
-    AggregateProof, AggregateProofAndInstance, KZGOpening, VerifierSRS,
 };
 use crate::groth16::{
-    aggregate::AggregateVersion,
-    multiscalar::{par_multiscalar, MultiscalarPrecomp, ScalarList},
     PreparedVerifyingKey,
+    aggregate::AggregateVersion,
+    multiscalar::{MultiscalarPrecomp, ScalarList, par_multiscalar},
 };
 use bellpepper_core::SynthesisError;
 

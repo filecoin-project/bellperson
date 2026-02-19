@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use ff::{Field, PrimeField};
 use group::{
-    prime::{PrimeCurve, PrimeCurveAffine},
     Curve, Group, Wnaf, WnafGroup,
+    prime::{PrimeCurve, PrimeCurveAffine},
 };
 use pairing::{Engine, MultiMillerLoop};
 use rand_core::RngCore;
