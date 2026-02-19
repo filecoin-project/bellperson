@@ -389,11 +389,8 @@ impl MultiMillerLoop for DummyEngine {
     type Result = Fr;
 
     fn multi_miller_loop(i: &[(&Self::G1Affine, &Self::G2Prepared)]) -> Self::Result {
-        let mut acc = <Fr as Field>::ZERO;
-        for &(&a, &b) in i {
-            acc += a * b;
-        }
-        acc
+        i.iter()
+            .fold(<Fr as Field>::ZERO, |acc, &(a, b)| acc + (a * b))
     }
 }
 
