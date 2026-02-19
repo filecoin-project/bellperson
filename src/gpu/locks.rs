@@ -137,6 +137,7 @@ impl Drop for GPULock<'_> {
 #[derive(Debug)]
 pub(crate) struct PriorityLock(File);
 impl PriorityLock {
+    #[allow(dead_code)]
     pub fn lock() -> PriorityLock {
         let priority_lock_file = tmp_path(PRIORITY_LOCK_NAME, None);
         debug!("Acquiring priority lock at {:?} ...", &priority_lock_file);

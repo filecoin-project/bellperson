@@ -2,6 +2,7 @@ use crate::LinearCombination;
 use ec_gpu_gen::multiexp_cpu::DensityTracker;
 use ff::PrimeField;
 
+#[allow(dead_code)]
 pub fn eval_with_trackers<Scalar: PrimeField>(
     lc: &LinearCombination<Scalar>,
     mut input_density: Option<&mut DensityTracker>,
