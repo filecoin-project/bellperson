@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     name: Clippy
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install required packages
         run: |
           sudo apt-get update
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     name: Checking fmt
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install cargo fmt
         run: rustup component add rustfmt
       - name: Run cargo fmt
@@ -52,7 +52,7 @@ jobs:
       matrix:
         cargo-args: ['--workspace', '--workspace --no-default-features', '--release -- --ignored']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install required packages
         run: |
           sudo apt-get update
@@ -99,7 +99,7 @@ jobs:
             cargo-args: "--release --features cuda-supraseal"
             framework: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # TODO: Move the driver installation to the AMI.
       # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html
       # https://www.nvidia.com/en-us/drivers/
