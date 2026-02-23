@@ -15,8 +15,6 @@ concurrency:
 env:
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
-  # Faster crates.io index checkout.
-  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
   RUST_LOG: debug
 
 jobs:
