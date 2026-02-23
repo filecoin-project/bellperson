@@ -21,7 +21,7 @@ bellpepper-core = { version = "0.2" }
 blake2s_simd = "1.0.0"
 ff = "0.13.0"
 group = "0.13.0"
-rand_core = "0.6"
+rand_core = "0.10"
 byteorder = "1"
 log = "0.4.8"
 rand = { version = "0.8", default-features = false }
