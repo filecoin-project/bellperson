@@ -18,7 +18,7 @@ pub type GpuResult<T> = std::result::Result<T, GpuError>;
 
 impl From<GpuError> for SynthesisError {
     fn from(e: GpuError) -> Self {
-        // inspired by the commenct on MalformedProofs
+        // inspired by the comment on MalformedProofs
         SynthesisError::MalformedProofs(format!("Encountered a GPU Error: {}", e))
     }
 }
