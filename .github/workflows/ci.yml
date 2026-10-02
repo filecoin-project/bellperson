@@ -57,7 +57,7 @@ jobs:
           sudo apt-get install --no-install-recommends --yes libhwloc-dev ocl-icd-opencl-dev
       # TODO: Remove this and other rust installation directives from jobs running
       # on self-hosted runners once rust is available on these machines by default
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
         with:
           toolchain: 1.93.1
       - name: Test
@@ -118,7 +118,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes libhwloc-dev nvidia-cuda-toolkit ocl-icd-opencl-dev
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
         with:
           toolchain: 1.93.1
       - name: Test ${{ matrix.framework }} with ${{ matrix.cargo-args }}
