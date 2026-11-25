@@ -2,7 +2,7 @@ use std::fmt;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 
-use group::{GroupEncoding, prime::PrimeCurveAffine};
+use group::{CurveAffine, GroupEncoding};
 use pairing::Engine;
 use rayon::prelude::*;
 
@@ -246,7 +246,6 @@ mod test_with_bls12_381 {
     use bincode::{deserialize, serialize};
     use blstrs::{Bls12, Scalar as Fr};
     use ff::{Field, PrimeField};
-    use rand::thread_rng;
 
     #[test]
     fn test_size() {
@@ -286,7 +285,7 @@ mod test_with_bls12_381 {
             }
         }
 
-        let rng = &mut thread_rng();
+        let rng = &mut rand::rng();
 
         let params =
             generate_random_parameters::<Bls12, _, _>(MySillyCircuit { a: None, b: None }, rng)

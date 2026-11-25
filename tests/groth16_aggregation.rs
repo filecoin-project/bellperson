@@ -16,7 +16,7 @@ use ff::{Field, PrimeField};
 use group::{Curve, Group};
 use itertools::Itertools;
 use pairing::Engine;
-use rand::{RngCore, SeedableRng};
+use rand::{Rng, SeedableRng};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::default::Default;
@@ -405,7 +405,7 @@ fn test_groth16_bench_inner(version: AggregateVersion) {
     writer.flush().expect("failed to flush");
 }
 
-fn generate_proof<R: SeedableRng + RngCore>(
+fn generate_proof<R: SeedableRng + Rng>(
     publics: usize,
     p: &Parameters<Bls12>,
     mut rng: &mut R,

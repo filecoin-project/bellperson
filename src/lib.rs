@@ -28,7 +28,6 @@
 //! use blstrs::Bls12;
 //! use ff::PrimeField;
 //! use pairing::Engine;
-//! use rand::rngs::OsRng;
 //! use sha2::{Digest, Sha256};
 //!
 //! /// Our own SHA-256d gadget. Input and output are in little-endian bit order.
@@ -103,7 +102,7 @@
 //! // be generated securely using a multiparty computation.
 //! let params = {
 //!     let c = MyCircuit { preimage: None };
-//!     groth16::generate_random_parameters::<Bls12, _, _>(c, &mut OsRng).unwrap()
+//!     groth16::generate_random_parameters::<Bls12, _, _>(c, &mut rand::rng()).unwrap()
 //! };
 //!
 //! // Prepare the verification key (for proof verification).
@@ -119,7 +118,7 @@
 //! };
 //!
 //! // Create a Groth16 proof with our parameters.
-//! let proof = groth16::create_random_proof(c, &params, &mut OsRng).unwrap();
+//! let proof = groth16::create_random_proof(c, &params, &mut rand::rng()).unwrap();
 //!
 //! // Pack the hash as inputs for proof verification.
 //! let hash_bits = multipack::bytes_to_bits_le(&hash);

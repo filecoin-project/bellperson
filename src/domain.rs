@@ -302,13 +302,13 @@ mod tests {
 
     use blstrs::Bls12;
     use pairing::Engine;
-    use rand_core::RngCore;
+    use rand_core::Rng;
 
     // Test multiplying various (low degree) polynomials together and
     // comparing with naive evaluations.
     #[test]
     fn polynomial_arith() {
-        fn test_mul<F: PrimeField + gpu::GpuName, R: RngCore>(rng: &mut R) {
+        fn test_mul<F: PrimeField + gpu::GpuName, R: Rng>(rng: &mut R) {
             let worker = Worker::new();
 
             for coeffs_a in 0..70 {
@@ -342,7 +342,7 @@ mod tests {
             }
         }
 
-        let rng = &mut rand::thread_rng();
+        let rng = &mut rand::rng();
 
         test_mul::<<Bls12 as Engine>::Fr, _>(rng);
     }
@@ -350,9 +350,9 @@ mod tests {
     #[test]
     fn fft_composition() {
         use blstrs::Bls12;
-        use rand_core::RngCore;
+        use rand_core::Rng;
 
-        fn test_comp<F: PrimeField + gpu::GpuName, R: RngCore>(rng: &mut R) {
+        fn test_comp<F: PrimeField + gpu::GpuName, R: Rng>(rng: &mut R) {
             let worker = Worker::new();
 
             for coeffs in 0..10 {
@@ -379,7 +379,7 @@ mod tests {
             }
         }
 
-        let rng = &mut rand::thread_rng();
+        let rng = &mut rand::rng();
 
         test_comp::<<Bls12 as Engine>::Fr, _>(rng);
     }

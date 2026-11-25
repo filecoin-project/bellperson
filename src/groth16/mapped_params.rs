@@ -1,4 +1,4 @@
-use group::{UncompressedEncoding, prime::PrimeCurveAffine};
+use group::{CurveAffine, UncompressedEncoding};
 use pairing::MultiMillerLoop;
 
 use bellpepper_core::SynthesisError;

@@ -43,12 +43,11 @@ pub fn test_parallel_prover() {
         prepare_verifying_key, verify_proof,
     };
     use blstrs::Bls12;
-    use rand::thread_rng;
     use std::thread;
     use std::time::{Duration, Instant};
 
     let _ = env_logger::try_init();
-    let rng = &mut thread_rng();
+    let rng = &mut rand::rng();
 
     println!("Initializing circuit...");
     println!("Creating parameters...");
@@ -79,7 +78,7 @@ pub fn test_parallel_prover() {
         for _ in 0..20 {
             let now = Instant::now();
 
-            let rng = &mut thread_rng();
+            let rng = &mut rand::rng();
             let proof_higher = create_random_proof_in_priority(c.clone(), &params, rng).unwrap();
             assert!(verify_proof(&pvk, &proof_higher, &[]).unwrap());
 

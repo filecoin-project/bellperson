@@ -108,7 +108,7 @@ where
 fn test_multipacking() {
     use crate::ConstraintSystem;
     use blstrs::Scalar as Fr;
-    use rand_core::{RngCore, SeedableRng};
+    use rand_core::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
     use super::boolean::{AllocatedBit, Boolean};

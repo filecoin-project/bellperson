@@ -170,10 +170,10 @@ impl<Scalar: PrimeField> TestConstraintSystem<Scalar> {
 
                 match var.0.get_unchecked() {
                     Index::Input(i) => {
-                        write!(s, "`{}`", &self.inputs[i].1).unwrap();
+                        write!(s, "`{}`", self.inputs[i].1).unwrap();
                     }
                     Index::Aux(i) => {
-                        write!(s, "`{}`", &self.aux[i].1).unwrap();
+                        write!(s, "`{}`", self.aux[i].1).unwrap();
                     }
                 }
             }
@@ -318,7 +318,7 @@ fn compute_path(ns: &[String], this: String) -> String {
     let mut name = String::new();
 
     let mut needs_separation = false;
-    for ns in ns.iter().chain(Some(&this).into_iter()) {
+    for ns in ns.iter().chain(Some(&this)) {
         if needs_separation {
             name += "/";
         }

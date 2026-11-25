@@ -1,8 +1,5 @@
 use ff::{PrimeField, PrimeFieldBits};
-use group::{
-    Curve,
-    prime::{PrimeCurve, PrimeCurveAffine},
-};
+use group::{Curve, CurveAffine, prime::PrimeCurve};
 
 use rayon::prelude::*;
 
@@ -14,10 +11,10 @@ pub fn get_mul_window_size(num_scalars: usize) -> usize {
     }
 }
 
-pub fn get_window_table<T>(scalar_size: usize, window: usize, g: T) -> Vec<Vec<T::AffineRepr>>
+pub fn get_window_table<T>(scalar_size: usize, window: usize, g: T) -> Vec<Vec<T::Affine>>
 where
     T: Curve,
-    T::AffineRepr: Send,
+    T::Affine: Send,
 {
     let in_window = 1 << window;
     let outerc = scalar_size.div_ceil(window);
@@ -86,7 +83,7 @@ where
 pub fn multi_scalar_mul<T>(
     scalar_size: usize,
     window: usize,
-    table: &[Vec<T::AffineRepr>],
+    table: &[Vec<T::Affine>],
     v: &[T::Scalar],
 ) -> Vec<T>
 where

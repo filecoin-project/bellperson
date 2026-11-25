@@ -4,7 +4,7 @@ use std::io::{Cursor, Read, Write};
 use blstrs::{Bls12, Compress, G1Affine, G1Projective, G2Affine, G2Projective, Gt};
 use group::{Group, GroupEncoding};
 use pairing::{MillerLoopResult, MultiMillerLoop};
-use rand_core::{RngCore, SeedableRng};
+use rand_core::{Rng, SeedableRng};
 
 #[derive(PartialEq, Clone, Debug)]
 struct TestVector {
@@ -91,7 +91,7 @@ fn get_test_vectors() -> Vec<TestVector> {
     vec![blst_test_vector, pairing_test_vector]
 }
 
-fn compute_test_vector<R: RngCore>(r: &mut R) -> TestVector {
+fn compute_test_vector<R: Rng>(r: &mut R) -> TestVector {
     let g1: G1Affine = G1Projective::random(&mut *r).into();
     let g2: G2Affine = G2Projective::random(&mut *r).into();
     let gt = Bls12::multi_miller_loop(&[(&g1, &g2.into())]).final_exponentiation();

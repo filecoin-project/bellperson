@@ -170,7 +170,7 @@ impl<E: Engine> Circuit<E::Fr> for MinRoot<E> {
 
 #[test]
 fn minroot_test() {
-    let rng = &mut rand_core::OsRng;
+    let rng = &mut rand::rng();
 
     // Create parameters for our circuit
     let params: Parameters<Bls12> = {
@@ -190,11 +190,11 @@ fn minroot_test() {
     let mut images = vec![];
 
     // Generate a random preimage and compute the image
-    let xl = <Bls12 as Engine>::Fr::random(*rng);
-    let xr = <Bls12 as Engine>::Fr::random(*rng);
+    let xl = <Bls12 as Engine>::Fr::random(rng);
+    let xr = <Bls12 as Engine>::Fr::random(rng);
     let (image_xl, image_xr) = minroot::<Bls12>(xl, xr);
 
-    proof_vec.truncate(0);
+    proof_vec.clear();
 
     {
         // Create an instance of our circuit (with the

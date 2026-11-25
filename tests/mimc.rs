@@ -1,7 +1,6 @@
 mod util;
 
 // For randomness (during paramgen and proof generation)
-use rand::thread_rng;
 
 // For benchmarking
 use std::time::{Duration, Instant};
@@ -156,8 +155,8 @@ impl<Scalar: PrimeField> Circuit<Scalar> for MimcDemo<'_, Scalar> {
 #[test]
 fn test_mimc() {
     // This may not be cryptographically safe, use
-    // `OsRng` (for example) in production software.
-    let rng = &mut thread_rng();
+    // `SysRng` (for example) in production software.
+    let rng = &mut rand::rng();
 
     // Generate the MiMC round constants
     let constants = (0..MIMC_ROUNDS)
@@ -202,7 +201,7 @@ fn test_mimc() {
         let xr = Fr::random(&mut *rng);
         let image = mimc::<Fr>(xl, xr, &constants);
 
-        proof_vec.truncate(0);
+        proof_vec.clear();
 
         let start = Instant::now();
         {
@@ -275,7 +274,7 @@ fn test_mimc() {
     {
         let start = Instant::now();
         let proofs: Vec<_> = proofs.iter().collect();
-        let valid = verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &proofs, &images).unwrap();
+        let valid = verify_proofs_batch(&pvk, &mut rand::rng(), &proofs, &images).unwrap();
         println!(
             "Batch verification of {} proofs: {:04}s ({:04}s/proof)",
             proofs.len(),
@@ -301,8 +300,7 @@ fn test_mimc() {
         }
         let bad_proofs_ref = bad_proofs.iter().collect::<Vec<_>>();
         assert!(
-            !verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &bad_proofs_ref[..], &images)
-                .unwrap()
+            !verify_proofs_batch(&pvk, &mut rand::rng(), &bad_proofs_ref[..], &images).unwrap()
         );
     }
 }

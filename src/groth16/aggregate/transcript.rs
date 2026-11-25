@@ -114,7 +114,7 @@ mod test {
     use super::*;
     use blstrs::{Bls12, G1Affine, G2Affine, Scalar as Fr};
     use ff::Field;
-    use group::prime::PrimeCurveAffine;
+    use group::CurveAffine;
     use pairing::{MillerLoopResult, MultiMillerLoop};
 
     #[test]

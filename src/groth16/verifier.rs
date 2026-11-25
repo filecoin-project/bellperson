@@ -1,7 +1,7 @@
 use std::ops::{AddAssign, Mul, MulAssign};
 
 use ff::{Field, PrimeField};
-use group::{Curve, Group, prime::PrimeCurveAffine};
+use group::{Curve, CurveAffine, Group};
 use pairing::{Engine, MillerLoopResult, MultiMillerLoop};
 use rayon::prelude::*;
 
@@ -113,7 +113,7 @@ pub fn verify_proofs_batch<E, R>(
 where
     E: MultiMillerLoop,
     <E::Fr as PrimeField>::Repr: Sync + Copy,
-    R: rand::RngCore,
+    R: rand::Rng,
 {
     debug_assert_eq!(proofs.len(), public_inputs.len());
 
@@ -138,9 +138,9 @@ where
     let mut accum_y = E::Fr::ZERO;
 
     for _ in 0..proof_num {
-        use rand::Rng;
+        use rand::RngExt;
 
-        let t: u128 = rng.r#gen();
+        let t: u128 = rng.random();
 
         let mut repr = E::Fr::ZERO.to_repr();
         let mut repr_u64s = le_bytes_to_u64s(repr.as_ref());

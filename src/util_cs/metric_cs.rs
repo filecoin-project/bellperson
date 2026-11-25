@@ -132,7 +132,7 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
         let mut s = String::new();
 
         for input in &self.inputs {
-            writeln!(s, "INPUT {}", &input).expect("writing to string never fails");
+            writeln!(s, "INPUT {}", input).expect("writing to string never fails");
         }
 
         let negone = -Scalar::ONE;
@@ -165,10 +165,10 @@ impl<Scalar: PrimeField> MetricCS<Scalar> {
 
                 match var.0.get_unchecked() {
                     Index::Input(i) => {
-                        write!(s, "`I{}`", &self.inputs[i]).expect("writing to string never fails");
+                        write!(s, "`I{}`", self.inputs[i]).expect("writing to string never fails");
                     }
                     Index::Aux(i) => {
-                        write!(s, "`A{}`", &self.aux[i]).expect("writing to string never fails");
+                        write!(s, "`A{}`", self.aux[i]).expect("writing to string never fails");
                     }
                 }
             }

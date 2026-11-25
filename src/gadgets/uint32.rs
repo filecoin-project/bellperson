@@ -414,7 +414,7 @@ mod test {
     use crate::gadgets::test::*;
     use blstrs::Scalar as Fr;
     use ff::Field;
-    use rand_core::{RngCore, SeedableRng};
+    use rand_core::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
     #[test]
