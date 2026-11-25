@@ -55,9 +55,9 @@ impl<'a> GPULock<'a> {
                     for (index, device) in devices.iter().enumerate() {
                         let uid = device.unique_id();
                         let path = tmp_path(GPU_LOCK_NAME, Some(uid));
-                        debug!("Acquiring GPU lock {}/{} at {:?} ...", index, val, &path);
+                        debug!("Acquiring GPU lock {}/{} at {:?} ...", index, val, path);
                         let file = File::create(&path).unwrap_or_else(|_| {
-                            panic!("Cannot create GPU {:?} lock file at {:?}", uid, &path)
+                            panic!("Cannot create GPU {:?} lock file at {:?}", uid, path)
                         });
                         if file.try_lock_exclusive().is_err() {
                             continue;
@@ -91,9 +91,9 @@ impl<'a> GPULock<'a> {
 
         // Fallback to create single lock
         let path = tmp_path(GPU_LOCK_NAME, None);
-        debug!("Acquiring GPU lock at {:?} ...", &path);
+        debug!("Acquiring GPU lock at {:?} ...", path);
         let file = File::create(&path).unwrap_or_else(|_| {
-            panic!("Cannot create GPU lock file at {:?}", &path);
+            panic!("Cannot create GPU lock file at {:?}", path);
         });
         file.lock_exclusive().unwrap();
         debug!("GPU lock acquired at {:?}", path);
@@ -140,11 +140,11 @@ impl PriorityLock {
     #[allow(dead_code)]
     pub fn lock() -> PriorityLock {
         let priority_lock_file = tmp_path(PRIORITY_LOCK_NAME, None);
-        debug!("Acquiring priority lock at {:?} ...", &priority_lock_file);
+        debug!("Acquiring priority lock at {:?} ...", priority_lock_file);
         let f = File::create(&priority_lock_file).unwrap_or_else(|_| {
             panic!(
                 "Cannot create priority lock file at {:?}",
-                &priority_lock_file
+                priority_lock_file
             )
         });
         f.lock_exclusive().unwrap();

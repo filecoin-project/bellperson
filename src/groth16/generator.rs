@@ -3,12 +3,9 @@ use std::ops::{AddAssign, Mul, MulAssign};
 use std::sync::Arc;
 
 use ff::{Field, PrimeField};
-use group::{
-    Curve, Group, Wnaf, WnafGroup,
-    prime::{PrimeCurve, PrimeCurveAffine},
-};
+use group::{Curve, CurveAffine, Group, Wnaf, WnafGroup};
 use pairing::{Engine, MultiMillerLoop};
-use rand_core::RngCore;
+use rand_core::Rng;
 
 use super::{Parameters, VerifyingKey};
 
@@ -30,7 +27,7 @@ where
     <E as Engine>::G1: WnafGroup,
     <E as Engine>::G2: WnafGroup,
     C: Circuit<E::Fr>,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
 {
     let g1 = E::G1::random(&mut *rng);
@@ -247,8 +244,7 @@ where
 
     let worker = Worker::new();
 
-    let mut h_affine =
-        vec![<E::G1 as PrimeCurve>::Affine::identity(); powers_of_tau.as_ref().len() - 1];
+    let mut h_affine = vec![<E::G1 as Curve>::Affine::identity(); powers_of_tau.as_ref().len() - 1];
     {
         // Compute powers of tau
         {
@@ -304,13 +300,13 @@ where
     let powers_of_tau = powers_of_tau.into_coeffs();
 
     let mut a_affine =
-        vec![<E::G1 as PrimeCurve>::Affine::identity(); assembly.num_inputs + assembly.num_aux];
+        vec![<E::G1 as Curve>::Affine::identity(); assembly.num_inputs + assembly.num_aux];
     let mut b_g1_affine =
-        vec![<E::G1 as PrimeCurve>::Affine::identity(); assembly.num_inputs + assembly.num_aux];
+        vec![<E::G1 as Curve>::Affine::identity(); assembly.num_inputs + assembly.num_aux];
     let mut b_g2_affine =
-        vec![<E::G2 as PrimeCurve>::Affine::identity(); assembly.num_inputs + assembly.num_aux];
-    let mut ic_affine = vec![<E::G1 as PrimeCurve>::Affine::identity(); assembly.num_inputs];
-    let mut l_affine = vec![<E::G1 as PrimeCurve>::Affine::identity(); assembly.num_aux];
+        vec![<E::G2 as Curve>::Affine::identity(); assembly.num_inputs + assembly.num_aux];
+    let mut ic_affine = vec![<E::G1 as Curve>::Affine::identity(); assembly.num_inputs];
+    let mut l_affine = vec![<E::G1 as Curve>::Affine::identity(); assembly.num_aux];
 
     #[allow(clippy::too_many_arguments)]
     fn eval<E: Engine>(

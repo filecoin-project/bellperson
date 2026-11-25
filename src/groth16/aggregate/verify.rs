@@ -1,7 +1,7 @@
 use blstrs::Compress;
 use crossbeam_channel::bounded;
 use ff::{Field, PrimeField};
-use group::{Curve, Group, prime::PrimeCurveAffine};
+use group::{Curve, CurveAffine, Group};
 use log::{debug, info};
 use pairing::{Engine, MultiMillerLoop};
 use rayon::prelude::*;
@@ -56,7 +56,7 @@ where
     E::G1: Serialize,
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     info!("verify_aggregate_proof");
     proof.parsing_check()?;
@@ -222,7 +222,7 @@ where
     E::G1: Serialize,
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     info!("verify_aggregate_proof");
     aggregate_proof_and_instance.parsing_check()?;
@@ -416,7 +416,7 @@ fn verify_tipp_mipp<E, R>(
     E::G1: Serialize,
     E::G1Affine: Serialize,
     E::G2Affine: Serialize,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     info!("verify with srs shift");
     let now = Instant::now();
@@ -807,7 +807,7 @@ pub fn verify_kzg_v<E, R>(
     pairing_checks: &PairingChecks<E, R>,
 ) where
     E: MultiMillerLoop,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     // f_v(z)
     let vpoly_eval_z =
@@ -857,7 +857,7 @@ fn kzg_check_v<E, R>(
     pairing_checks: &PairingChecks<E, R>,
 ) where
     E: MultiMillerLoop,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     // KZG Check: e(g, C_f * h^{-y}) = e(vk * g^{-x}, \pi)
     // Transformed, such that
@@ -883,7 +883,7 @@ pub fn verify_kzg_w<E, R>(
     pairing_checks: &PairingChecks<E, R>,
 ) where
     E: MultiMillerLoop,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     // compute in parallel f(z) and z^n and then combines into f_w(z) = z^n * f(z)
     par! {
@@ -936,7 +936,7 @@ fn kzg_check_w<E, R>(
     pairing_checks: &PairingChecks<E, R>,
 ) where
     E: MultiMillerLoop,
-    R: rand_core::RngCore + Send,
+    R: rand_core::Rng + Send,
 {
     // KZG Check: e(C_f * g^{-y}, h) = e(\pi, wk * h^{-x})
     // Transformed, such that

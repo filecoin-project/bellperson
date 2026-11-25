@@ -4,7 +4,7 @@ use super::prover::{create_proof_batch_priority, create_random_proof_batch_prior
 use super::{ParameterSource, Proof};
 use crate::gpu;
 use pairing::MultiMillerLoop;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 /// Creates a single proof where the randomization vector is already predefined
 pub fn create_proof<E, C, P: ParameterSource<E>>(
@@ -34,7 +34,7 @@ pub fn create_random_proof<E, C, R, P: ParameterSource<E>>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,
@@ -70,7 +70,7 @@ pub fn create_random_proof_batch<E, C, R, P: ParameterSource<E>>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,
@@ -110,7 +110,7 @@ pub fn create_random_proof_in_priority<E, C, R, P: ParameterSource<E>>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,
@@ -150,7 +150,7 @@ pub fn create_random_proof_batch_in_priority<E, C, R, P: ParameterSource<E>>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,

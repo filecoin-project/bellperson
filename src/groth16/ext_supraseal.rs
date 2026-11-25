@@ -8,7 +8,7 @@
 
 use bellpepper_core::{Circuit, SynthesisError};
 use pairing::MultiMillerLoop;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 use crate::{
     gpu,
@@ -47,7 +47,7 @@ pub fn create_random_proof<E, C, R>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,
@@ -82,7 +82,7 @@ pub fn create_random_proof_batch<E, C, R>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,
@@ -121,7 +121,7 @@ pub fn create_random_proof_in_priority<E, C, R>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,
@@ -160,7 +160,7 @@ pub fn create_random_proof_batch_in_priority<E, C, R>(
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: gpu::GpuName,
     E::G1Affine: gpu::GpuName,
     E::G2Affine: gpu::GpuName,

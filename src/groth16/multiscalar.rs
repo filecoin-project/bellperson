@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::ops::AddAssign;
 
 use ff::PrimeField;
-use group::{Curve, Group, prime::PrimeCurveAffine};
+use group::{Curve, CurveAffine, Group, prime::PrimeCurveAffine};
 use rayon::prelude::*;
 
 pub const WINDOW_SIZE: usize = 8;
@@ -23,7 +23,7 @@ impl<G: PrimeCurveAffine, F: Fn(usize) -> <G::Scalar as PrimeField>::Repr> Scala
 }
 
 pub type Getter<G> =
-    dyn Fn(usize) -> <<G as PrimeCurveAffine>::Scalar as PrimeField>::Repr + Sync + Send;
+    dyn Fn(usize) -> <<G as CurveAffine>::Scalar as PrimeField>::Repr + Sync + Send;
 
 /// Abstraction over owned and referenced multiscalar precomputations.
 pub trait MultiscalarPrecomp<G: PrimeCurveAffine>: Send + Sync {

@@ -2,13 +2,13 @@
 
 use ff::{Field, PrimeField};
 use group::{
-    Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
-    prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
+    Curve, CurveAffine, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
+    prime::{PrimeCurve, PrimeGroup},
 };
 use pairing::{Engine, MillerLoopResult, MultiMillerLoop, PairingCurveAffine};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use rand_core::RngCore;
+use rand_core::TryRng;
 use std::convert::TryInto;
 use std::fmt;
 use std::iter::{Product, Sum};
@@ -211,8 +211,8 @@ impl<'a> Product<&'a Fr> for Fr {
 }
 
 impl Field for Fr {
-    fn random(mut rng: impl RngCore) -> Self {
-        Fr(Wrapping(rng.next_u32()) % MODULUS_R)
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        Ok(Fr(Wrapping(rng.try_next_u32()?) % MODULUS_R))
     }
 
     const ZERO: Self = Fr(Wrapping(0));
@@ -415,8 +415,8 @@ impl Sum for Fr {
 impl Group for Fr {
     type Scalar = Fr;
 
-    fn random(rng: impl RngCore) -> Self {
-        <Fr as Field>::random(rng)
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        <Fr as Field>::try_random(rng)
     }
 
     fn identity() -> Self {
@@ -478,18 +478,16 @@ impl WnafGroup for Fr {
 impl PrimeGroup for Fr {}
 
 impl Curve for Fr {
-    type AffineRepr = Fr;
+    type Affine = Fr;
 
-    fn to_affine(&self) -> Self::AffineRepr {
+    fn to_affine(&self) -> Self::Affine {
         *self
     }
 }
 
-impl PrimeCurve for Fr {
-    type Affine = Fr;
-}
+impl PrimeCurve for Fr {}
 
-impl PrimeCurveAffine for Fr {
+impl CurveAffine for Fr {
     type Scalar = Fr;
     type Curve = Fr;
 

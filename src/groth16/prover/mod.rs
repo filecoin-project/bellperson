@@ -11,7 +11,7 @@ use bellpepper_core::{
 use ec_gpu_gen::multiexp_cpu::DensityTracker;
 use ff::{Field, PrimeField};
 use pairing::MultiMillerLoop;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 #[cfg(not(feature = "cuda-supraseal"))]
 use self::native as prover;
@@ -219,7 +219,7 @@ pub(super) fn create_random_proof_batch_priority<E, C, R, P: ParameterSource<E>>
 where
     E: MultiMillerLoop,
     C: Circuit<E::Fr> + Send,
-    R: RngCore,
+    R: Rng,
     E::Fr: GpuName,
     E::G1Affine: GpuName,
     E::G2Affine: GpuName,
@@ -258,7 +258,7 @@ mod tests {
     use super::*;
 
     use blstrs::Scalar as Fr;
-    use rand::Rng;
+    use rand::RngExt;
     use rand_core::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
@@ -289,7 +289,7 @@ mod tests {
                     let index: usize = i / k;
                     let partial_assignment = &mut partial_assignments[index];
 
-                    if rng.r#gen() {
+                    if rng.random() {
                         let el = Fr::random(&mut rng);
                         full_assignment
                             .alloc(|| format!("alloc:{},{}", i, k), || Ok(el))
@@ -299,7 +299,7 @@ mod tests {
                             .unwrap();
                     }
 
-                    if rng.r#gen() {
+                    if rng.random() {
                         let el = Fr::random(&mut rng);
                         full_assignment
                             .alloc_input(|| format!("alloc_input:{},{}", i, k), || Ok(el))

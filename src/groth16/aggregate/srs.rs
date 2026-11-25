@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use digest::Digest;
 use ff::{Field, PrimeField, PrimeFieldBits};
 use group::{
-    Curve, Group, GroupEncoding,
+    Curve, CurveAffine, Group, GroupEncoding,
     prime::{PrimeCurve, PrimeCurveAffine},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -340,7 +340,7 @@ pub fn setup_fake_srs<E, R>(rng: &mut R, size: usize) -> GenericSRS<E>
 where
     E: Engine,
     E::Fr: PrimeFieldBits,
-    R: rand_core::RngCore,
+    R: rand_core::Rng,
 {
     let alpha = E::Fr::random(&mut *rng);
     let beta = E::Fr::random(&mut *rng);
@@ -375,11 +375,11 @@ pub(crate) fn structured_generators_scalar_power<G>(
     num: usize,
     g: &G,
     s: &G::Scalar,
-) -> Vec<G::AffineRepr>
+) -> Vec<G::Affine>
 where
     G: PrimeCurve,
     G::Scalar: PrimeFieldBits,
-    G::AffineRepr: Send,
+    G::Affine: Send,
 {
     assert!(num > 0);
     let mut powers_of_scalar = Vec::with_capacity(num);

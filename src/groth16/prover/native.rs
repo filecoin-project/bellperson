@@ -12,7 +12,7 @@ use ec_gpu_gen::{
     threadpool::{THREAD_POOL, Worker},
 };
 use ff::{Field, PrimeField};
-use group::{Curve, prime::PrimeCurveAffine};
+use group::{Curve, CurveAffine};
 #[cfg(any(feature = "cuda", feature = "opencl"))]
 use log::trace;
 use log::{debug, info};
@@ -301,11 +301,11 @@ where
     debug!("proofs");
     let proofs = h_s
         .into_iter()
-        .zip(l_s.into_iter())
-        .zip(inputs_g1.into_iter())
-        .zip(inputs_g2.into_iter())
-        .zip(r_s.into_iter())
-        .zip(s_s.into_iter())
+        .zip(l_s)
+        .zip(inputs_g1)
+        .zip(inputs_g2)
+        .zip(r_s)
+        .zip(s_s)
         .map(
             |(
                 ((((h, l), (a_inputs, a_aux, b_g1_inputs_aux_opt)), (b_g2_inputs, b_g2_aux)), r),

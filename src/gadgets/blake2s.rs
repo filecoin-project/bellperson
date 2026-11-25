@@ -406,7 +406,7 @@ pub fn blake2s<Scalar: PrimeField, CS: ConstraintSystem<Scalar>>(
 mod test {
     use blake2s_simd::Params as Blake2sParams;
     use blstrs::Scalar as Fr;
-    use rand_core::{RngCore, SeedableRng};
+    use rand_core::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
     use super::blake2s;

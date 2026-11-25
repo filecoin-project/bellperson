@@ -19,7 +19,8 @@ use blstrs::{Bls12, Scalar as Fr};
 use ff::{Field, PrimeField};
 use group::{Curve, Group};
 use pairing::{Engine, MultiMillerLoop};
-use rand::RngCore;
+use rand::rngs::SysRng;
+use rand::{rand_core::UnwrapErr, Rng};
 use structopt::StructOpt;
 
 macro_rules! timer {
@@ -75,11 +76,11 @@ impl<Scalar: PrimeField> Circuit<Scalar> for DummyDemo {
     }
 }
 
-fn random_points<C, R>(count: usize, mut rng: R) -> Vec<C::AffineRepr>
+fn random_points<C, R>(count: usize, mut rng: R) -> Vec<C::Affine>
 where
     C: Curve,
-    <C as Curve>::AffineRepr: Clone,
-    R: RngCore,
+    <C as Curve>::Affine: Clone,
+    R: Rng,
 {
     // Number of distinct points is limited because generating random points is very time
     // consuming, so it's better to just repeat them.
@@ -93,7 +94,7 @@ where
         .collect()
 }
 
-fn dummy_proofs<E: Engine, R: RngCore>(count: usize, mut rng: R) -> Vec<Proof<E>> {
+fn dummy_proofs<E: Engine, R: Rng>(count: usize, mut rng: R) -> Vec<Proof<E>> {
     (0..count)
         .map(|_| Proof {
             a: E::G1::random(&mut rng).to_affine(),
@@ -103,13 +104,13 @@ fn dummy_proofs<E: Engine, R: RngCore>(count: usize, mut rng: R) -> Vec<Proof<E>
         .collect()
 }
 
-fn dummy_inputs<E: Engine, R: RngCore>(count: usize, mut rng: R) -> Vec<<E as Engine>::Fr> {
+fn dummy_inputs<E: Engine, R: Rng>(count: usize, mut rng: R) -> Vec<<E as Engine>::Fr> {
     (0..count)
         .map(|_| <E as Engine>::Fr::random(&mut rng))
         .collect()
 }
 
-fn dummy_vk<E: MultiMillerLoop, R: RngCore>(public: usize, mut rng: R) -> VerifyingKey<E> {
+fn dummy_vk<E: MultiMillerLoop, R: Rng>(public: usize, mut rng: R) -> VerifyingKey<E> {
     VerifyingKey {
         alpha_g1: E::G1::random(&mut rng).to_affine(),
         beta_g1: E::G1::random(&mut rng).to_affine(),
@@ -124,7 +125,7 @@ fn dummy_vk<E: MultiMillerLoop, R: RngCore>(public: usize, mut rng: R) -> Verify
 fn dummy_params<E, R>(public: usize, private: usize, mut rng: R) -> Parameters<E>
 where
     E: MultiMillerLoop,
-    R: RngCore,
+    R: Rng,
 {
     let count = public + private;
     let hlen = (1 << (((count + public + 1) as f64).log2().ceil() as usize)) - 1;
@@ -164,7 +165,7 @@ struct Opts {
 }
 
 fn main() {
-    let mut rng = rand::rngs::OsRng;
+    let mut rng = UnwrapErr(SysRng);
     pretty_env_logger::init_timed();
 
     let opts = Opts::from_args();

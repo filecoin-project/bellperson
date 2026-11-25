@@ -2,7 +2,7 @@ use crossbeam_channel::{Receiver, Sender, bounded};
 use ff::Field;
 use group::{Curve, Group};
 use pairing::{Engine, MillerLoopResult, MultiMillerLoop};
-use rand_core::RngCore;
+use rand_core::Rng;
 use rayon::prelude::*;
 
 use bellpepper_core::SynthesisError;
@@ -25,7 +25,7 @@ use std::thread;
 pub struct PairingChecks<E, R>
 where
     E: MultiMillerLoop,
-    R: RngCore + Send,
+    R: Rng + Send,
 {
     /// Circuit breaker to allow canceling all checks and marking the whole check as failed.
     valid: Arc<AtomicBool>,
@@ -40,7 +40,7 @@ where
 impl<E, R> PairingChecks<E, R>
 where
     E: MultiMillerLoop,
-    R: RngCore + Send,
+    R: Rng + Send,
 {
     #[allow(clippy::type_complexity)]
     pub fn new(rng: R) -> Self {
@@ -321,7 +321,7 @@ fn add_if_not_one_gt<E: Engine>(left: &mut E::Gt, right: &E::Gt) {
     *left += right
 }
 
-fn derive_non_zero<E: Engine, R: rand_core::RngCore>(rng: &mut R) -> E::Fr {
+fn derive_non_zero<E: Engine, R: rand_core::Rng>(rng: &mut R) -> E::Fr {
     loop {
         let coeff = E::Fr::random(&mut *rng);
         if coeff != E::Fr::ZERO {
@@ -335,10 +335,10 @@ mod test {
     use super::*;
     use blstrs::{Bls12, G1Projective, G2Projective};
     use group::Group;
-    use rand_core::RngCore;
+    use rand_core::Rng;
     use rand_core::SeedableRng;
 
-    fn gen_pairing_check<R: RngCore>(r: &mut R) -> PairingCheck<Bls12> {
+    fn gen_pairing_check<R: Rng>(r: &mut R) -> PairingCheck<Bls12> {
         let g1r = G1Projective::random(&mut *r).to_affine();
         let g2r = G2Projective::random(&mut *r).to_affine();
         let exp = Bls12::pairing(&g1r, &g2r);

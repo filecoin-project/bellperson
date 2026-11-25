@@ -4,7 +4,7 @@ use ec_gpu_gen::EcError;
 use ec_gpu_gen::multiexp_cpu::{QueryDensity, SourceBuilder, multiexp_cpu};
 use ec_gpu_gen::threadpool::{Waiter, Worker};
 use ff::PrimeField;
-use group::prime::PrimeCurveAffine;
+use group::{CurveAffine, prime::PrimeCurveAffine};
 
 use crate::gpu;
 pub use ec_gpu_gen::multiexp_cpu::DensityTracker;
@@ -18,7 +18,7 @@ pub fn multiexp<'b, Q, D, G, S>(
     density_map: D,
     exponents: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
     kern: &mut gpu::LockedMultiexpKernel<G>,
-) -> Waiter<Result<<G as PrimeCurveAffine>::Curve, EcError>>
+) -> Waiter<Result<<G as CurveAffine>::Curve, EcError>>
 where
     for<'a> &'a Q: QueryDensity,
     D: Send + Sync + 'static + Clone + AsRef<Q>,
@@ -53,7 +53,7 @@ pub fn multiexp<'b, Q, D, G, S>(
     density_map: D,
     exponents: Arc<Vec<<G::Scalar as PrimeField>::Repr>>,
     _kern: &mut gpu::LockedMultiexpKernel<G>,
-) -> Waiter<Result<<G as PrimeCurveAffine>::Curve, EcError>>
+) -> Waiter<Result<<G as CurveAffine>::Curve, EcError>>
 where
     for<'a> &'a Q: QueryDensity,
     D: Send + Sync + 'static + Clone + AsRef<Q>,
